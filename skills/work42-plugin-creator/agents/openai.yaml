@@ -1,0 +1,4 @@
+interface:
+  display_name: "Work42 Plugin Creator"
+  short_description: "Create, test, and publish Work42 plugins"
+  default_prompt: "Create or update a Work42 plugin using the installed SDK and Git-native lifecycle."
