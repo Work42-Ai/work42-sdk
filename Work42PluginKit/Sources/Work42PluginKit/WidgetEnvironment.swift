@@ -31,8 +31,22 @@ public extension EnvironmentValues {
 public struct WidgetLinkRouter: Sendable {
     public let route: @MainActor @Sendable (_ url: URL, _ keepHere: @escaping @MainActor @Sendable () -> Void) -> Bool
 
+    /// The URL patterns other widgets own. `BrowserSurface` hands them to each page so a click on a
+    /// matching link is caught inside the page (single-page apps never trigger a navigation) and sent to
+    /// `route`. Empty means only real navigations are offered to `route`.
+    public let patterns: @MainActor @Sendable () -> [WebLinkPattern]
+
     public init(route: @escaping @MainActor @Sendable (_ url: URL, _ keepHere: @escaping @MainActor @Sendable () -> Void) -> Bool) {
         self.route = route
+        self.patterns = { [] }
+    }
+
+    public init(
+        route: @escaping @MainActor @Sendable (_ url: URL, _ keepHere: @escaping @MainActor @Sendable () -> Void) -> Bool,
+        patterns: @escaping @MainActor @Sendable () -> [WebLinkPattern]
+    ) {
+        self.route = route
+        self.patterns = patterns
     }
 }
 

@@ -807,11 +807,13 @@ private struct BrowserSurfaceReady: View {
     private func installLinkRouter(on live: WebSectionLiveView) {
         guard let router = linkRouter else {
             live.setLinkRouter(nil)
+            live.setLinkPatterns([])
             return
         }
         live.setLinkRouter { [weak live] url in
             router.route(url) { live?.load(url) }
         }
+        live.setLinkPatterns(router.patterns())
     }
 
     // MARK: - Body

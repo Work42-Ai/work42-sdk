@@ -683,6 +683,50 @@ public enum WebSectionScript {
         """
     }
 
+    /// Catches clicks on links that another widget owns, inside the page.
+    ///
+    /// Single-page apps (Linear, Jira) change page with `history.pushState`, which never reaches the web
+    /// view's navigation delegate, so the host's link router cannot see an ordinary click. This script
+    /// listens for `click` in the CAPTURE phase, before the app's own handler. When the clicked anchor's
+    /// absolute `href` matches one of `window.__w42Links.patterns` (a list of `{source, flags}` pushed by
+    /// the native side via `WebSectionLiveView.setLinkPatterns`), it cancels the click and posts
+    /// `{url}` to `handlerName`; the host then focuses the owning widget.
+    ///
+    /// Inert until patterns are set. Clicks with ⌘ ⌃ ⇧ or ⌥ held, non-primary buttons, and clicks the
+    /// page already handled are left alone, so ⌥-click navigates in place. A pattern the page can't
+    /// compile is skipped.
+    public static func linkInterceptor(handlerName: String) -> String {
+        let handlerLiteral = jsStringLiteral(handlerName)
+        return """
+        (function() {
+          if (window.__w42Links) { return; }
+          var HANDLER = \(handlerLiteral);
+          var state = window.__w42Links = { patterns: [] };
+          function matches(href) {
+            for (var i = 0; i < state.patterns.length; i++) {
+              var p = state.patterns[i];
+              try { if (new RegExp(p.source, p.flags).test(href)) { return true; } } catch (e) { /* bad pattern: skip */ }
+            }
+            return false;
+          }
+          document.addEventListener('click', function(e) {
+            if (state.patterns.length === 0 || e.defaultPrevented) { return; }
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) { return; }
+            var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+            if (!a || typeof a.href !== 'string') { return; }
+            var href = a.href;
+            if (!matches(href)) { return; }
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            try {
+              var mh = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[HANDLER];
+              if (mh && typeof mh.postMessage === 'function') { mh.postMessage({ url: href }); }
+            } catch (err) { /* no handler: nothing to hand the link to */ }
+          }, true);
+        })();
+        """
+    }
+
     /// Encode an arbitrary string as a JavaScript string literal
     /// (including the surrounding double quotes), safely escaping every
     /// character that would otherwise break out of, or alter, the

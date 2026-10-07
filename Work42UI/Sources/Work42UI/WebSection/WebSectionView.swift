@@ -91,6 +91,10 @@ public struct WebSectionView: NSViewRepresentable {
     /// don't collide on the same `WKUserContentController`.
     public static let selectionHandlerName = "w42Selection"
 
+    /// Name the JS->Swift message handler for intercepted link clicks is registered under
+    /// (`WebSectionScript.linkInterceptor`).
+    public static let linkHandlerName = "w42Link"
+
     /// Name the JS->Swift message handler for element-picker events
     /// (lanky-pine.2). The handler is always registered; the Coordinator
     /// discards messages when `pickHandler` and `onPickerStopped` are both
@@ -215,6 +219,19 @@ public struct WebSectionView: NSViewRepresentable {
         let selectionProxy = SelectionHandlerProxy(coordinator: coordinator)
         coordinator.selectionProxy = selectionProxy
         userContentController.add(selectionProxy, name: Self.selectionHandlerName)
+
+        // SEAM — Link interception. Single-page apps change page with history.pushState, which the
+        // navigation delegate never sees, so clicks on links another widget owns are caught inside the
+        // page. Inert until the host sets patterns (`WebSectionLiveView.setLinkPatterns`).
+        let linkScript = WKUserScript(
+            source: WebSectionScript.linkInterceptor(handlerName: Self.linkHandlerName),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        userContentController.addUserScript(linkScript)
+        let linkProxy = LinkHandlerProxy(coordinator: coordinator)
+        coordinator.linkProxy = linkProxy
+        userContentController.add(linkProxy, name: Self.linkHandlerName)
 
         // SEAM — Element picker (lanky-pine.2). Always inject:
         //   1. The picker-core.js asset at .atDocumentStart so
@@ -442,6 +459,16 @@ public struct WebSectionView: NSViewRepresentable {
         /// Torn down in `dismantleNSView`.
         var selectionProxy: SelectionHandlerProxy?
 
+        /// The weak-proxy message handler for intercepted link clicks. Torn down in `dismantleNSView`.
+        var linkProxy: LinkHandlerProxy?
+
+        /// URL patterns other widgets own, pushed into the page for the link interceptor.
+        var linkPatterns: [WebLinkPattern] = []
+
+        /// Where an intercepted link goes when the router declines it. Nil loads it in the web view,
+        /// which is what the click would have done; tests inject their own.
+        var interceptedLinkFallback: ((URL) -> Void)?
+
         /// OPTIONAL element-pick callback (lanky-pine.2 / AC3).
         /// Receives the CSS selector, the view-space bounding rect, the
         /// element's normalized text, and the page URL when JS posts a
@@ -522,6 +549,29 @@ public struct WebSectionView: NSViewRepresentable {
             else { return }
             let title = dict["title"] as? String
             onSignal(WebSectionSignal(kind: kind, title: title))
+        }
+
+        /// Push `linkPatterns` into the page. Safe to call before the interceptor exists (it is guarded)
+        /// and again after every navigation, since a full load starts with empty patterns.
+        func pushLinkPatterns(to webView: WKWebView) {
+            let payload = linkPatterns.map { ["source": $0.source, "flags": $0.flags] }
+            guard let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            webView.evaluateJavaScript("window.__w42Links && (window.__w42Links.patterns = \(json));", completionHandler: nil)
+        }
+
+        /// A click on a claimed link was cancelled in the page; hand the URL to the host's router and, if
+        /// it declines, let the link go where the click would have. Called by `LinkHandlerProxy`.
+        func handleInterceptedLinkBody(_ body: Any, webView: WKWebView?) {
+            guard let dict = body as? [String: Any],
+                  let raw = dict["url"] as? String,
+                  let url = URL(string: raw) else { return }
+            if linkRouter?(url) == true { return }
+            if let interceptedLinkFallback {
+                interceptedLinkFallback(url)
+            } else {
+                webView?.load(URLRequest(url: url))
+            }
         }
 
         /// Decode a JS payload from the injected selection-tracking script
@@ -644,6 +694,8 @@ public struct WebSectionView: NSViewRepresentable {
                 onURLChange?(current)
             }
             reapplyIsolation(in: webView)
+            // A full load starts with empty link patterns; hand the page the current ones again.
+            if !linkPatterns.isEmpty { pushLinkPatterns(to: webView) }
         }
 
         public func webView(
@@ -1101,6 +1153,26 @@ public struct WebSectionView: NSViewRepresentable {
         }
     }
 
+    /// Weak forwarding shim for the link-interception JS->Swift message handler. Same retain-cycle
+    /// avoidance as `SelectionHandlerProxy`: the content controller retains its handlers strongly, so we
+    /// register this shim and hold only a weak back-reference to the Coordinator.
+    @MainActor
+    final class LinkHandlerProxy: NSObject, WKScriptMessageHandler {
+        weak var coordinator: Coordinator?
+
+        init(coordinator: Coordinator) {
+            self.coordinator = coordinator
+            super.init()
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            coordinator?.handleInterceptedLinkBody(message.body, webView: message.webView)
+        }
+    }
+
     /// Weak forwarding shim for the element-picker JS->Swift message handler
     /// (lanky-pine.2). Same retain-cycle-avoidance pattern as
     /// `SelectionHandlerProxy`: `WKUserContentController` retains its
@@ -1178,6 +1250,9 @@ public struct WebSectionView: NSViewRepresentable {
         // Also tear down the selection message handler symmetrically.
         controller.removeScriptMessageHandler(forName: Self.selectionHandlerName)
         coordinator.selectionProxy = nil
+        // Tear down the link-interception handler symmetrically.
+        controller.removeScriptMessageHandler(forName: Self.linkHandlerName)
+        coordinator.linkProxy = nil
         // Tear down the element-picker message handler symmetrically.
         controller.removeScriptMessageHandler(forName: Self.elementPickHandlerName)
         coordinator.pickProxy = nil
@@ -1475,6 +1550,20 @@ public final class WebSectionLiveView {
     /// view; returning true means the host took the link and navigation here is cancelled.
     public func setLinkRouter(_ router: ((URL) -> Bool)?) {
         coordinator.linkRouter = router
+    }
+
+    /// The URL patterns other widgets own. A click on a link matching one is caught INSIDE the page (so it
+    /// also works for single-page apps that never trigger a navigation) and handed to the link router.
+    /// Pass `[]` to stop intercepting. Idempotent: the page is only re-told when the list changes.
+    public func setLinkPatterns(_ patterns: [WebLinkPattern]) {
+        guard patterns != coordinator.linkPatterns else { return }
+        coordinator.linkPatterns = patterns
+        coordinator.pushLinkPatterns(to: webView)
+    }
+
+    /// Testing seam: where an intercepted link goes when the router declines it.
+    func setInterceptedLinkFallback(_ fallback: ((URL) -> Void)?) {
+        coordinator.interceptedLinkFallback = fallback
     }
 
     /// Load `url` in this view (what "keep it here" does after the router declined or the user
