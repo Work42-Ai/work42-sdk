@@ -747,6 +747,92 @@ public enum WebSectionScript {
         """
     }
 
+    /// The page half of the link policy (`Work42WebView`): posts every clicked link, and every route change a
+    /// click or Enter causes, to `handlerName` as `{kind, url, ...}`. No modifier-key checks: every click routes.
+    ///
+    /// Runs at document start in the top frame only. Clicks are caught in the capture phase, before the app's
+    /// handlers; presses are never cancelled (dragging rows and selecting text keep working). A single-page
+    /// app that navigates from a press or a non-link element still calls `history.pushState`, which is wrapped:
+    /// within a second of a gesture, a change of origin+path is posted as `routeChange` so the host can
+    /// take it (`__w42Links.revert`). The host answering "keep it here" for a click replays it
+    /// (`__w42Links.replay`).
+    public static func linkPolicy(handlerName: String) -> String {
+        let handlerLiteral = jsStringLiteral(handlerName)
+        return """
+        (function() {
+          if (window.__w42Links) { return; }
+          var HANDLER = \(handlerLiteral);
+          var GESTURE_MS = 1000;
+          var state = window.__w42Links = { pending: null, replaying: false, lastGesture: 0, routed: [], lastAdded: false };
+          var origPush = history.pushState, origReplace = history.replaceState;
+          function post(message) {
+            try {
+              var mh = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[HANDLER];
+              if (mh && typeof mh.postMessage === 'function') { mh.postMessage(message); }
+            } catch (err) { /* no handler: nothing to hand the link to */ }
+          }
+          function routable(a) {
+            var proto = a.protocol;
+            if (proto !== 'http:' && proto !== 'https:' && proto !== 'work42:' && proto !== 'file:') { return false; }
+            if (a.hash && a.href.split('#')[0] === location.href.split('#')[0]) { return false; }
+            return true;
+          }
+          function originPath(href) {
+            try { var u = new URL(href, location.href); return u.origin + u.pathname; } catch (e) { return href; }
+          }
+          function now() { return Date.now(); }
+          state.replay = function() {
+            var a = state.pending; state.pending = null;
+            if (!a || !a.isConnected) { return false; }
+            state.replaying = true;
+            try { a.click(); } finally { state.replaying = false; }
+            return true;
+          };
+          state.revert = function(replaced, previous) {
+            // A push that really added an entry is undone with back(); a replace (or a push the browser turned
+            // into one) puts the previous URL back in place.
+            if (replaced || !state.lastAdded) { origReplace.call(history, null, '', previous); } else { history.back(); }
+          };
+          function gesture() { state.lastGesture = now(); }
+          window.addEventListener('pointerdown', gesture, true);
+          window.addEventListener('keydown', function(e) { if (e.key === 'Enter') { gesture(); } }, true);
+          window.addEventListener('click', function(e) {
+            gesture();
+            if (state.replaying) { return; }
+            var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+            if (!a || typeof a.href !== 'string' || !routable(a)) { return; }
+            var href = a.href;
+            var t = now();
+            state.routed = state.routed.filter(function(r) { return t - r.at <= GESTURE_MS; });
+            var alreadyRouted = state.routed.some(function(r) { return r.url === href; });
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (alreadyRouted) { return; }
+            state.pending = a;
+            post({ kind: 'click', url: href });
+          }, true);
+          function wrap(name, original) {
+            history[name] = function() {
+              var before = location.href;
+              var lengthBefore = history.length;
+              var result = original.apply(this, arguments);
+              state.lastAdded = name === 'pushState' && history.length > lengthBefore;
+              try {
+                var after = location.href;
+                if (!state.replaying && now() - state.lastGesture <= GESTURE_MS && originPath(before) !== originPath(after)) {
+                  state.routed.push({ url: after, at: now() });
+                  post({ kind: 'routeChange', url: after, replaced: name === 'replaceState', previous: before });
+                }
+              } catch (err) { /* never break the page's own routing */ }
+              return result;
+            };
+          }
+          wrap('pushState', origPush);
+          wrap('replaceState', origReplace);
+        })();
+        """
+    }
+
     /// Encode an arbitrary string as a JavaScript string literal
     /// (including the surrounding double quotes), safely escaping every
     /// character that would otherwise break out of, or alter, the
