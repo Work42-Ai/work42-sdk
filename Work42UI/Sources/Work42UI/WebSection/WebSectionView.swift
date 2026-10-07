@@ -406,6 +406,13 @@ public struct WebSectionView: NSViewRepresentable {
         /// Browser-oriented views leave this nil and navigate normally.
         var onOpenLink: ((URL) -> Void)?
 
+        /// Optional link router for browser-style hosts (which leave `onOpenLink` nil). Asked
+        /// about a link the user clicked (or a `target=_blank` / `window.open` popup); returning
+        /// true means the host took the link and the in-place navigation is cancelled, false
+        /// means navigate here as usual. Never consulted for same-document anchors, redirects or
+        /// script-driven navigations, so login flows are unaffected.
+        var linkRouter: ((URL) -> Bool)?
+
         /// OPTIONAL text-selection callback (AC2 / AC7 — cozy-nimbus).
         /// Receives the selected text, the view-space `CGRect` bounding the
         /// selection, and an optional file path extracted from the surrounding
@@ -645,7 +652,7 @@ public struct WebSectionView: NSViewRepresentable {
             decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
         ) {
             guard navigationAction.navigationType == .linkActivated,
-                  let onOpenLink,
+                  onOpenLink != nil || linkRouter != nil,
                   let url = navigationAction.request.url else {
                 decisionHandler(.allow)
                 return
@@ -659,8 +666,14 @@ public struct WebSectionView: NSViewRepresentable {
                 return
             }
 
-            onOpenLink(url.absoluteURL)
-            decisionHandler(.cancel)
+            if let onOpenLink {
+                onOpenLink(url.absoluteURL)
+                decisionHandler(.cancel)
+            } else if let linkRouter, linkRouter(url.absoluteURL) {
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
+            }
         }
 
         static func isSameDocumentAnchor(_ candidate: URL, currentURL: URL?) -> Bool {
@@ -722,6 +735,11 @@ public struct WebSectionView: NSViewRepresentable {
                 // same-webview popup/SSO behavior by leaving `onOpenLink` nil.
                 if let onOpenLink, !Self.isSameDocumentAnchor(url, currentURL: webView.url) {
                     onOpenLink(url.absoluteURL)
+                } else if onOpenLink == nil, let linkRouter,
+                          !Self.isSameDocumentAnchor(url, currentURL: webView.url),
+                          linkRouter(url.absoluteURL) {
+                    // The host took the link (another widget claims it, or the user chose to
+                    // open it elsewhere); nothing to load here.
                 } else {
                     webView.load(URLRequest(url: url))
                 }
@@ -1451,6 +1469,18 @@ public final class WebSectionLiveView {
     /// page is loaded yet — `reload()` simply re-requests the last URL.
     public func reload() {
         webView.reload()
+    }
+
+    /// Wire (or clear) the link router: asked about each link the user clicks in a browser-style
+    /// view; returning true means the host took the link and navigation here is cancelled.
+    public func setLinkRouter(_ router: ((URL) -> Bool)?) {
+        coordinator.linkRouter = router
+    }
+
+    /// Load `url` in this view (what "keep it here" does after the router declined or the user
+    /// chose to stay).
+    public func load(_ url: URL) {
+        webView.load(URLRequest(url: url))
     }
 
     /// Wire (or clear) the native diagram-expand sink. The `w42Diagram` message

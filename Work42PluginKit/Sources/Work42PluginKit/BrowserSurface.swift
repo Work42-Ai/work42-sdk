@@ -752,6 +752,10 @@ private struct BrowserSurfaceReady: View {
     /// Plugin selection resolver, forwarded from `BrowserSurface`.
     var selectionResolver: WebSelectionResolver?
 
+    /// The host's link router (see `WidgetLinkRouter`): links clicked in the page are offered to
+    /// the host before they navigate in place.
+    @Environment(\.widgetLinkRouter) private var linkRouter
+
     /// When `true`, the host's widget-chrome engine owns and renders the browser
     /// chrome row in the widget header (AC7). Skip the in-body chrome row +
     /// divider here to avoid a double header. The find-bar overlay and
@@ -785,10 +789,23 @@ private struct BrowserSurfaceReady: View {
             dataStoreKey: spec.dataStoreKey,
             title: spec.title
         )
-        return BrowserSurfaceCache.shared.liveView(
+        let live = BrowserSurfaceCache.shared.liveView(
             forKey: tabLiveKey(for: tab.id),
             building: sectionSpec
         )
+        installLinkRouter(on: live)
+        return live
+    }
+
+    /// Offer links clicked in `live` to the host's router; "keep here" loads the URL in this view.
+    private func installLinkRouter(on live: WebSectionLiveView) {
+        guard let router = linkRouter else {
+            live.setLinkRouter(nil)
+            return
+        }
+        live.setLinkRouter { [weak live] url in
+            router.route(url) { live?.load(url) }
+        }
     }
 
     // MARK: - Body

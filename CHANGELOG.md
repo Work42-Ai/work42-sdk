@@ -6,6 +6,12 @@
   `BrowserSurface` falls back to it when no `services:` is passed, so highlight-to-comment works
   in every browser widget without per-widget wiring. An explicit `services:` still wins. Additive;
   ABI generation `11` is unchanged.
+- Add `EnvironmentValues.widgetLinkRouter` (`WidgetLinkRouter`) and `WebSectionLiveView.setLinkRouter(_:)`
+  / `load(_:)`. A browser widget's web views offer a clicked link (and `target=_blank` / `window.open`
+  popups, but never same-document anchors, redirects or script navigations) to the host before
+  navigating in place; returning true cancels the navigation. `BrowserSurface` installs the
+  environment router on every web view it shows. Content hosts that set `onOpenLink` are unchanged.
+  Additive.
 
 ## 1.1.0
 
