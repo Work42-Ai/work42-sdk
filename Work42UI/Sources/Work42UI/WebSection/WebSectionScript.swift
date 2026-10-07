@@ -692,7 +692,8 @@ public enum WebSectionScript {
     /// the native side via `WebSectionLiveView.setLinkPatterns`), it cancels the click and posts
     /// `{url}` to `handlerName`; the host then focuses the owning widget.
     ///
-    /// Inert until patterns are set. Clicks with ⌘ ⌃ ⇧ or ⌥ held, non-primary buttons, and clicks the
+    /// Inert until patterns are set or `all` is turned on (`WebSectionLiveView.setInterceptAllLinks`, which makes every
+    /// web link the host's to route). A click the host declines is replayed (`window.__w42Links.replay()`). Clicks with ⌘ ⌃ ⇧ or ⌥ held, non-primary buttons, and clicks the
     /// page already handled are left alone, so ⌥-click navigates in place. A pattern the page can't
     /// compile is skipped.
     public static func linkInterceptor(handlerName: String) -> String {
@@ -701,7 +702,7 @@ public enum WebSectionScript {
         (function() {
           if (window.__w42Links) { return; }
           var HANDLER = \(handlerLiteral);
-          var state = window.__w42Links = { patterns: [] };
+          var state = window.__w42Links = { patterns: [], all: false, pending: null, replaying: false };
           function matches(href) {
             for (var i = 0; i < state.patterns.length; i++) {
               var p = state.patterns[i];
@@ -709,15 +710,34 @@ public enum WebSectionScript {
             }
             return false;
           }
+          // `all` mode: every web link is the host's to route. mailto:, javascript: and the like, and
+          // fragment links inside the current document, stay with the page.
+          function isWebLink(a) {
+            var proto = a.protocol;
+            if (proto !== 'http:' && proto !== 'https:' && proto !== 'work42:') { return false; }
+            if (a.hash && a.href.split('#')[0] === location.href.split('#')[0]) { return false; }
+            return true;
+          }
+          // The host declined the link: send the same click through again so the page (a single-page
+          // app routing with pushState, or a plain navigation) handles it exactly as it would have.
+          state.replay = function() {
+            var a = state.pending; state.pending = null;
+            if (!a || !a.isConnected) { return false; }
+            state.replaying = true;
+            try { a.click(); } finally { state.replaying = false; }
+            return true;
+          };
           document.addEventListener('click', function(e) {
-            if (state.patterns.length === 0 || e.defaultPrevented) { return; }
+            if (state.replaying) { return; }
+            if ((!state.all && state.patterns.length === 0) || e.defaultPrevented) { return; }
             if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) { return; }
             var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
             if (!a || typeof a.href !== 'string') { return; }
             var href = a.href;
-            if (!matches(href)) { return; }
+            if (state.all ? !isWebLink(a) : !matches(href)) { return; }
             e.preventDefault();
             e.stopImmediatePropagation();
+            state.pending = a;
             try {
               var mh = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[HANDLER];
               if (mh && typeof mh.postMessage === 'function') { mh.postMessage({ url: href }); }

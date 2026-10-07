@@ -803,17 +803,18 @@ private struct BrowserSurfaceReady: View {
         return live
     }
 
-    /// Offer links clicked in `live` to the host's router; "keep here" loads the URL in this view.
+    /// Offer every link clicked in `live` to the host's router (Open Link decides where it opens);
+    /// "keep here" loads the URL in this view.
     private func installLinkRouter(on live: WebSectionLiveView) {
         guard let router = linkRouter else {
             live.setLinkRouter(nil)
-            live.setLinkPatterns([])
+            live.setInterceptAllLinks(false)
             return
         }
         live.setLinkRouter { [weak live] url in
             router.route(url) { live?.load(url) }
         }
-        live.setLinkPatterns(router.patterns())
+        live.setInterceptAllLinks(true)
     }
 
     // MARK: - Body

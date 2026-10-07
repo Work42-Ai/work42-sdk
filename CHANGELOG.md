@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add `WebSectionLiveView.setInterceptAllLinks(_:)`. `BrowserSurface` turns it on whenever the host provides a
+  link router, so every web link click (`http`, `https`, `work42`; not `mailto:` or fragments in the current
+  document) is offered to the router, including in-page single-page-app clicks, and the host's Open Link
+  decides where it opens. A click the router declines is replayed in the page, so the app routes in place as
+  before. Option-click always navigates in place. `WidgetLinkRouter.patterns` is kept but no longer used.
+  Adds symbols only.
+
 - Add `EnvironmentValues.widgetSessionServices`, set by the host around every plugin widget.
   `BrowserSurface` falls back to it when no `services:` is passed, so highlight-to-comment works
   in every browser widget without per-widget wiring. An explicit `services:` still wins. The

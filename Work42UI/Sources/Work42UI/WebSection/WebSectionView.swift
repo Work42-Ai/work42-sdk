@@ -464,6 +464,8 @@ public struct WebSectionView: NSViewRepresentable {
 
         /// URL patterns other widgets own, pushed into the page for the link interceptor.
         var linkPatterns: [WebLinkPattern] = []
+        /// Every web link click is handed to `linkRouter` (Open Link decides). Supersedes `linkPatterns`.
+        var interceptAllLinks = false
 
         /// Where an intercepted link goes when the router declines it. Nil loads it in the web view,
         /// which is what the click would have done; tests inject their own.
@@ -557,7 +559,7 @@ public struct WebSectionView: NSViewRepresentable {
             let payload = linkPatterns.map { ["source": $0.source, "flags": $0.flags] }
             guard let data = try? JSONSerialization.data(withJSONObject: payload),
                   let json = String(data: data, encoding: .utf8) else { return }
-            webView.evaluateJavaScript("window.__w42Links && (window.__w42Links.patterns = \(json));", completionHandler: nil)
+            webView.evaluateJavaScript("window.__w42Links && (window.__w42Links.patterns = \(json), window.__w42Links.all = \(interceptAllLinks));", completionHandler: nil)
         }
 
         /// A click on a claimed link was cancelled in the page; hand the URL to the host's router and, if
@@ -569,8 +571,10 @@ public struct WebSectionView: NSViewRepresentable {
             if linkRouter?(url) == true { return }
             if let interceptedLinkFallback {
                 interceptedLinkFallback(url)
-            } else {
-                webView?.load(URLRequest(url: url))
+            } else if let webView {
+                webView.evaluateJavaScript("window.__w42Links ? window.__w42Links.replay() : false") { result, _ in
+                    if (result as? Bool) != true { webView.load(URLRequest(url: url)) }
+                }
             }
         }
 
@@ -695,7 +699,7 @@ public struct WebSectionView: NSViewRepresentable {
             }
             reapplyIsolation(in: webView)
             // A full load starts with empty link patterns; hand the page the current ones again.
-            if !linkPatterns.isEmpty { pushLinkPatterns(to: webView) }
+            if !linkPatterns.isEmpty || interceptAllLinks { pushLinkPatterns(to: webView) }
         }
 
         public func webView(
@@ -705,6 +709,7 @@ public struct WebSectionView: NSViewRepresentable {
         ) {
             guard navigationAction.navigationType == .linkActivated,
                   onOpenLink != nil || linkRouter != nil,
+                  !navigationAction.modifierFlags.contains(.option),
                   let url = navigationAction.request.url else {
                 decisionHandler(.allow)
                 return
@@ -1558,6 +1563,15 @@ public final class WebSectionLiveView {
     public func setLinkPatterns(_ patterns: [WebLinkPattern]) {
         guard patterns != coordinator.linkPatterns else { return }
         coordinator.linkPatterns = patterns
+        coordinator.pushLinkPatterns(to: webView)
+    }
+
+    /// Make every web link click (http, https, work42; not fragments in the current document) go to the link
+    /// router, whatever it points at, so the host's Open Link decides where it opens. A declined click is
+    /// replayed in the page. Option-click always navigates in place. Idempotent.
+    public func setInterceptAllLinks(_ on: Bool) {
+        guard on != coordinator.interceptAllLinks else { return }
+        coordinator.interceptAllLinks = on
         coordinator.pushLinkPatterns(to: webView)
     }
 
