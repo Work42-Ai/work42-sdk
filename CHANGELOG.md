@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add `EnvironmentValues.widgetSessionServices`, set by the host around every plugin widget.
+  `BrowserSurface` falls back to it when no `services:` is passed, so highlight-to-comment works
+  in every browser widget without per-widget wiring. An explicit `services:` still wins. Additive;
+  ABI generation `11` is unchanged.
+
 ## 1.1.0
 
 - Add the canonical `work42-plugin-creator` skill, references, and plugin

@@ -450,7 +450,13 @@ public struct BrowserSurface: View {
     /// publishes the selection for dictate-to-comment — no per-widget wiring.
     /// Nil (previews / tests / hosts that don't pass services) disables the
     /// comment pipeline but keeps every other behaviour identical.
+    ///
+    /// When nil, the surface falls back to `EnvironmentValues.widgetSessionServices`, which
+    /// the host sets around every plugin widget — so highlight-to-comment works for any
+    /// browser widget without it passing `services:`. An explicit value always wins.
     public let services: SessionServices?
+
+    @Environment(\.widgetSessionServices) private var environmentServices
 
     /// Optional plugin hook that enriches a raw selection into a useful source
     /// label / excerpt (e.g. GitHub → "PR #42 · File.swift:L12–L18") right
@@ -474,6 +480,11 @@ public struct BrowserSurface: View {
         self.configure = configure
     }
 
+    /// The services the comment pipeline uses: the explicit parameter, else the environment's.
+    static func effectiveServices(explicit: SessionServices?, environment: SessionServices?) -> SessionServices? {
+        explicit ?? environment
+    }
+
     public var body: some View {
         content
             .task(id: state.retryNonce) {
@@ -487,7 +498,11 @@ public struct BrowserSurface: View {
         // immediately. Remounts must never re-run the provider or flash a
         // spinner (AC4: cache hit short-circuits resolution).
         if let model = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey) {
-            BrowserSurfaceReady(model: model, cacheKey: cacheKey, spec: spec, services: services, selectionResolver: selectionResolver)
+            BrowserSurfaceReady(
+                model: model, cacheKey: cacheKey, spec: spec,
+                services: Self.effectiveServices(explicit: services, environment: environmentServices),
+                selectionResolver: selectionResolver
+            )
         } else {
             switch state.resolution {
             case .resolving:
