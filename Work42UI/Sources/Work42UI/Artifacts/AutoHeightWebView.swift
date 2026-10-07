@@ -77,7 +77,7 @@ public struct AutoHeightWebView: NSViewRepresentable {
         // Use OverscrollPassthroughWebView in .alwaysPassThrough mode: the
         // card is sized to its content height so there is nothing to scroll
         // internally — all wheel events must chain to the parent chat scroll.
-        let webView = OverscrollPassthroughWebView(frame: .zero, configuration: config)
+        let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: config, role: .offscreen)
         webView.overscrollMode = .alwaysPassThrough
         webView.navigationDelegate = coordinator
         // Transparent: card background shows through

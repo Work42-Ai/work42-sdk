@@ -247,9 +247,10 @@ public final class ArtifactSnapshotRenderer: NSObject {
         let config = WKWebViewConfiguration()
         // Offscreen: never added to a window; a fixed frame gives WebKit its
         // layout viewport.
-        let view = WKWebView(
-            frame: CGRect(origin: .zero, size: Self.viewportSize),
-            configuration: config
+        let view = Work42WebView.make(
+            configuration: config,
+            role: .offscreen,
+            frame: CGRect(origin: .zero, size: Self.viewportSize)
         )
         view.navigationDelegate = self
         webView = view

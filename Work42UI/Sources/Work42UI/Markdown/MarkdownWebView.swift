@@ -28,7 +28,7 @@ public struct MarkdownCommentRange: Equatable, Sendable {
 /// so it has nothing to scroll itself — but a stock WKWebView still consumes
 /// wheel events, which freezes the outer scroll whenever the cursor is over
 /// the document. Forwarding to the next responder restores normal scrolling.
-private final class PassthroughScrollWebView: WKWebView {
+private final class PassthroughScrollWebView: PolicyWebView {
     var forwardsScrollEvents = false
 
     override func scrollWheel(with event: NSEvent) {
@@ -49,13 +49,6 @@ struct MarkdownWebView: NSViewRepresentable {
     /// The doc's own URL — the base for resolving relative image/link paths and
     /// for distinguishing same-doc `#anchor` links from outbound links.
     private let baseURL: URL?
-    /// Called for any outbound user-activated link after resolving it to one
-    /// canonical URL. The host owns intent dispatch and destination selection.
-    /// Mandatory route supplied by `MarkdownPreview`, the public document
-    /// policy boundary. The renderer must never decide to open an outbound URL
-    /// itself or silently fall back to a process-global notification.
-    private let onOpenLink: (URL) -> Void
-
     /// Comment layer. Enabled only for the file Preview; other surfaces render
     /// read-only. `comments` drives the persistent marks; the callbacks fire on
     /// the floating add-button click and on a mark click, with the anchor view +
@@ -112,7 +105,6 @@ struct MarkdownWebView: NSViewRepresentable {
     init(
         text: String,
         baseURL: URL? = nil,
-        onOpenLink: @escaping (URL) -> Void,
         commentsEnabled: Bool = false,
         comments: [MarkdownCommentRange] = [],
         onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)? = nil,
@@ -129,7 +121,6 @@ struct MarkdownWebView: NSViewRepresentable {
     ) {
         self.text = text
         self.baseURL = baseURL
-        self.onOpenLink = onOpenLink
         self.commentsEnabled = commentsEnabled
         self.comments = comments
         self.onAddComment = onAddComment
@@ -183,7 +174,11 @@ struct MarkdownWebView: NSViewRepresentable {
             ucc.add(context.coordinator, name: Coordinator.bridgeMessageName)
         }
         config.userContentController = ucc
-        let webView = PassthroughScrollWebView(frame: .zero, configuration: config)
+        let webView = Work42WebView.make(
+            PassthroughScrollWebView.self,
+            configuration: config,
+            role: .interactive(source: context.environment.work42LinkSource)
+        )
         // Auto-height mode: the view is sized to its content, so wheel events
         // belong to the enclosing ScrollView.
         webView.forwardsScrollEvents = onContentHeight != nil
@@ -205,7 +200,6 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     public func updateNSView(_ webView: WKWebView, context: Context) {
-        context.coordinator.onOpenLink = onOpenLink
         context.coordinator.onAddComment = onAddComment
         context.coordinator.onViewComment = onViewComment
         context.coordinator.onSelectionChanged = onSelectionChanged
@@ -227,7 +221,6 @@ struct MarkdownWebView: NSViewRepresentable {
 
     public func makeCoordinator() -> Coordinator {
         Coordinator(
-            onOpenLink: onOpenLink,
             onAddComment: onAddComment,
             onViewComment: onViewComment,
             artifactURLResolver: artifactURLResolver,
@@ -283,7 +276,6 @@ struct MarkdownWebView: NSViewRepresentable {
         /// Raw HTML appended after the markdown fragment at load time.
         var trailingHTML = ""
 
-        var onOpenLink: (URL) -> Void
         var onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)?
         var onViewComment: ((NSView, CGRect, Int) -> Void)?
         /// A live text selection appeared (1-based line span + excerpt) — used to
@@ -302,13 +294,11 @@ struct MarkdownWebView: NSViewRepresentable {
         private var lastCommentsKey: String?
 
         init(
-            onOpenLink: @escaping (URL) -> Void,
             onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)?,
             onViewComment: ((NSView, CGRect, Int) -> Void)?,
             artifactURLResolver: ((String) -> URL?)? = nil,
             artifactTitleResolver: ((String) -> String?)? = nil
         ) {
-            self.onOpenLink = onOpenLink
             self.onAddComment = onAddComment
             self.onViewComment = onViewComment
             self.artifactURLResolver = artifactURLResolver
@@ -539,13 +529,13 @@ struct MarkdownWebView: NSViewRepresentable {
                 return
             }
 
-            // Content surfaces never navigate outbound links themselves. Hand
-            // one canonical URL to the host's visible Open Link intent. WebKit
-            // has already resolved ordinary relative hrefs against `baseURL`;
-            // the fallback also normalizes the `path:line` spelling that
-            // WebKit parses as a custom scheme.
+            // Content surfaces never navigate outbound links themselves. The web view's link policy has
+            // already routed ordinary http(s)/file links to Open Link; what reaches here is a reference
+            // the page could not route (a `path:line` spelling WebKit parses as a custom scheme, a
+            // relative href in a page with no base URL). Resolve it to one canonical URL and offer it
+            // to the same Open Link.
             let canonicalURL = Self.canonicalLinkURL(url, baseURL: baseURL)
-            onOpenLink(canonicalURL)
+            (webView as? PolicyWebView)?.offerLink(canonicalURL)
             decisionHandler(.cancel)
         }
 

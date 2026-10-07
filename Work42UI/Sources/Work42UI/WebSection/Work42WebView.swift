@@ -82,13 +82,30 @@ public enum WebViewRole: Sendable {
 
 public enum Work42WebView {
     /// The only way to create a web view in Work42. `configuration` carries the caller's scripts and handlers.
-    public static func make(configuration: WKWebViewConfiguration = WKWebViewConfiguration(), role: WebViewRole) -> WKWebView {
+    public static func make(
+        configuration: WKWebViewConfiguration = WKWebViewConfiguration(),
+        role: WebViewRole,
+        frame: CGRect = .zero
+    ) -> WKWebView {
         switch role {
         case .offscreen:
-            return WKWebView(frame: .zero, configuration: configuration)
-        case .interactive(let source):
-            return PolicyWebView(configuration: configuration, source: source)
+            return WKWebView(frame: frame, configuration: configuration)
+        case .interactive:
+            return make(PolicyWebView.self, configuration: configuration, role: role, frame: frame)
         }
+    }
+
+    /// Builds one of the SDK's own `PolicyWebView` subclasses (overscroll passthrough, the markdown renderer's
+    /// scroll forwarding). An `.offscreen` role leaves the subclass without a link policy.
+    static func make<T: PolicyWebView>(
+        _ type: T.Type,
+        configuration: WKWebViewConfiguration = WKWebViewConfiguration(),
+        role: WebViewRole,
+        frame: CGRect = .zero
+    ) -> T {
+        let view = type.init(frame: frame, configuration: configuration)
+        view.install(role)
+        return view
     }
 }
 
@@ -99,17 +116,34 @@ extension EnvironmentValues {
 
 // MARK: - PolicyWebView
 
-/// An interactive web view whose navigation and UI delegates are fronted by the link policy.
-public final class PolicyWebView: WKWebView {
+/// An interactive web view whose navigation and UI delegates are fronted by the link policy. Subclass it for
+/// a view that needs its own behaviour and build it with `Work42WebView.make(_:configuration:role:)`.
+public class PolicyWebView: WKWebView {
     public var linkSource: String?
 
     private let policy = LinkPolicyProxy()
+    private var policyActive = false
     private weak var callerNavigation: (any WKNavigationDelegate)?
     private weak var callerUI: (any WKUIDelegate)?
 
-    init(configuration: WKWebViewConfiguration, source: String?) {
+    public required override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+        super.init(frame: frame, configuration: configuration)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("PolicyWebView is built by Work42WebView.make") }
+
+    /// Offers a link the page could not route itself (a `path:line` reference, a relative href in a page with no
+    /// base URL) to the host's Open Link. A view with no policy ignores it.
+    func offerLink(_ url: URL) {
+        guard policyActive else { return }
+        policy.offer(url, kind: .click) { _ in }
+    }
+
+    /// Turns the link policy on for an interactive role. Offscreen leaves the view as a plain web view.
+    func install(_ role: WebViewRole) {
+        guard case .interactive(let source) = role, !policyActive else { return }
         linkSource = source
-        super.init(frame: .zero, configuration: configuration)
         policy.webView = self
         let controller = configuration.userContentController
         controller.addUserScript(WKUserScript(
@@ -118,16 +152,19 @@ public final class PolicyWebView: WKWebView {
             forMainFrameOnly: true
         ))
         controller.add(LinkMessageRelay(policy), name: LinkPolicyProxy.handlerName)
+        policyActive = true
+        callerNavigation = super.navigationDelegate
+        callerUI = super.uiDelegate
+        policy.callerNavigation = callerNavigation
+        policy.callerUI = callerUI
         super.navigationDelegate = policy
         super.uiDelegate = policy
     }
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("PolicyWebView is built by Work42WebView.make") }
-
     public override var navigationDelegate: (any WKNavigationDelegate)? {
-        get { callerNavigation }
+        get { policyActive ? callerNavigation : super.navigationDelegate }
         set {
+            guard policyActive else { super.navigationDelegate = newValue; return }
             callerNavigation = newValue
             policy.callerNavigation = newValue
             super.navigationDelegate = policy
@@ -135,8 +172,9 @@ public final class PolicyWebView: WKWebView {
     }
 
     public override var uiDelegate: (any WKUIDelegate)? {
-        get { callerUI }
+        get { policyActive ? callerUI : super.uiDelegate }
         set {
+            guard policyActive else { super.uiDelegate = newValue; return }
             callerUI = newValue
             policy.callerUI = newValue
             super.uiDelegate = policy
@@ -213,7 +251,7 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     /// Ask the host; no handler means the link stays where it is.
-    private func offer(_ url: URL, kind: WebLinkKind, completion: @escaping @MainActor (WebLinkOutcome) -> Void) {
+    func offer(_ url: URL, kind: WebLinkKind, completion: @escaping @MainActor (WebLinkOutcome) -> Void) {
         guard let webView, let handler = WebLinkHost.handler else {
             completion(.keptInPlace)
             return

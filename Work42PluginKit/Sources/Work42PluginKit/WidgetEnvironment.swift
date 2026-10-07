@@ -34,17 +34,14 @@ public extension EnvironmentValues {
 
 // MARK: - Link routing
 
-/// How a link clicked inside a browser widget is offered to the host before it navigates in
-/// place. `route(url, keepHere)` returns true when the host took the link (it may ask the user
-/// where to open it and call `keepHere` to load it in the source view after all), false to
-/// navigate in place. Installed by the host around every plugin widget; `BrowserSurface` wires
-/// it to each of its web views.
+/// How a plugin's own code offers a link to the host's Open Link: `route(url, keepHere)` returns true when
+/// the host took the link (it may ask the user where to open it and call `keepHere` to load it in the source
+/// view after all), false to navigate in place. Installed by the host around every plugin widget. Web views
+/// need none of this: `Work42WebView` sends every link they show to Open Link by itself.
 public struct WidgetLinkRouter: Sendable {
     public let route: @MainActor @Sendable (_ url: URL, _ keepHere: @escaping @MainActor @Sendable () -> Void) -> Bool
 
-    /// The URL patterns other widgets own. `BrowserSurface` hands them to each page so a click on a
-    /// matching link is caught inside the page (single-page apps never trigger a navigation) and sent to
-    /// `route`. Empty means only real navigations are offered to `route`.
+    /// Ignored; every link goes to Open Link.
     public let patterns: @MainActor @Sendable () -> [WebLinkPattern]
 
     public init(route: @escaping @MainActor @Sendable (_ url: URL, _ keepHere: @escaping @MainActor @Sendable () -> Void) -> Bool) {

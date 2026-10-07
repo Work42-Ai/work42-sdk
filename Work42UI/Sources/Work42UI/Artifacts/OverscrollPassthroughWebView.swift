@@ -98,7 +98,7 @@ public enum OverscrollMode {
 ///
 /// - Important: Main-actor–isolated. Always create and use from the main actor.
 @MainActor
-public final class OverscrollPassthroughWebView: WKWebView {
+public final class OverscrollPassthroughWebView: PolicyWebView {
 
     // MARK: Public configuration
 

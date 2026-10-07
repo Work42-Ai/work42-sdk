@@ -74,9 +74,8 @@ public struct WebSectionView: NSViewRepresentable {
     /// for consumers that don't need it.
     public var onSignal: ((WebSectionSignal) -> Void)?
 
-    /// Optional content-surface link interception. When present, outbound
-    /// user-activated links are cancelled and forwarded to the host. Ordinary
-    /// BrowserSurface consumers leave this nil and retain normal navigation.
+    /// Ignored. Every link a web view shows goes to the host's Open Link intent (`WebLinkHost`); kept so
+    /// source written against earlier SDKs still compiles.
     public var onOpenLink: ((URL) -> Void)?
 
     /// Name the JS->Swift message handler is registered under, matching
@@ -91,8 +90,7 @@ public struct WebSectionView: NSViewRepresentable {
     /// don't collide on the same `WKUserContentController`.
     public static let selectionHandlerName = "w42Selection"
 
-    /// Name the JS->Swift message handler for intercepted link clicks is registered under
-    /// (`WebSectionScript.linkInterceptor`).
+    /// Name the link policy's JS->Swift message handler is registered under (`Work42WebView` owns it).
     public static let linkHandlerName = "w42Link"
 
     /// Name the JS->Swift message handler for element-picker events
@@ -119,7 +117,6 @@ public struct WebSectionView: NSViewRepresentable {
     }
 
     public func makeNSView(context: Context) -> WKWebView {
-        context.coordinator.onOpenLink = onOpenLink
         return Self.buildWebView(spec: spec, onSignal: onSignal, coordinator: context.coordinator)
     }
 
@@ -219,19 +216,6 @@ public struct WebSectionView: NSViewRepresentable {
         let selectionProxy = SelectionHandlerProxy(coordinator: coordinator)
         coordinator.selectionProxy = selectionProxy
         userContentController.add(selectionProxy, name: Self.selectionHandlerName)
-
-        // SEAM — Link interception. Single-page apps change page with history.pushState, which the
-        // navigation delegate never sees, so clicks on links another widget owns are caught inside the
-        // page. Inert until the host sets patterns (`WebSectionLiveView.setLinkPatterns`).
-        let linkScript = WKUserScript(
-            source: WebSectionScript.linkInterceptor(handlerName: Self.linkHandlerName),
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
-        )
-        userContentController.addUserScript(linkScript)
-        let linkProxy = LinkHandlerProxy(coordinator: coordinator)
-        coordinator.linkProxy = linkProxy
-        userContentController.add(linkProxy, name: Self.linkHandlerName)
 
         // SEAM — Element picker (lanky-pine.2). Always inject:
         //   1. The picker-core.js asset at .atDocumentStart so
@@ -344,7 +328,7 @@ public struct WebSectionView: NSViewRepresentable {
         // Use OverscrollPassthroughWebView so wheel events chain to the
         // enclosing chat scroll view when the page is at its top/bottom
         // boundary (feat/spec-as-html.11).
-        let webView = OverscrollPassthroughWebView(frame: .zero, configuration: configuration)
+        let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: configuration, role: .interactive(source: nil))
         webView.overscrollMode = .passthroughAtBoundary
         // SEAM .3: navigation + UI delegates. The Coordinator re-runs the
         // isolation script on SPA navigation (Jira switches issues without
@@ -419,17 +403,6 @@ public struct WebSectionView: NSViewRepresentable {
         /// after IN-PAGE navigation (link clicks), not just the last typed URL.
         var onURLChange: ((URL) -> Void)?
 
-        /// Optional outbound-link sink installed only by content-style hosts.
-        /// Browser-oriented views leave this nil and navigate normally.
-        var onOpenLink: ((URL) -> Void)?
-
-        /// Optional link router for browser-style hosts (which leave `onOpenLink` nil). Asked
-        /// about a link the user clicked (or a `target=_blank` / `window.open` popup); returning
-        /// true means the host took the link and the in-place navigation is cancelled, false
-        /// means navigate here as usual. Never consulted for same-document anchors, redirects or
-        /// script-driven navigations, so login flows are unaffected.
-        var linkRouter: ((URL) -> Bool)?
-
         /// OPTIONAL text-selection callback (AC2 / AC7 — cozy-nimbus).
         /// Receives the selected text, the view-space `CGRect` bounding the
         /// selection, and an optional file path extracted from the surrounding
@@ -458,18 +431,6 @@ public struct WebSectionView: NSViewRepresentable {
         /// Same retain-cycle-avoidance pattern as `messageProxy`.
         /// Torn down in `dismantleNSView`.
         var selectionProxy: SelectionHandlerProxy?
-
-        /// The weak-proxy message handler for intercepted link clicks. Torn down in `dismantleNSView`.
-        var linkProxy: LinkHandlerProxy?
-
-        /// URL patterns other widgets own, pushed into the page for the link interceptor.
-        var linkPatterns: [WebLinkPattern] = []
-        /// Every web link click is handed to `linkRouter` (Open Link decides). Supersedes `linkPatterns`.
-        var interceptAllLinks = false
-
-        /// Where an intercepted link goes when the router declines it. Nil loads it in the web view,
-        /// which is what the click would have done; tests inject their own.
-        var interceptedLinkFallback: ((URL) -> Void)?
 
         /// OPTIONAL element-pick callback (lanky-pine.2 / AC3).
         /// Receives the CSS selector, the view-space bounding rect, the
@@ -551,31 +512,6 @@ public struct WebSectionView: NSViewRepresentable {
             else { return }
             let title = dict["title"] as? String
             onSignal(WebSectionSignal(kind: kind, title: title))
-        }
-
-        /// Push `linkPatterns` into the page. Safe to call before the interceptor exists (it is guarded)
-        /// and again after every navigation, since a full load starts with empty patterns.
-        func pushLinkPatterns(to webView: WKWebView) {
-            let payload = linkPatterns.map { ["source": $0.source, "flags": $0.flags] }
-            guard let data = try? JSONSerialization.data(withJSONObject: payload),
-                  let json = String(data: data, encoding: .utf8) else { return }
-            webView.evaluateJavaScript("window.__w42Links && (window.__w42Links.patterns = \(json), window.__w42Links.all = \(interceptAllLinks));", completionHandler: nil)
-        }
-
-        /// A click on a claimed link was cancelled in the page; hand the URL to the host's router and, if
-        /// it declines, let the link go where the click would have. Called by `LinkHandlerProxy`.
-        func handleInterceptedLinkBody(_ body: Any, webView: WKWebView?) {
-            guard let dict = body as? [String: Any],
-                  let raw = dict["url"] as? String,
-                  let url = URL(string: raw) else { return }
-            if linkRouter?(url) == true { return }
-            if let interceptedLinkFallback {
-                interceptedLinkFallback(url)
-            } else if let webView {
-                webView.evaluateJavaScript("window.__w42Links ? window.__w42Links.replay() : false") { result, _ in
-                    if (result as? Bool) != true { webView.load(URLRequest(url: url)) }
-                }
-            }
         }
 
         /// Decode a JS payload from the injected selection-tracking script
@@ -698,39 +634,6 @@ public struct WebSectionView: NSViewRepresentable {
                 onURLChange?(current)
             }
             reapplyIsolation(in: webView)
-            // A full load starts with empty link patterns; hand the page the current ones again.
-            if !linkPatterns.isEmpty || interceptAllLinks { pushLinkPatterns(to: webView) }
-        }
-
-        public func webView(
-            _ webView: WKWebView,
-            decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
-        ) {
-            guard navigationAction.navigationType == .linkActivated,
-                  onOpenLink != nil || linkRouter != nil,
-                  !navigationAction.modifierFlags.contains(.option),
-                  let url = navigationAction.request.url else {
-                decisionHandler(.allow)
-                return
-            }
-
-            // Same-document fragments belong to the document itself. This is
-            // particularly important for generated reports and artifacts with
-            // tables of contents.
-            if Self.isSameDocumentAnchor(url, currentURL: webView.url) {
-                decisionHandler(.allow)
-                return
-            }
-
-            if let onOpenLink {
-                onOpenLink(url.absoluteURL)
-                decisionHandler(.cancel)
-            } else if let linkRouter, linkRouter(url.absoluteURL) {
-                decisionHandler(.cancel)
-            } else {
-                decisionHandler(.allow)
-            }
         }
 
         static func isSameDocumentAnchor(_ candidate: URL, currentURL: URL?) -> Bool {
@@ -773,35 +676,6 @@ public struct WebSectionView: NSViewRepresentable {
             didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!
         ) {
             reapplyIsolation(in: webView)
-        }
-
-        /// Route SSO/login popups (`window.open`) into the same webview so
-        /// the auth flow completes inside the widget. Returning nil tells
-        /// WebKit not to create a separate popup webview.
-        public func webView(
-            _ webView: WKWebView,
-            createWebViewWith configuration: WKWebViewConfiguration,
-            for navigationAction: WKNavigationAction,
-            windowFeatures: WKWindowFeatures
-        ) -> WKWebView? {
-            if navigationAction.targetFrame == nil, let url = navigationAction.request.url {
-                // `target="_blank"`/`window.open` bypasses the ordinary
-                // navigation-policy callback. Content hosts (artifacts) must
-                // still dispatch these outbound links through Open Link,
-                // while BrowserSurface consumers keep their existing
-                // same-webview popup/SSO behavior by leaving `onOpenLink` nil.
-                if let onOpenLink, !Self.isSameDocumentAnchor(url, currentURL: webView.url) {
-                    onOpenLink(url.absoluteURL)
-                } else if onOpenLink == nil, let linkRouter,
-                          !Self.isSameDocumentAnchor(url, currentURL: webView.url),
-                          linkRouter(url.absoluteURL) {
-                    // The host took the link (another widget claims it, or the user chose to
-                    // open it elsewhere); nothing to load here.
-                } else {
-                    webView.load(URLRequest(url: url))
-                }
-            }
-            return nil
         }
 
         // MARK: - JS dialog delegates (native-web-dialog-parity, subtask .1)
@@ -1158,26 +1032,6 @@ public struct WebSectionView: NSViewRepresentable {
         }
     }
 
-    /// Weak forwarding shim for the link-interception JS->Swift message handler. Same retain-cycle
-    /// avoidance as `SelectionHandlerProxy`: the content controller retains its handlers strongly, so we
-    /// register this shim and hold only a weak back-reference to the Coordinator.
-    @MainActor
-    final class LinkHandlerProxy: NSObject, WKScriptMessageHandler {
-        weak var coordinator: Coordinator?
-
-        init(coordinator: Coordinator) {
-            self.coordinator = coordinator
-            super.init()
-        }
-
-        func userContentController(
-            _ userContentController: WKUserContentController,
-            didReceive message: WKScriptMessage
-        ) {
-            coordinator?.handleInterceptedLinkBody(message.body, webView: message.webView)
-        }
-    }
-
     /// Weak forwarding shim for the element-picker JS->Swift message handler
     /// (lanky-pine.2). Same retain-cycle-avoidance pattern as
     /// `SelectionHandlerProxy`: `WKUserContentController` retains its
@@ -1255,9 +1109,6 @@ public struct WebSectionView: NSViewRepresentable {
         // Also tear down the selection message handler symmetrically.
         controller.removeScriptMessageHandler(forName: Self.selectionHandlerName)
         coordinator.selectionProxy = nil
-        // Tear down the link-interception handler symmetrically.
-        controller.removeScriptMessageHandler(forName: Self.linkHandlerName)
-        coordinator.linkProxy = nil
         // Tear down the element-picker message handler symmetrically.
         controller.removeScriptMessageHandler(forName: Self.elementPickHandlerName)
         coordinator.pickProxy = nil
@@ -1271,7 +1122,6 @@ public struct WebSectionView: NSViewRepresentable {
     }
 
     public func updateNSView(_ webView: WKWebView, context: Context) {
-        context.coordinator.onOpenLink = onOpenLink
         // Reload only if the spec now points at a different URL, so
         // routine SwiftUI updates don't kick off a reload (which would
         // also drop any in-progress login or SPA state).
@@ -1509,11 +1359,11 @@ public final class WebSectionLiveView {
         set { coordinator.onURLChange = newValue }
     }
 
-    /// Intercept outbound user link activations. Nil preserves normal web
-    /// navigation, which is the default for BrowserSurface-based widgets.
-    public var onOpenLink: ((URL) -> Void)? {
-        get { coordinator.onOpenLink }
-        set { coordinator.onOpenLink = newValue }
+    /// The widget this web view belongs to (the link policy offers it to Open Link with every link). Nil for
+    /// views that are no widget.
+    public var linkSource: String? {
+        get { (webView as? PolicyWebView)?.linkSource }
+        set { (webView as? PolicyWebView)?.linkSource = newValue }
     }
 
     /// Callback fired when the user deselects a previously-picked element by
@@ -1549,35 +1399,6 @@ public final class WebSectionLiveView {
     /// page is loaded yet — `reload()` simply re-requests the last URL.
     public func reload() {
         webView.reload()
-    }
-
-    /// Wire (or clear) the link router: asked about each link the user clicks in a browser-style
-    /// view; returning true means the host took the link and navigation here is cancelled.
-    public func setLinkRouter(_ router: ((URL) -> Bool)?) {
-        coordinator.linkRouter = router
-    }
-
-    /// The URL patterns other widgets own. A click on a link matching one is caught INSIDE the page (so it
-    /// also works for single-page apps that never trigger a navigation) and handed to the link router.
-    /// Pass `[]` to stop intercepting. Idempotent: the page is only re-told when the list changes.
-    public func setLinkPatterns(_ patterns: [WebLinkPattern]) {
-        guard patterns != coordinator.linkPatterns else { return }
-        coordinator.linkPatterns = patterns
-        coordinator.pushLinkPatterns(to: webView)
-    }
-
-    /// Make every web link click (http, https, work42; not fragments in the current document) go to the link
-    /// router, whatever it points at, so the host's Open Link decides where it opens. A declined click is
-    /// replayed in the page. Option-click always navigates in place. Idempotent.
-    public func setInterceptAllLinks(_ on: Bool) {
-        guard on != coordinator.interceptAllLinks else { return }
-        coordinator.interceptAllLinks = on
-        coordinator.pushLinkPatterns(to: webView)
-    }
-
-    /// Testing seam: where an intercepted link goes when the router declines it.
-    func setInterceptedLinkFallback(_ fallback: ((URL) -> Void)?) {
-        coordinator.interceptedLinkFallback = fallback
     }
 
     /// Load `url` in this view (what "keep it here" does after the router declined or the user
@@ -1767,7 +1588,6 @@ extension WebSectionView {
         onOpenLink: ((URL) -> Void)? = nil
     ) -> WebSectionLiveView {
         let coordinator = Coordinator(selector: spec.selector, onSignal: onSignal)
-        coordinator.onOpenLink = onOpenLink
         let webView = buildWebView(spec: spec, onSignal: onSignal, coordinator: coordinator)
         return WebSectionLiveView(webView: webView, coordinator: coordinator)
     }

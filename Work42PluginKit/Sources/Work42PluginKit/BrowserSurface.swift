@@ -792,9 +792,9 @@ private struct BrowserSurfaceReady: View {
     /// Plugin selection resolver, forwarded from `BrowserSurface`.
     var selectionResolver: WebSelectionResolver?
 
-    /// The host's link router (see `WidgetLinkRouter`): links clicked in the page are offered to
-    /// the host before they navigate in place.
-    @Environment(\.widgetLinkRouter) private var linkRouter
+    /// The widget this surface belongs to, set by the host around every plugin widget. Every link clicked in
+    /// the page is offered to Open Link with it as the source.
+    @Environment(\.work42LinkSource) private var linkSource
 
     /// When `true`, the host's widget-chrome engine owns and renders the browser
     /// chrome row in the widget header (AC7). Skip the in-body chrome row +
@@ -833,22 +833,8 @@ private struct BrowserSurfaceReady: View {
             forKey: tabLiveKey(for: tab.id),
             building: sectionSpec
         )
-        installLinkRouter(on: live)
+        live.linkSource = linkSource
         return live
-    }
-
-    /// Offer every link clicked in `live` to the host's router (Open Link decides where it opens);
-    /// "keep here" loads the URL in this view.
-    private func installLinkRouter(on live: WebSectionLiveView) {
-        guard let router = linkRouter else {
-            live.setLinkRouter(nil)
-            live.setInterceptAllLinks(false)
-            return
-        }
-        live.setLinkRouter { [weak live] url in
-            router.route(url) { live?.load(url) }
-        }
-        live.setInterceptAllLinks(true)
     }
 
     // MARK: - Body
