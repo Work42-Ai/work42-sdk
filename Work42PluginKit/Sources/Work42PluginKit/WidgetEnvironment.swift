@@ -12,7 +12,18 @@ public struct WidgetSessionServicesKey: EnvironmentKey {
     public static let defaultValue: SessionServices? = nil
 }
 
+public struct WidgetCacheScopeKey: EnvironmentKey {
+    public static let defaultValue: String? = nil
+}
+
 public extension EnvironmentValues {
+    /// Which session (its id, or `"home"`) this widget instance belongs to. `BrowserSurface` prefixes its cache
+    /// keys with it, so one widget shown in two sessions never shares a web page. Nil outside a host-rendered widget.
+    var widgetCacheScope: String? {
+        get { self[WidgetCacheScopeKey.self] }
+        set { self[WidgetCacheScopeKey.self] = newValue }
+    }
+
     /// The session services of the widget this view belongs to. Nil outside a host-rendered
     /// widget (previews, tests).
     var widgetSessionServices: SessionServices? {
