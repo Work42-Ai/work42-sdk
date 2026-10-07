@@ -47,8 +47,48 @@ public final class ArtifactSnapshotRenderer: NSObject {
     /// Logical viewport the artifact lays out against (spec: 760pt wide,
     /// height capped at 600pt of content).
     public static let viewportSize = CGSize(width: 760, height: 600)
-    /// Smallest capture height — keeps a tiny artifact from a sliver preview.
-    static let minCaptureHeight: CGFloat = 150
+
+    /// How wide to lay the page out and how much of its height to keep. The default is the
+    /// preview-card look; `fullPage(width:)` keeps the whole page (`work42 artifact snapshot`).
+    public struct Options: Equatable, Sendable {
+        public var width: CGFloat
+        public var maxHeight: CGFloat
+        public var minHeight: CGFloat
+        /// A page shorter than the viewport reports the viewport's height as its scroll height, so
+        /// a capture of it would carry a blank band. When true, a page that fits is cropped to
+        /// where its content actually ends. Off for the preview look (its behaviour is unchanged).
+        public var trimsToContentEdge: Bool
+
+        public init(width: CGFloat, maxHeight: CGFloat, minHeight: CGFloat, trimsToContentEdge: Bool = false) {
+            self.width = width
+            self.maxHeight = maxHeight
+            self.minHeight = minHeight
+            self.trimsToContentEdge = trimsToContentEdge
+        }
+
+        /// 760pt wide, content height clamped to [150, 600]: what the preview cards cache.
+        public static let preview = Options(width: 760, maxHeight: 600, minHeight: 150)
+
+        /// The tallest page a full-page capture keeps (points); longer pages are cut here.
+        public static let fullPageHeightCap: CGFloat = 20_000
+
+        /// `width` points wide, the whole page height (up to `fullPageHeightCap`).
+        public static func fullPage(width: CGFloat) -> Options {
+            Options(width: width, maxHeight: fullPageHeightCap, minHeight: 1, trimsToContentEdge: true)
+        }
+
+        /// A measured content height clamped to `[minHeight, maxHeight]`.
+        public func clampedHeight(_ measured: CGFloat) -> CGFloat {
+            min(max(measured, minHeight), maxHeight)
+        }
+    }
+
+    /// The coalescing key actually used: the caller's key for the preview look, and a key that
+    /// includes the options otherwise, so differently-sized renders of one page never share a
+    /// result.
+    static func coalescingKey(_ key: String, options: Options) -> String {
+        options == .preview ? key : "\(key)|w\(Int(options.width))|h\(Int(options.maxHeight))"
+    }
     /// Backing-pixel scale of the cached PNG.
     public static let snapshotScale: CGFloat = 2
     /// Post-didFinish settle delay before the snapshot.
@@ -76,7 +116,10 @@ public final class ArtifactSnapshotRenderer: NSObject {
 
     /// Render `url` at the fixed viewport and return PNG data. Requests with
     /// the same `coalescingKey` share one render; distinct keys queue.
-    public func render(url: URL, coalescingKey: String) async throws -> Data {
+    public func render(
+        url: URL, coalescingKey: String, options: Options = .preview
+    ) async throws -> Data {
+        let coalescingKey = Self.coalescingKey(coalescingKey, options: options)
         if let existing = inFlight[coalescingKey] {
             return try await existing.value
         }
@@ -86,7 +129,7 @@ public final class ArtifactSnapshotRenderer: NSObject {
             // Wait for the queue ahead of us — errors of predecessors are
             // irrelevant to this request.
             await previousTail.value
-            return try await self.renderNowWithRetry(url: url)
+            return try await self.renderNowWithRetry(url: url, options: options)
         }
         inFlight[coalescingKey] = task
         chainTail = Task {
@@ -98,18 +141,20 @@ public final class ArtifactSnapshotRenderer: NSObject {
 
     // MARK: - Attempts
 
-    private func renderNowWithRetry(url: URL) async throws -> Data {
+    private func renderNowWithRetry(url: URL, options: Options) async throws -> Data {
         do {
-            return try await renderNow(url: url)
+            return try await renderNow(url: url, options: options)
         } catch {
             // One retry — offscreen WebKit's first paint is occasionally
             // flaky; a second attempt on the warmed process usually lands.
-            return try await renderNow(url: url)
+            return try await renderNow(url: url, options: options)
         }
     }
 
-    private func renderNow(url: URL) async throws -> Data {
+    private func renderNow(url: URL, options: Options) async throws -> Data {
         let webView = ensureWebView()
+        // Lay the page out at this request's width (the reused view keeps its frame otherwise).
+        webView.frame = CGRect(origin: .zero, size: CGSize(width: options.width, height: Self.viewportSize.height))
 
         // Race the load against the attempt timeout.
         let timeout = Task {
@@ -131,8 +176,14 @@ public final class ArtifactSnapshotRenderer: NSObject {
 
         // Capture content-height (clamped) so the preview fits tightly — no
         // blank space under a short artifact, no letterboxing on the card.
-        let captureHeight = await measuredContentHeight(webView)
-        let captureSize = CGSize(width: Self.viewportSize.width, height: captureHeight)
+        let captureHeight = await measuredContentHeight(webView, options: options)
+        let captureSize = CGSize(width: options.width, height: captureHeight)
+        // A snapshot rect past the view's bounds comes back blank, so grow the frame to the
+        // content (full-page captures are taller than the 600pt preview viewport).
+        if captureHeight > webView.frame.height {
+            webView.frame = CGRect(origin: .zero, size: captureSize)
+            try await Task.sleep(nanoseconds: Self.settleNanoseconds / 3)
+        }
 
         let config = WKSnapshotConfiguration()
         config.rect = CGRect(origin: .zero, size: captureSize)
@@ -156,24 +207,32 @@ public final class ArtifactSnapshotRenderer: NSObject {
         return png
     }
 
-    /// The artifact's rendered content height, clamped to
-    /// `[minCaptureHeight, viewportSize.height]`. Measured off the live DOM so
+    /// The artifact's rendered content height, clamped to `[options.minHeight, options.maxHeight]`. Measured off the live DOM so
     /// the snapshot rect matches the real content.
-    private func measuredContentHeight(_ webView: WKWebView) async -> CGFloat {
-        let js = "Math.ceil(Math.max("
+    private func measuredContentHeight(_ webView: WKWebView, options: Options) async -> CGFloat {
+        let scrollHeight = "Math.ceil(Math.max("
             + "document.body ? document.body.scrollHeight : 0,"
             + "document.documentElement ? document.documentElement.scrollHeight : 0))"
+        // When the page fits in the viewport its scroll height IS the viewport height, so read the
+        // bottom edge of the body (plus its bottom margin) instead.
+        let contentEdge = "(function(){var de=document.documentElement,b=document.body;"
+            + "var h=\(scrollHeight);"
+            + "if(de&&b&&de.scrollHeight<=window.innerHeight){"
+            + "var r=b.getBoundingClientRect(),cs=getComputedStyle(b);"
+            + "h=Math.ceil(r.bottom+(parseFloat(cs.marginBottom)||0)+window.scrollY);}"
+            + "return h;})()"
+        let js = options.trimsToContentEdge ? contentEdge : scrollHeight
         let measured: CGFloat = await withCheckedContinuation { cont in
             webView.evaluateJavaScript(js) { result, _ in
                 let value: CGFloat
                 if let d = result as? Double { value = CGFloat(d) }
                 else if let i = result as? Int { value = CGFloat(i) }
                 else if let n = result as? NSNumber { value = CGFloat(truncating: n) }
-                else { value = Self.viewportSize.height }
+                else { value = options.maxHeight }
                 cont.resume(returning: value)
             }
         }
-        return min(max(measured, Self.minCaptureHeight), Self.viewportSize.height)
+        return options.clampedHeight(measured)
     }
 
     private func ensureWebView() -> WKWebView {

@@ -12,6 +12,9 @@
   navigating in place; returning true cancels the navigation. `BrowserSurface` installs the
   environment router on every web view it shows. Content hosts that set `onOpenLink` are unchanged.
   Additive.
+- `ArtifactSnapshotRenderer.render(url:coalescingKey:options:)` takes `Options` (width, height cap,
+  `trimsToContentEdge`). The default, `.preview`, is the existing 760pt / 600pt-capped look;
+  `.fullPage(width:)` captures the whole page, cropped to where its content ends. Additive.
 
 ## 1.1.0
 
