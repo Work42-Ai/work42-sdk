@@ -454,9 +454,12 @@ public struct BrowserSurface: View {
     /// When nil, the surface falls back to `EnvironmentValues.widgetSessionServices`, which
     /// the host sets around every plugin widget — so highlight-to-comment works for any
     /// browser widget without it passing `services:`. An explicit value always wins.
+    ///
+    /// The environment is read inside the internal `BrowserSurfaceReady`, NOT here: this struct is
+    /// embedded by value in every widget, so any new stored property (an `@Environment` wrapper
+    /// stores its value inline) changes its size and crashes widgets built against another SDK.
+    /// `PublicLayoutStabilityTests` pins that size.
     public let services: SessionServices?
-
-    @Environment(\.widgetSessionServices) private var environmentServices
 
     /// Optional plugin hook that enriches a raw selection into a useful source
     /// label / excerpt (e.g. GitHub → "PR #42 · File.swift:L12–L18") right
@@ -500,7 +503,7 @@ public struct BrowserSurface: View {
         if let model = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey) {
             BrowserSurfaceReady(
                 model: model, cacheKey: cacheKey, spec: spec,
-                services: Self.effectiveServices(explicit: services, environment: environmentServices),
+                services: services,
                 selectionResolver: selectionResolver
             )
         } else {
@@ -749,6 +752,9 @@ private struct BrowserSurfaceReady: View {
     /// content area gets the generic highlight-to-comment layer.
     var services: SessionServices?
 
+    /// The host-injected services, used when `services` is nil (see `BrowserSurface.services`).
+    @Environment(\.widgetSessionServices) private var environmentServices
+
     /// Plugin selection resolver, forwarded from `BrowserSurface`.
     var selectionResolver: WebSelectionResolver?
 
@@ -868,7 +874,7 @@ private struct BrowserSurfaceReady: View {
                         // sink). Keyed to the live view so it re-wires per tab.
                         .modifier(BrowserSelectionCommentLayer(
                             live: live,
-                            composer: services?.composer,
+                            composer: BrowserSurface.effectiveServices(explicit: services, environment: environmentServices)?.composer,
                             resolver: selectionResolver,
                             pageURL: { [weak live] in live?.webView.url },
                             pageTitle: { [weak live] in live?.webView.title },

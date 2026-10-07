@@ -116,8 +116,15 @@ public final class ArtifactSnapshotRenderer: NSObject {
 
     /// Render `url` at the fixed viewport and return PNG data. Requests with
     /// the same `coalescingKey` share one render; distinct keys queue.
+    /// The signature plugins built against SDK 1.0 / 1.1 link to. Folding it into the `options:`
+    /// version below as a defaulted parameter would have REMOVED this symbol and made such a plugin
+    /// fail to load, so it stays as its own overload.
+    public func render(url: URL, coalescingKey: String) async throws -> Data {
+        try await render(url: url, coalescingKey: coalescingKey, options: .preview)
+    }
+
     public func render(
-        url: URL, coalescingKey: String, options: Options = .preview
+        url: URL, coalescingKey: String, options: Options
     ) async throws -> Data {
         let coalescingKey = Self.coalescingKey(coalescingKey, options: options)
         if let existing = inFlight[coalescingKey] {
