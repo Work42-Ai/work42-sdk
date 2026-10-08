@@ -6,7 +6,7 @@ import Work42UI
 struct Work42SDKCompatibilityTests {
     @Test("release and ABI are canonical")
     func canonicalCompatibility() {
-        #expect(Work42SDKCompatibility.version == "1.1.0")
+        #expect(Work42SDKCompatibility.version == "1.2.0")
         #expect(Work42SDKCompatibility.abiGeneration == 11)
         #expect(WidgetSDK.version == Work42SDKCompatibility.version)
         #expect(WidgetSDK.abiVersion == Work42SDKCompatibility.abiGeneration)

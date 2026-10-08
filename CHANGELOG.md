@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
+
+- Retain ABI generation `11`; plugins built for SDK 1.0.0 and 1.1.0 remain binary-compatible. This
+  release only adds symbols.
 
 - Add `WebSectionLiveView.setInterceptAllLinks(_:)`. `BrowserSurface` turns it on whenever the host provides a
   link router, so every web link click (`http`, `https`, `work42`; not `mailto:` or fragments in the current
