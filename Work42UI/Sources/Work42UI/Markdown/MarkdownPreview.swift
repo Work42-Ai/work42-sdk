@@ -19,7 +19,6 @@ import AppKit
 ///   layer (file Preview only). `comments` paints the marks; the callbacks fire
 ///   with the anchor view + rect so the host can present its popover.
 public struct MarkdownPreview: View {
-    @Environment(\.openURL) private var openURL
 
     private let text: String
     private let baseURL: URL?
@@ -99,13 +98,9 @@ public struct MarkdownPreview: View {
     }
 
     public var body: some View {
-        let routedOpenLink: (URL) -> Void = { url in
-            Self.routeOpenLink(url, host: { openURL($0) })
-        }
         let webView = MarkdownWebView(
             text: text,
             baseURL: baseURL,
-            onOpenLink: routedOpenLink,
             commentsEnabled: commentsEnabled,
             comments: comments,
             onAddComment: onAddComment,
@@ -141,12 +136,5 @@ public struct MarkdownPreview: View {
         .sheet(item: $diagramExpand) { item in
             DiagramExpandDialog(svg: item.svg) { diagramExpand = nil }
         }
-    }
-
-    /// Routes every outbound document link through the inherited host action.
-    /// Kept internal so tests can prove the mandatory policy without exposing
-    /// a widget-level customization point.
-    static func routeOpenLink(_ url: URL, host: (URL) -> Void) {
-        host(url)
     }
 }

@@ -246,6 +246,17 @@ public final class BrowserSurfaceCache {
 
     private init() {}
 
+    // MARK: - Session scope
+
+    /// Set by the host around a widget instance's `activate`/`deactivate`, so a widget's own
+    /// `teardown(key: id)` reaches the entries of ITS session only. Nil everywhere else.
+    public var scope: String?
+
+    /// The cache key a surface in `scope` uses for `key` (`"<scope>/<key>"`; unchanged when `scope` is nil).
+    public static func scopedKey(_ key: String, scope: String?) -> String {
+        scope.map { "\($0)/\(key)" } ?? key
+    }
+
     // MARK: - Internal model cache
 
     /// Return the cached model for `key`, or nil when none was built yet.
@@ -307,7 +318,8 @@ public final class BrowserSurfaceCache {
     ///
     /// Call from the widget's `deactivate()` — a cached `WKWebView` is a
     /// heavyweight resource and "done means inert".
-    public func teardown(key: String) {
+    public func teardown(key rawKey: String) {
+        let key = Self.scopedKey(rawKey, scope: scope)
         // Release the model for this surface.
         models.removeValue(forKey: key)
         // Release all per-tab live views: keys are "<key>:<tabID>".
@@ -340,6 +352,18 @@ public final class BrowserSurfaceCache {
             liveViews.removeValue(forKey: liveKey)
         }
     }
+}
+
+// MARK: - Scope reader
+
+/// Reads `widgetCacheScope` from the environment and hands it to `build`.
+private struct BrowserSurfaceScopeReader<Content: View>: View {
+    @Environment(\.widgetCacheScope) private var scope
+    let build: (String?) -> Content
+
+    init(@ViewBuilder build: @escaping (String?) -> Content) { self.build = build }
+
+    var body: some View { build(scope) }
 }
 
 // MARK: - BrowserSurfaceState
@@ -450,6 +474,15 @@ public struct BrowserSurface: View {
     /// publishes the selection for dictate-to-comment — no per-widget wiring.
     /// Nil (previews / tests / hosts that don't pass services) disables the
     /// comment pipeline but keeps every other behaviour identical.
+    ///
+    /// When nil, the surface falls back to `EnvironmentValues.widgetSessionServices`, which
+    /// the host sets around every plugin widget — so highlight-to-comment works for any
+    /// browser widget without it passing `services:`. An explicit value always wins.
+    ///
+    /// The environment is read inside the internal `BrowserSurfaceReady`, NOT here: this struct is
+    /// embedded by value in every widget, so any new stored property (an `@Environment` wrapper
+    /// stores its value inline) changes its size and crashes widgets built against another SDK.
+    /// `PublicLayoutStabilityTests` pins that size.
     public let services: SessionServices?
 
     /// Optional plugin hook that enriches a raw selection into a useful source
@@ -474,20 +507,33 @@ public struct BrowserSurface: View {
         self.configure = configure
     }
 
+    /// The services the comment pipeline uses: the explicit parameter, else the environment's.
+    static func effectiveServices(explicit: SessionServices?, environment: SessionServices?) -> SessionServices? {
+        explicit ?? environment
+    }
+
     public var body: some View {
-        content
-            .task(id: state.retryNonce) {
-                await resolveIfNeeded()
-            }
+        // The scope is read in a nested view: a stored `@Environment` here would change this struct's size.
+        BrowserSurfaceScopeReader { scope in
+            let key = BrowserSurfaceCache.scopedKey(cacheKey, scope: scope)
+            content(cacheKey: key)
+                .task(id: state.retryNonce) {
+                    await resolveIfNeeded(cacheKey: key)
+                }
+        }
     }
 
     @ViewBuilder
-    private var content: some View {
+    private func content(cacheKey: String) -> some View {
         // A cached model means this surface already resolved once — render it
         // immediately. Remounts must never re-run the provider or flash a
         // spinner (AC4: cache hit short-circuits resolution).
         if let model = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey) {
-            BrowserSurfaceReady(model: model, cacheKey: cacheKey, spec: spec, services: services, selectionResolver: selectionResolver)
+            BrowserSurfaceReady(
+                model: model, cacheKey: cacheKey, spec: spec,
+                services: services,
+                selectionResolver: selectionResolver
+            )
         } else {
             switch state.resolution {
             case .resolving:
@@ -530,6 +576,12 @@ public struct BrowserSurface: View {
         BrowserSurfaceCache.shared.existingModel(forKey: cacheKey)
     }
 
+    /// The model of the surface with `cacheKey` in `scope` (a session id, or `"home"`): what a host asks for
+    /// when one widget is shown in several sessions.
+    public static func model(forKey cacheKey: String, scope: String?) -> BrowserWidgetModel? {
+        BrowserSurfaceCache.shared.existingModel(forKey: BrowserSurfaceCache.scopedKey(cacheKey, scope: scope))
+    }
+
     // MARK: - Resolution
 
     /// Resolve the spec's URL source, build the `BrowserWidgetModel`, and seed
@@ -540,7 +592,7 @@ public struct BrowserSurface: View {
     /// On CACHE HIT (model already exists, new BrowserSurface value mounting):
     /// calls `wireHooks` once on the first `.task` execution; subsequent
     /// `.task` executions (re-renders) are guarded by `state.configureInvoked`.
-    private func resolveIfNeeded() async {
+    private func resolveIfNeeded(cacheKey: String) async {
         // Cache hit: already resolved. Call wireHooks on first mount only,
         // then flip to ready.
         if let model = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey) {
@@ -734,8 +786,15 @@ private struct BrowserSurfaceReady: View {
     /// content area gets the generic highlight-to-comment layer.
     var services: SessionServices?
 
+    /// The host-injected services, used when `services` is nil (see `BrowserSurface.services`).
+    @Environment(\.widgetSessionServices) private var environmentServices
+
     /// Plugin selection resolver, forwarded from `BrowserSurface`.
     var selectionResolver: WebSelectionResolver?
+
+    /// The widget this surface belongs to, set by the host around every plugin widget. Every link clicked in
+    /// the page is offered to Open Link with it as the source.
+    @Environment(\.work42LinkSource) private var linkSource
 
     /// When `true`, the host's widget-chrome engine owns and renders the browser
     /// chrome row in the widget header (AC7). Skip the in-body chrome row +
@@ -770,10 +829,12 @@ private struct BrowserSurfaceReady: View {
             dataStoreKey: spec.dataStoreKey,
             title: spec.title
         )
-        return BrowserSurfaceCache.shared.liveView(
+        let live = BrowserSurfaceCache.shared.liveView(
             forKey: tabLiveKey(for: tab.id),
             building: sectionSpec
         )
+        live.linkSource = linkSource
+        return live
     }
 
     // MARK: - Body
@@ -836,7 +897,7 @@ private struct BrowserSurfaceReady: View {
                         // sink). Keyed to the live view so it re-wires per tab.
                         .modifier(BrowserSelectionCommentLayer(
                             live: live,
-                            composer: services?.composer,
+                            composer: BrowserSurface.effectiveServices(explicit: services, environment: environmentServices)?.composer,
                             resolver: selectionResolver,
                             pageURL: { [weak live] in live?.webView.url },
                             pageTitle: { [weak live] in live?.webView.title },

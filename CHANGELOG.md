@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- Add `WebSectionLiveView.setInterceptAllLinks(_:)`. `BrowserSurface` turns it on whenever the host provides a
+  link router, so every web link click (`http`, `https`, `work42`; not `mailto:` or fragments in the current
+  document) is offered to the router, including in-page single-page-app clicks, and the host's Open Link
+  decides where it opens. A click the router declines is replayed in the page, so the app routes in place as
+  before. Option-click always navigates in place. `WidgetLinkRouter.patterns` is kept but no longer used.
+  Adds symbols only.
+
+- Add `EnvironmentValues.widgetSessionServices`, set by the host around every plugin widget.
+  `BrowserSurface` falls back to it when no `services:` is passed, so highlight-to-comment works
+  in every browser widget without per-widget wiring. An explicit `services:` still wins. The
+  environment is read inside an internal view, so the public `BrowserSurface` keeps its 384-byte layout
+  and widgets built against SDK 1.0/1.1 keep working. (A first version stored the `@Environment` on
+  `BrowserSurface` itself, growing it to 624 bytes; widgets built against either SDK crashed when loaded
+  by an app with the other.)
+- Add `EnvironmentValues.widgetLinkRouter` (`WidgetLinkRouter`) and `WebSectionLiveView.setLinkRouter(_:)`
+  / `load(_:)`. A browser widget's web views offer a clicked link (and `target=_blank` / `window.open`
+  popups, but never same-document anchors, redirects or script navigations) to the host before
+  navigating in place; returning true cancels the navigation. `BrowserSurface` installs the
+  environment router on every web view it shows. Content hosts that set `onOpenLink` are unchanged.
+  Adds symbols only.
+- `ArtifactSnapshotRenderer.render(url:coalescingKey:options:)` takes `Options` (width, height cap,
+  `trimsToContentEdge`). The default, `.preview`, is the existing 760pt / 600pt-capped look;
+  `.fullPage(width:)` captures the whole page, cropped to where its content ends.
+  `render(url:coalescingKey:)` remains as its own overload (a defaulted parameter would have removed
+  that symbol).
+- Add `PublicLayoutStabilityTests`, pinning the in-memory size of the public structs widgets embed by
+  value. Work42PluginKit is not built with library evolution, so changing one is an ABI break.
+
 ## 1.1.0
 
 - Add the canonical `work42-plugin-creator` skill, references, and plugin

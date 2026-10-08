@@ -102,7 +102,7 @@ final class DiagramCanvas {
     init() {
         let config = WKWebViewConfiguration()
         config.userContentController = WKUserContentController()
-        self.webView = WKWebView(frame: .zero, configuration: config)
+        self.webView = Work42WebView.make(configuration: config, role: .interactive(source: nil))
     }
 
     func load(svg: String, themeCSS: String) {
@@ -121,6 +121,7 @@ struct DiagramExpandDialog: View {
     let onClose: () -> Void
 
     @State private var canvas = DiagramCanvas()
+    @Environment(\.work42LinkSource) private var linkSource
 
     var body: some View {
         VStack(spacing: 0) {
@@ -130,7 +131,10 @@ struct DiagramExpandDialog: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 800, idealWidth: 1100, minHeight: 560, idealHeight: 800)
-        .onAppear { canvas.load(svg: svg, themeCSS: CanvasTheme.css()) }
+        .onAppear {
+            (canvas.webView as? PolicyWebView)?.linkSource = linkSource
+            canvas.load(svg: svg, themeCSS: CanvasTheme.css())
+        }
     }
 
     private var header: some View {
