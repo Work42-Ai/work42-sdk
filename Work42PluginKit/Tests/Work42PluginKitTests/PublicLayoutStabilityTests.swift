@@ -38,4 +38,30 @@ struct PublicLayoutStabilityTests {
         #expect(MemoryLayout<WidgetPillAppIcon>.size == 32)
         #expect(MemoryLayout<WidgetPillActionButtonStyle>.size == 16)
     }
+
+    // Added with WOR-70, measured at SDK 1.2.0 (ABI generation 11). `WidgetBackgroundServices` is what a widget's
+    // background agent is handed and keeps (the Oct 3 `CalendarDetectionAgent` crash was in its copy), and
+    // `SessionServices` is what every widget keeps for its session.
+    @Test("the services and value types widgets receive and keep are unchanged")
+    func servicesAndValueTypes() {
+        #expect(MemoryLayout<WidgetBackgroundServices>.size == 192)
+        #expect(MemoryLayout<SessionServices>.size == 232)
+        #expect(MemoryLayout<NoopWidgetSessionActivityService>.size == 0)
+        #expect(MemoryLayout<WidgetServiceError>.size == 32)
+        #expect(MemoryLayout<WidgetShellResult>.size == 36)
+        #expect(MemoryLayout<WidgetLinkRouter>.size == 32)
+        #expect(MemoryLayout<WidgetMinSize>.size == 16)
+        #expect(MemoryLayout<WidgetIntentMenuOption>.size == 49)
+        #expect(MemoryLayout<WidgetPillMetadata>.size == 48)
+        #expect(MemoryLayout<SessionCreateContext>.size == 136)
+    }
+
+    // A generic view is embedded with the widget's own type arguments; `EmptyView` pins the shell's own storage.
+    @Test("the pill accessory shell keeps its own storage")
+    func pillAccessoryShell() {
+        #expect(MemoryLayout<WidgetPillAccessoryShell<EmptyView, EmptyView>>.size == 64)
+    }
+
+    // Not pinned, on purpose: `WidgetSessionServicesKey`, `WidgetCacheScopeKey` and `WidgetLinkRouterKey` are
+    // `EnvironmentKey` namespaces with only static members. A widget never holds one, so they have no stored layout.
 }
