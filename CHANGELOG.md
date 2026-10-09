@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Documentation and templates only; the binary contract (SDK `1.2.0`, ABI `11`) is unchanged.
+- Document the manifest field `requires` (plugin dependencies), the session-type field `widgets` (the widgets
+  its sessions have), `work42 plugin install --path <subdir>`, the `## Prerequisites` skill convention with
+  `~/.work42/bin` as the install target for plugin CLIs, `work42 plugin setup <name>`, and
+  deregister-then-remove semantics.
+- The plugin template and the plugin-creator example widget skill gain `requires: []` and a Prerequisites stub.
+
 ## 1.2.0
 
 - Retain ABI generation `11`; plugins built for SDK 1.0.0 and 1.1.0 remain binary-compatible. This

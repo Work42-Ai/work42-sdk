@@ -5,3 +5,4 @@ description: Describe what this plugin adds.
 author: Your Name
 sdk_version: 1.2.0
 sdk_abi: 11
+requires: []

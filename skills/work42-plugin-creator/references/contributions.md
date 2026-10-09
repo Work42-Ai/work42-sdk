@@ -24,6 +24,20 @@ Use the installed app SDK via `work42 plugin build`, not app-internal modules or
 
 Each `skills/<slug>/SKILL.md` needs valid skill frontmatter and agent-facing instructions. Scope it from a session type using `session_skills`; use manifest `global_skills` only when it truly applies to every session.
 
+### Prerequisites
+
+A skill for something that needs an external tool or configuration starts, right after its title, with a `## Prerequisites` section. It is how a plugin gets set up: the skill is composed into every session that uses the plugin, and `work42 plugin setup <name>` opens a chat that follows it. Write exact, checkable steps:
+
+```markdown
+## Prerequisites
+
+1. `command -v mytool` must print a path. If it prints nothing: `brew install owner/tap/mytool`.
+2. `mytool whoami` must show a user. If not, ask the user to run `mytool login` themselves (it is interactive).
+3. `~/.config/my-plugin/config.json` must exist; if it does not, ask the user for the values, never guess.
+```
+
+Install a tool into `~/.work42/bin` when it is not on a package manager: that directory is on `PATH` for agent sessions and widget commands. A widget's own `SKILL.md` composes into any session that has the widget, so give it a short version of the same section.
+
 ## Workflows
 
 Each `workflows/<slug>.json` declares a slug, name, description, ordered stages, transitions, and optional stage rules. Minimal shape:
@@ -47,7 +61,9 @@ Stage-rule kinds are `execute`, `edit`, `fetch`, or `mcp`; actions are `allow` o
 
 Each `session-types/<id>.json` declares `id`, display `name`, and a same-bundle `workflow`. Optional arrays `session_skills` and `session_mcps` must name same-bundle folders. `create_intent`, when present, must name a same-bundle intent. Other supported fields are `layout_json`, `icon`, `accent_hex`, `fresh_per_session`, `shows_in_new_session_menu`, `sort_order`, `enforce_capability_gate`, `self_archives`, `list_shape`, `archive_source`, `shows_in_session_list`, and typed `args`.
 
-Removing the plugin removes the type definition, not session records. Existing sessions resolve through Work42’s generic chat-like fallback.
+`widgets` is the explicit list of widget kind ids sessions of this type have: built-in kinds as plain ids (`chat`, `files`, `terminal`) and plugin widgets as `widget:<slug>`. Only these exist in its sessions (the `+ Widget` picker, background work, link handling, the widgets' skills); installing a plugin adds its widgets to the catalog but to no type's list. A `widget:` entry must be one of this plugin's widgets or one of a plugin named in `requires`, or install fails. When `widgets` is absent, the ids found in `layout_json` are used. Keep it in step with the layout.
+
+Removing the plugin deregisters it first: its sessions become plain chat sessions that keep their transcript, artifacts, storage and layout minus the plugin's widgets, and only then are the type and its workflows deleted.
 
 ## Intents
 

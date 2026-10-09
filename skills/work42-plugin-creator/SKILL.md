@@ -35,7 +35,7 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
 
    To start from the bundled example instead, copy `assets/plugin-template/` and replace every `example-plugin` identifier.
 
-3. Add only the contribution folders needed. Keep cross-references self-contained: a plugin session type may refer only to workflows, skills, MCPs, and intents in the same bundle.
+3. Add only the contribution folders needed. Keep cross-references self-contained: a plugin session type may refer only to workflows, skills, MCPs, and intents in the same bundle. Two things cross the bundle boundary on purpose: a session type's `widgets` list may name another plugin's widgets, and then the manifest must say `requires: [that-plugin]`. If the plugin needs a command-line tool or configuration, its skill says so in a `## Prerequisites` section (see `references/contributions.md`).
 
 4. Validate before building:
 
@@ -58,7 +58,11 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
    work42 plugin install .
    # or
    work42 plugin install https://github.com/OWNER/REPOSITORY.git --ref main
+   # a plugin kept in a subfolder of a larger (tool) repository:
+   work42 plugin install https://github.com/OWNER/TOOL.git --path work42-plugin
    ```
+
+   Install fails, naming the plugin, when anything listed in `requires` is not installed yet; install that first. Nothing is installed automatically, and Work42 itself ships with no plugins. A new plugin's widgets are in the catalog but on no session type's widget list until the plugin's own session types (or the user, in Session Lab) name them.
 
    Installing the same plugin identity replaces its package-owned definitions. Work42 preserves existing sessions, storage, artifacts, transcripts, recordings, and files.
 
@@ -71,11 +75,13 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
 
    Never enable automatic plugin updates. To move a pinned tag or commit, run `plugin install` again with the new `--ref`.
 
-8. Before removal, tell the user that package contributions disappear while previously written content remains:
+8. Before removal, tell the user what will happen: the plugin is deregistered first, then deleted. Its sessions become plain chat sessions (keeping transcript, artifacts, storage and their own layout minus the plugin's widgets); its widgets leave every session; its session types, workflows, widgets and skills are deleted. Removal is refused while another installed plugin `requires` it.
 
    ```bash
    work42 plugin remove my-plugin
    ```
+
+9. To check a plugin has everything it needs (its CLI, configuration), run `work42 plugin setup my-plugin`: it opens a chat with the plugin's skills loaded and a message waiting in the composer.
 
 ## Guardrails
 
