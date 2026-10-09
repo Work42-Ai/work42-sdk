@@ -26,7 +26,7 @@ Each `skills/<slug>/SKILL.md` needs valid skill frontmatter and agent-facing ins
 
 ### Prerequisites
 
-A skill for something that needs an external tool or configuration starts, right after its title, with a `## Prerequisites` section. It is how a plugin gets set up: the skill is composed into every session that uses the plugin, and `work42 plugin setup <name>` opens a chat that follows it. Write exact, checkable steps:
+A skill for something that needs an external tool or configuration starts, right after its title, with a `## Prerequisites` section. It is how a plugin gets set up: the skill is composed into every session that uses the plugin, so the agent checks it before using the tool. When the install is more than one command, put it in a separate `<plugin>-setup` skill and have the last Prerequisites step say "if that fails, follow the `<plugin>-setup` skill". Write exact, checkable steps:
 
 ```markdown
 ## Prerequisites

@@ -81,7 +81,7 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
    work42 plugin remove my-plugin
    ```
 
-9. To check a plugin has everything it needs (its CLI, configuration), run `work42 plugin setup my-plugin`: it opens a chat with the plugin's skills loaded and a message waiting in the composer.
+9. If the plugin needs a CLI or configuration, give it a `my-plugin-setup` skill with the exact install steps, and end every other skill's `## Prerequisites` with "if that fails, follow the `my-plugin-setup` skill". The agent runs it when something is missing; there is no Set up button.
 
 ## Guardrails
 

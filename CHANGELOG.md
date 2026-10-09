@@ -5,7 +5,7 @@
 - Documentation and templates only; the binary contract (SDK `1.2.0`, ABI `11`) is unchanged.
 - Document the manifest field `requires` (plugin dependencies), the session-type field `widgets` (the widgets
   its sessions have), `work42 plugin install --path <subdir>`, the `## Prerequisites` skill convention with
-  `~/.work42/bin` as the install target for plugin CLIs, `work42 plugin setup <name>`, and
+  `~/.work42/bin` as the install target for plugin CLIs, the `<plugin>-setup` skill convention for installing them, and
   deregister-then-remove semantics.
 - The plugin template and the plugin-creator example widget skill gain `requires: []` and a Prerequisites stub.
 
