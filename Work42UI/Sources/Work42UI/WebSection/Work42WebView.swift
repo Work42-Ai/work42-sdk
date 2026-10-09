@@ -121,7 +121,8 @@ extension EnvironmentValues {
 public class PolicyWebView: WKWebView {
     public var linkSource: String?
 
-    private let policy = LinkPolicyProxy()
+    /// Internal so the link-policy tests can drive the proxy directly.
+    let policy = LinkPolicyProxy()
     private var policyActive = false
     private weak var callerNavigation: (any WKNavigationDelegate)?
     private weak var callerUI: (any WKUIDelegate)?
@@ -207,17 +208,141 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var allowedOnce: [String: Date] = [:]
 
     // MARK: Forwarding
+    //
+    // WebKit asks `respondsToSelector:` once, when a delegate is assigned, and caches the answers. The callers are
+    // held weakly, so answering for them dynamically promised methods that a released caller could no longer take
+    // and WebKit aborted with `doesNotRecognizeSelector`. Every method a caller can implement is therefore a real
+    // method below: it forwards while the caller is alive and responds, and otherwise applies WebKit's own default.
 
-    nonisolated override func responds(to aSelector: Selector!) -> Bool {
-        super.responds(to: aSelector)
-            || (callerNavigation?.responds(to: aSelector) ?? false)
-            || (callerUI?.responds(to: aSelector) ?? false)
+    // MARK: Navigation lifecycle
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        guard let caller = callerNavigation,
+              caller.responds(to: #selector(WKNavigationDelegate.webView(_:didStartProvisionalNavigation:))) else { return }
+        caller.webView?(webView, didStartProvisionalNavigation: navigation)
     }
 
-    nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
-        if let callerNavigation, callerNavigation.responds(to: aSelector) { return callerNavigation }
-        if let callerUI, callerUI.responds(to: aSelector) { return callerUI }
-        return super.forwardingTarget(for: aSelector)
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        guard let caller = callerNavigation,
+              caller.responds(to: #selector(WKNavigationDelegate.webView(_:didCommit:))) else { return }
+        caller.webView?(webView, didCommit: navigation)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let caller = callerNavigation,
+              caller.responds(to: #selector(WKNavigationDelegate.webView(_:didFinish:))) else { return }
+        caller.webView?(webView, didFinish: navigation)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard let caller = callerNavigation,
+              caller.responds(to: #selector(WKNavigationDelegate.webView(_:didFail:withError:))) else { return }
+        caller.webView?(webView, didFail: navigation, withError: error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard let caller = callerNavigation,
+              caller.responds(to: #selector(WKNavigationDelegate.webView(_:didFailProvisionalNavigation:withError:))) else { return }
+        caller.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
+    }
+
+    func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+        guard let caller = callerNavigation,
+              caller.responds(to: #selector(WKNavigationDelegate.webView(_:didReceiveServerRedirectForProvisionalNavigation:))) else { return }
+        caller.webView?(webView, didReceiveServerRedirectForProvisionalNavigation: navigation)
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        guard let caller = callerNavigation,
+              caller.responds(to: #selector(WKNavigationDelegate.webViewWebContentProcessDidTerminate(_:))) else { return }
+        caller.webViewWebContentProcessDidTerminate?(webView)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationResponse: WKNavigationResponse,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
+    ) {
+        guard let caller = callerNavigation,
+              caller.responds(to: Selector(("webView:decidePolicyForNavigationResponse:decisionHandler:"))) else {
+            decisionHandler(.allow)
+            return
+        }
+        caller.webView?(webView, decidePolicyFor: navigationResponse, decisionHandler: decisionHandler)
+    }
+
+    /// Authentication: a released caller (or one with no opinion) gets WebKit's default handling, exactly as if no
+    /// delegate method existed.
+    func webView(
+        _ webView: WKWebView,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard let caller = callerNavigation,
+              caller.responds(to: Selector(("webView:didReceiveAuthenticationChallenge:completionHandler:"))) else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        caller.webView?(webView, didReceive: challenge, completionHandler: completionHandler)
+    }
+
+    // MARK: JavaScript panels and file picker
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptAlertPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        guard let caller = callerUI,
+              caller.responds(to: #selector(WKUIDelegate.webView(_:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:))) else {
+            completionHandler()
+            return
+        }
+        caller.webView?(webView, runJavaScriptAlertPanelWithMessage: message, initiatedByFrame: frame, completionHandler: completionHandler)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
+        guard let caller = callerUI,
+              caller.responds(to: #selector(WKUIDelegate.webView(_:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:))) else {
+            completionHandler(false)
+            return
+        }
+        caller.webView?(webView, runJavaScriptConfirmPanelWithMessage: message, initiatedByFrame: frame, completionHandler: completionHandler)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptTextInputPanelWithPrompt prompt: String,
+        defaultText: String?,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping @MainActor @Sendable (String?) -> Void
+    ) {
+        guard let caller = callerUI,
+              caller.responds(to: #selector(WKUIDelegate.webView(_:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:))) else {
+            completionHandler(nil)
+            return
+        }
+        caller.webView?(webView, runJavaScriptTextInputPanelWithPrompt: prompt, defaultText: defaultText, initiatedByFrame: frame, completionHandler: completionHandler)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping @MainActor @Sendable ([URL]?) -> Void
+    ) {
+        guard let caller = callerUI,
+              caller.responds(to: #selector(WKUIDelegate.webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:))) else {
+            completionHandler(nil)
+            return
+        }
+        caller.webView?(webView, runOpenPanelWith: parameters, initiatedByFrame: frame, completionHandler: completionHandler)
     }
 
     // MARK: Messages from the page
