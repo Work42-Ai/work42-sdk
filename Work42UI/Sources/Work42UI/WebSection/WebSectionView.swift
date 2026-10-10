@@ -330,6 +330,15 @@ public struct WebSectionView: NSViewRepresentable {
         // boundary (feat/spec-as-html.11).
         let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: configuration, role: .interactive(source: nil))
         webView.overscrollMode = .passthroughAtBoundary
+        // Artifact pages draw their own page background (the canvas theme
+        // paints --w42-backdrop on body), so the web view itself paints
+        // nothing: a page that makes html/body transparent (the meet42
+        // brief and summary) shows the pane behind it. Other web apps keep
+        // WebKit's default opaque background.
+        if spec.dataStoreKey == WebAppCatalog.artifactDataStoreKey {
+            webView.setValue(false, forKey: "drawsBackground")
+            webView.underPageBackgroundColor = .clear
+        }
         // SEAM .3: navigation + UI delegates. The Coordinator re-runs the
         // isolation script on SPA navigation (Jira switches issues without
         // a full reload, so the `.atDocumentEnd` user script above doesn't
