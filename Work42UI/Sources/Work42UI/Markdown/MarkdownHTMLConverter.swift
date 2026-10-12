@@ -6,8 +6,8 @@
 // swift-markdown-ui; we just render HTML directly instead of MarkdownUI's AST.
 
 import Foundation
-import cmark_gfm
-import cmark_gfm_extensions
+internal import cmark_gfm
+internal import cmark_gfm_extensions
 
 public enum MarkdownHTMLConverter {
 

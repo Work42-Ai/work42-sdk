@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.0
+
+- **ABI generation `12`.** `Work42UI` and `Work42PluginKit` are built with Swift library evolution and ship a
+  compiler-independent `.swiftinterface`, so a plugin builds with the Swift compiler that built the app **or any
+  newer one** (the app used to ship only binary `.swiftmodule`s, which only the exact same compiler could import,
+  so plugins failed to build on Macs with a newer Xcode). Plugins built for ABI `11` do not load: reinstall them
+  (`work42 plugin install <source>`).
+- **Breaking:** `Work42UI` no longer re-exports MarkdownUI or Yams, and `MarkdownUI.Theme.work42` / `.flow42` are
+  no longer public, so the plugin contract holds only Work42 types and MarkdownUI/Yams can be upgraded without
+  breaking built plugins. Migration:
+  - `Markdown(text).markdownTheme(.work42)` → `Work42MarkdownText(text)` (`theme: .flow42` for the alias).
+  - `YAMLDecoder().decode(T.self, from: yaml)` → `Work42YAML.decode(T.self, from: yaml)`.
+  - `YAMLEncoder().encode(value)` → `Work42YAML.encode(value)`.
+  - `Yams.load(yaml: text)` → `Work42YAML.load(text)`.
+  - Plugins that need other MarkdownUI or Yams API should render through `MarkdownPreview` /
+    `Work42MarkdownDocument`, or open an issue for the missing capability.
+- Add `Work42MarkdownText`, `Work42MarkdownTheme` and `Work42YAML`. The host app additionally uses
+  `@_spi(Work42Host)` `Work42ParsedMarkdown` and the `init(parsed:theme:bodyFontSize:resolvesLocalFileImages:)`
+  initializer; they are not part of the plugin contract.
+- The minimum plugin compiler is Swift 6.2 (it must know `-default-isolation`); the interface also records the Swift that
+  built the app in its `// swift-compiler-version:` header. Older compilers fail up front with a message naming both.
+- Add a `Work42UITests` test target.
+
 ## 1.3.0
 
 - Retain ABI generation `11`; plugins built for SDK 1.0.0, 1.1.0 and 1.2.0 remain binary-compatible. This

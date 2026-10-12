@@ -8,8 +8,8 @@ name: my-plugin
 version: 0.1.0
 description: Explain what this plugin contributes
 author: Your Name
-sdk_version: 1.3.0
-sdk_abi: 11
+sdk_version: 2.0.0
+sdk_abi: 12
 global_skills: optional-global-skill
 requires: [other-plugin]
 ```

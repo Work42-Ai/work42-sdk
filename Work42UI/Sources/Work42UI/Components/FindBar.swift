@@ -23,6 +23,7 @@
 //   • SourceEditorFindBackend   (file editor, in-buffer + emphasisManager)
 //   • DiffFindBackend           (diff tile, rendered-line search)
 
+import Combine
 import SwiftUI
 
 // MARK: - FindBarBackend

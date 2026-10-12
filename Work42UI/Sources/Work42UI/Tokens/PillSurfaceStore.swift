@@ -20,6 +20,7 @@
 // here). Work42UI has no Work42Core dep, so the path is derived via
 // `NSHomeDirectory()` directly, like `ThemeStore.swift`.
 
+import Combine
 import AppKit
 import Foundation
 import SwiftUI

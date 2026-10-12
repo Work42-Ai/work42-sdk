@@ -26,7 +26,7 @@ private final class ExplicitLinkWidget: Work42Widget {
 struct WidgetLinkIntentTests {
     @Test("current ABI keeps explicit link declarations and defaults brand image to nil")
     func currentAbiVersion() {
-        #expect(WidgetSDK.abiVersion == 11)
+        #expect(WidgetSDK.abiVersion == 12)
         let widget: any Work42Widget = ExplicitLinkWidget()
         #expect(widget.iconImageData == nil)
         #expect(widget.linkIntents.count == 1)

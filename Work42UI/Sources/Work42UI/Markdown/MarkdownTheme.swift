@@ -26,10 +26,10 @@
 // code block fill) stays on the semantic primary/secondary scale
 // so it reads correctly in both light and dark mode.
 
-import MarkdownUI
+internal import MarkdownUI
 import SwiftUI
 
-public extension MarkdownUI.Theme {
+extension MarkdownUI.Theme {
 
     /// The Work42 markdown theme. Use it for any rendered markdown
     /// in the apps; the look is tuned to match the rest of the
