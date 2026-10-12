@@ -19,8 +19,8 @@
 - Add `Work42MarkdownText`, `Work42MarkdownTheme` and `Work42YAML`. The host app additionally uses
   `@_spi(Work42Host)` `Work42ParsedMarkdown` and the `init(parsed:theme:bodyFontSize:resolvesLocalFileImages:)`
   initializer; they are not part of the plugin contract.
-- The minimum plugin compiler is the Swift version that built the app (shown by `work42 sdk version` and in the
-  `swift-compiler-version` header of the shipped interface). Older compilers fail with a message naming both.
+- The minimum plugin compiler is the Swift version that built the app, recorded in the `// swift-compiler-version:`
+  header of the shipped `Work42PluginKit` interface. Older compilers fail with a message naming both.
 - Add a `Work42UITests` test target.
 
 ## 1.3.0
