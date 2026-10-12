@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.1.0
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 remain binary-compatible. Every change below is additive.
+- **Web app compatibility.** Web-app views and the sign-in popups they open send Safari's own `Version/x Safari/605.1.15`
+  user-agent token (the installed Safari's version), so providers that require a supported Safari (Atlassian Cloud)
+  stop reporting an unsupported browser. Ephemeral and offscreen web views are unchanged.
+- **Deterministic loading and recovery.** `WebSectionLiveView` ignores callbacks from superseded navigations, never
+  shows a cancellation as a failure, offers "This page is taking too long" with Retry / Keep waiting after 30 seconds,
+  and makes one bounded reload after a web content process crash. A POST is never replayed. New:
+  `retry()`, `stopLoading()`, `keepWaiting()`, `isStalled`, `isUnresponsive`, `dismissUnresponsiveNotice()`,
+  `didRecoverFromProcessTermination`. `reload()` loads the intended address when nothing is committed yet.
+  `WebSectionStatus` is unchanged.
+- **Cached state on return.** A cached web section probes responsiveness once when it becomes visible again (five-second
+  timeout) and otherwise leaves the page alone; nothing runs while hidden.
+- **Address bar search.** New public `BrowserAddressResolver.resolve(_:)`: addresses load directly (http for
+  localhost and loopback, https otherwise), phrases become an encoded Google search, unsupported schemes resolve to
+  nil. `BrowserWidgetModel.navigateToDraft()` uses it, so every widget on the shared chrome gets it.
+- **History.** App web sections enable the native back/forward swipe; the address field keeps an unsubmitted draft
+  across page URL changes and shows the right tab's address and history state when rebound.
+- `BrowserChromeRow` gains `onStop` (Refresh becomes Stop while loading); `makeWebWidgetChrome` gains `onStop` and
+  `webStatus`. All have defaults.
+
 ## 2.0.0
 
 - **ABI generation `12`.** `Work42UI` and `Work42PluginKit` are built with Swift library evolution and ship a
