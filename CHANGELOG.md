@@ -1,13 +1,25 @@
 # Changelog
 
-## Unreleased
+## 1.3.0
 
-- Documentation and templates only; the binary contract (SDK `1.2.0`, ABI `11`) is unchanged.
+- Retain ABI generation `11`; plugins built for SDK 1.0.0, 1.1.0 and 1.2.0 remain binary-compatible. This
+  release adds documentation, fixes and pinned layouts; it changes no public symbol's layout.
 - Document the manifest field `requires` (plugin dependencies), the session-type field `widgets` (the widgets
   its sessions have), `work42 plugin install --path <subdir>`, the `## Prerequisites` skill convention with
   `~/.work42/bin` as the install target for plugin CLIs, the `<plugin>-setup` skill convention for installing them, and
   deregister-then-remove semantics.
 - The plugin template and the plugin-creator example widget skill gain `requires: []` and a Prerequisites stub.
+- Artifact web views (`WebAppCatalog.artifact(url:)`) no longer paint a background of their own. The canvas
+  theme still paints the page background of ordinary artifacts, so they look the same; a page whose `html` and
+  `body` are transparent (the meet42 brief and summary) now shows the pane behind it. Other web views (browser,
+  Jira, GitHub) are unchanged. No public API change.
+- `LinkPolicyProxy` implements every delegate method itself: it forwards while the caller is alive and applies
+  WebKit's defaults otherwise (default handling for authentication challenges, allow for navigation responses,
+  cancel answers for JavaScript panels and the file picker, no-op for notifications). This fixes
+  `doesNotRecognizeSelector` aborts when SwiftUI released the caller during a page load.
+- `PublicLayoutStabilityTests` pins the layout of every public struct widgets receive or embed
+  (`WidgetBackgroundServices`, `SessionServices` and others), so a stored property added by accident fails the
+  test instead of crashing widgets built against another SDK.
 
 ## 1.2.0
 
