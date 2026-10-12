@@ -224,12 +224,10 @@ public final class BrowserWidgetModel: ObservableObject {
 
     // MARK: - Single-URL Actions
 
-    /// Called when the user submits the URL capsule field.
+    /// Called when the user submits the URL capsule field. Resolution lives in `BrowserAddressResolver`.
     public func navigateToDraft() {
-        var raw = urlDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !raw.isEmpty else { return }
-        if !raw.contains("://") { raw = "https://" + raw }
-        guard let resolved = URL(string: raw) else { return }
+        // An address loads directly, a phrase becomes a Google search; empty or an unsupported scheme does nothing.
+        guard let resolved = BrowserAddressResolver.resolve(urlDraft) else { return }
         url = resolved
         urlDraft = resolved.absoluteString
         // Reflect the navigation onto the active tab so an empty tab pins its
