@@ -1365,6 +1365,26 @@ public final class WebSectionLiveView {
     private var watchdog: Task<Void, Never>?
     private var watchdogDeadline: Date?
 
+    /// True when the visibility probe got no answer within five seconds (or failed): the page may be frozen. The
+    /// cached view shows recovery controls; the page itself is left untouched so a healthy SPA keeps its state.
+    public private(set) var isUnresponsive: Bool = false
+
+    /// How long a returning-to-visible page has to answer the probe.
+    var probeTimeout: Duration = .seconds(5)
+
+    /// Test seam: stands in for the JavaScript round-trip. Receives a completion to call with whether the page
+    /// answered. Nil uses the real page.
+    var probeEvaluator: ((@escaping @MainActor (Bool) -> Void) -> Void)?
+
+    /// Probes started by this view, ever. Widget-owned work is the probe only; tests read this to prove nothing
+    /// runs while hidden.
+    private(set) var probeCount = 0
+
+    private var probeTask: Task<Void, Never>?
+    private var probeToken = 0
+    private var probeGeneration = 0
+    private var lastVisible: Bool?
+
     init(webView: WKWebView, coordinator: WebSectionView.Coordinator) {
         self.webView = webView
         self.coordinator = coordinator
@@ -1535,8 +1555,66 @@ public final class WebSectionLiveView {
 
     private func setLoading() {
         status = .loading
+        isUnresponsive = false
         hasPaintedContent = false
         didRecoverFromProcessTermination = false
+    }
+
+    // MARK: - Visibility
+
+    /// The hosting tab became visible or hidden. Hiding only invalidates a probe in flight: nothing runs while
+    /// hidden. Becoming visible repaints natively and, if the page had finished loading, probes it once.
+    func visibilityChanged(_ visible: Bool) {
+        let previous = lastVisible
+        lastVisible = visible
+        guard visible else {
+            invalidateProbe()
+            return
+        }
+        guard previous == false else { return }
+        // A cached page can finish its first paint while hidden with a frozen frame; ask AppKit to re-composite.
+        webView.setNeedsDisplay(webView.bounds)
+        webView.layer?.setNeedsDisplay()
+        guard status == .loaded else { return }
+        startProbe()
+    }
+
+    private func startProbe() {
+        invalidateProbe()
+        probeCount += 1
+        let token = probeToken
+        probeGeneration = coordinator.navState.generation
+        let respond: @MainActor (Bool) -> Void = { [weak self] answered in
+            guard let self, self.probeToken == token else { return }
+            self.probeTask?.cancel()
+            self.probeTask = nil
+            self.isUnresponsive = !answered
+        }
+        probeTask = Task { @MainActor [weak self, timeout = probeTimeout] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled, let self, self.probeToken == token else { return }
+            self.probeTask = nil
+            self.isUnresponsive = true
+        }
+        if let probeEvaluator {
+            probeEvaluator(respond)
+        } else {
+            webView.evaluateJavaScript("1") { _, error in
+                DispatchQueue.main.async { MainActor.assumeIsolated { respond(error == nil) } }
+            }
+        }
+    }
+
+    /// Drops the pending probe: a late answer or timeout of an older probe no longer counts.
+    private func invalidateProbe() {
+        probeToken += 1
+        probeTask?.cancel()
+        probeTask = nil
+    }
+
+    /// "Keep waiting" on the unresponsive notice: leave the page as it is.
+    public func dismissUnresponsiveNotice() {
+        isUnresponsive = false
     }
 
     // MARK: - Navigation health
@@ -1544,6 +1622,11 @@ public final class WebSectionLiveView {
     /// Syncs the observable stall flag and keeps exactly one watchdog armed for the active navigation.
     private func navigationStateDidChange() {
         let state = coordinator.navState
+        // A new navigation supersedes the probe, and a page that is loading again is not "unresponsive".
+        if state.phase == .loading || state.generation != probeGeneration {
+            if probeTask != nil { invalidateProbe() }
+            if state.phase == .loading, isUnresponsive { isUnresponsive = false }
+        }
         if isStalled != state.isStalled { isStalled = state.isStalled }
         guard state.phase == .loading, !state.isStalled, let deadline = state.stallDeadline else {
             cancelWatchdog()
@@ -1740,6 +1823,7 @@ public final class WebSectionLiveView {
     /// before dropping the holder so the `WKUserContentController` stops
     /// retaining the message proxy. Idempotent.
     public func teardown() {
+        invalidateProbe()
         cancelWatchdog()
         coordinator.onNavigationStateChange = nil
         coordinator.onProcessTerminated = nil
@@ -1814,6 +1898,8 @@ public struct CachedWebSectionView: View {
             .overlay {
                 if case .failed(let description) = live.status {
                     errorOverlay(description: description)
+                } else if live.isUnresponsive, case .loaded = live.status {
+                    unresponsiveOverlay
                 } else if live.isStalled, case .loading = live.status {
                     stalledOverlay
                 } else if shouldShowLoadingOverlay {
@@ -1849,6 +1935,55 @@ public struct CachedWebSectionView: View {
             // The 42 brand mark loader (not a generic spinner).
             Loader42()
                 .frame(width: 48, height: 48)
+        }
+    }
+
+    // MARK: - Unresponsive notice
+
+    @ViewBuilder
+    private var unresponsiveOverlay: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor).opacity(0.92)
+            VStack(spacing: 14) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(.secondary)
+
+                Text("This page isn't responding")
+                    .font(.system(size: 14, weight: .semibold))
+
+                Text("Retry reloads the page; anything on it you haven't saved will be lost. Or keep waiting.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+
+                HStack(spacing: 10) {
+                    Button {
+                        live.dismissUnresponsiveNotice()
+                    } label: {
+                        Text("Keep waiting")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        live.retry()
+                    } label: {
+                        Text("Retry")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 7)
+                            .background(DT.systemAccent, in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(24)
         }
     }
 
@@ -1957,29 +2092,19 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         // changes are handled by rebuilding the cache entry under a new key,
         // not by reloading in place — so this stays a no-op for that.
         //
-        // The one thing it DOES do: when the hosting tab transitions from
-        // hidden to visible, nudge a repaint. A cached page can complete its
-        // first paint while the tab is at `opacity(0)` with a frozen frame;
-        // on re-show the frame often does not change, so WebKit never
-        // re-composites and the tab reads blank until an unrelated layout
-        // pass. Forcing an in-page reflow (display none→read→restore) makes
-        // WebKit repaint immediately, without a tab switch.
+        // The one thing it DOES do: thread this tab's visibility to the live view, which repaints natively and
+        // runs its single bounded responsiveness probe on a hidden→visible edge. Deferred a turn because this is
+        // a view update and the live view's state is observable.
         let isVisible = context.environment.widgetIsVisible
-        defer { context.coordinator.wasVisible = isVisible }
-        guard isVisible, context.coordinator.wasVisible == false else { return }
-        nsView.setNeedsDisplay(nsView.bounds)
-        nsView.evaluateJavaScript(
-            "(function(){var b=document.body;if(!b)return;var d=b.style.display;"
-                + "b.style.display='none';void b.offsetHeight;b.style.display=d;})()",
-            completionHandler: nil
-        )
+        guard context.coordinator.wasVisible != isVisible else { return }
+        context.coordinator.wasVisible = isVisible
+        let live = live
+        DispatchQueue.main.async { live.visibilityChanged(isVisible) }
     }
 
     @MainActor
     final class Coordinator {
-        /// Last visibility seen in `updateNSView`, so the repaint nudge fires
-        /// only on the hidden→visible edge. Starts `true` so a webview first
-        /// built while already visible does not nudge (it paints normally).
-        var wasVisible: Bool = true
+        /// Last visibility reported to the live view from this representable; nil until the first update.
+        var wasVisible: Bool?
     }
 }
