@@ -20,7 +20,7 @@ do not statically embed either module in a plugin.
 ## Compatibility
 
 SDK releases use semantic versions. Binary compatibility is tracked separately
-by `Work42SDKCompatibility.abiGeneration`. Release `2.0.0` uses ABI generation
+by `Work42SDKCompatibility.abiGeneration`. Release `2.1.0` uses ABI generation
 `12`.
 
 ## Development
