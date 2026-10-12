@@ -328,6 +328,8 @@ public struct WebSectionView: NSViewRepresentable {
         // Use OverscrollPassthroughWebView so wheel events chain to the
         // enclosing chat scroll view when the page is at its top/bottom
         // boundary (feat/spec-as-html.11).
+        // Web apps present Safari's identity (local ephemeral content has no provider to satisfy).
+        if !spec.ephemeral { WebAppBrowserConfiguration.apply(to: configuration) }
         let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: configuration, role: .interactive(source: nil))
         webView.overscrollMode = .passthroughAtBoundary
         // Artifact pages draw their own page background (the canvas theme

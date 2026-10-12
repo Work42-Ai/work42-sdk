@@ -451,6 +451,10 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         // A popup shares its opener's content controller; give it its own so the policy handler is added once.
         configuration.userContentController = WKUserContentController()
+        // Opener and popup must agree on identity; the popup inherits it, this keeps it explicit.
+        if WebAppBrowserConfiguration.isApplied(to: opener.configuration) {
+            WebAppBrowserConfiguration.apply(to: configuration)
+        }
         let popup = Work42WebView.make(configuration: configuration, role: .interactive(source: opener.linkSource))
         PopupPanel.show(popup, over: opener.window)
         return popup
