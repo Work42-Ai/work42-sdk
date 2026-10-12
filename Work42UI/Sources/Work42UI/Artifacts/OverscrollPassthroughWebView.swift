@@ -134,6 +134,10 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
     /// reloading" behavior is preserved.
     private var deferredLoad: URLRequest?
 
+    /// Whether a load is waiting for this view to be attached to a window. WebKit is idle in that time, but the
+    /// page is still on its way: nothing may treat the idle view as a finished or failed load.
+    var hasDeferredLoad: Bool { deferredLoad != nil }
+
     @discardableResult
     public override func load(_ request: URLRequest) -> WKNavigation? {
         guard window != nil else {

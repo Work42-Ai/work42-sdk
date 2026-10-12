@@ -1368,6 +1368,11 @@ public final class WebSectionLiveView {
     private var watchdog: Task<Void, Never>?
     private var watchdogDeadline: Date?
 
+    /// Watches WebKit's own `isLoading`: the ground truth the status is reconciled against when a delegate
+    /// callback is lost (see `scheduleIdleCheck`).
+    private var loadingObservation: NSKeyValueObservation?
+    private var idleCheck: Task<Void, Never>?
+
     /// True once `teardown()` ran: the view's delegates and handlers are detached, so it can no longer report a
     /// load. Hosts and caches must not show or drive it; every action below is a no-op on it.
     public private(set) var isTornDown: Bool = false
@@ -1423,6 +1428,13 @@ public final class WebSectionLiveView {
         // `change.newValue` (URL, Sendable) avoids touching the @MainActor
         // `webView.url` from this nonisolated KVO closure; hop to main to reach
         // the @MainActor coordinator (KVO fires on main, but stay defensive).
+        loadingObservation = webView.observe(\.isLoading, options: [.new]) { [weak self] _, change in
+            let loading = change.newValue ?? false
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.webViewLoadingChanged(loading) }
+            }
+        }
+        scheduleIdleCheck()
         urlObservation = webView.observe(\.url, options: [.new]) { [weak self] _, change in
             guard let newURL = change.newValue ?? nil else { return }
             DispatchQueue.main.async {
@@ -1566,6 +1578,7 @@ public final class WebSectionLiveView {
 
     private func setLoading() {
         status = .loading
+        scheduleIdleCheck()
         isUnresponsive = false
         hasPaintedContent = false
         didRecoverFromProcessTermination = false
@@ -1626,6 +1639,37 @@ public final class WebSectionLiveView {
     /// "Keep waiting" on the unresponsive notice: leave the page as it is.
     public func dismissUnresponsiveNotice() {
         isUnresponsive = false
+    }
+
+    // MARK: - Idle reconciliation
+
+    private func webViewLoadingChanged(_ loading: Bool) {
+        if loading {
+            idleCheck?.cancel()
+            idleCheck = nil
+        } else {
+            scheduleIdleCheck()
+        }
+    }
+
+    /// The loading overlay keys off `status`, which the navigation delegate maintains. If a callback is ever lost
+    /// the status would stay `.loading` forever, so one second after WebKit goes idle with the status still
+    /// loading, it is corrected from what the view actually shows. A load waiting for a window (a view built while
+    /// hidden) and a load WebKit is still running are not idle and are left alone.
+    private func scheduleIdleCheck() {
+        idleCheck?.cancel()
+        guard status == .loading, !isTornDown, !webView.isLoading else { idleCheck = nil; return }
+        idleCheck = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let self else { return }
+            self.idleCheck = nil
+            guard self.status == .loading, !self.isTornDown, !self.webView.isLoading else { return }
+            if (self.webView as? OverscrollPassthroughWebView)?.hasDeferredLoad == true { return }
+            switch self.coordinator.navState.reconcileIdle(url: self.webView.url) {
+            case .failed(let description): self.status = .failed(description: description)
+            default: self.status = .loaded
+            }
+        }
     }
 
     // MARK: - Navigation health
@@ -1835,6 +1879,9 @@ public final class WebSectionLiveView {
     /// retaining the message proxy. Idempotent.
     public func teardown() {
         isTornDown = true
+        idleCheck?.cancel()
+        idleCheck = nil
+        loadingObservation = nil
         invalidateProbe()
         cancelWatchdog()
         coordinator.onNavigationStateChange = nil
