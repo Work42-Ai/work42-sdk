@@ -49,6 +49,13 @@ private final class Rig {
         }
     }
 
+    func loadFile(_ url: URL) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            loader.continuation = continuation
+            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        }
+    }
+
     @discardableResult
     func run(_ js: String) async -> Any? {
         try? await webView.evaluateJavaScript(js)
@@ -87,6 +94,43 @@ struct LinkPolicyTests {
         #expect(request?.pageURL?.absoluteString.hasPrefix("https://x.test/") == true)
         // kept in place -> the click is replayed, so the page's own handler finally runs
         #expect(await rig.eventually { (await rig.run("window.pageSawClick") as? Bool) == true })
+    }
+
+    @Test("history moves (Back/Forward buttons and swipes) are never offered to the host as links")
+    func historyBypassesRouting() async throws {
+        let rig = Rig()
+        rig.owned = [""]   // even a URL another widget owns must not be rerouted by a history move
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("w42-link-history-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var pages: [URL] = []
+        for name in ["a.html", "b.html", "c.html"] {
+            let url = directory.appendingPathComponent(name)
+            try Data("<html><body>\(name)</body></html>".utf8).write(to: url)
+            pages.append(url)
+            await rig.loadFile(url)
+        }
+        #expect(rig.webView.canGoBack)
+
+        // Each history move settles (the page is committed and idle) before the next one starts.
+        func settle() async {
+            _ = await rig.eventually { !rig.webView.isLoading }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        rig.webView.goBack()
+        #expect(await rig.eventually { rig.webView.url?.lastPathComponent == "b.html" })
+        await settle()
+        rig.webView.goBack()
+        #expect(await rig.eventually { rig.webView.url?.lastPathComponent == "a.html" })
+        await settle()
+        rig.webView.goForward()
+        #expect(await rig.eventually { rig.webView.url?.lastPathComponent == "b.html" })
+        await settle()
+        await rig.run("history.forward()")
+        #expect(await rig.eventually { rig.webView.url?.lastPathComponent == "c.html" })
+
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(rig.requests.isEmpty)
     }
 
     @Test("a taken click is not replayed")

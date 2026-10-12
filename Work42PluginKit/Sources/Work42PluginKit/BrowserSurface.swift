@@ -760,7 +760,7 @@ public struct BrowserSurface: View {
 /// re-render; on the next render `activeTab.url` is non-nil, `liveView(for:url:)`
 /// builds and caches the live view, and `CachedWebSectionView` renders it.
 /// The `onNavigate` callback in the chrome row calls
-/// `live?.webView.load(URLRequest(url:))` — which is a no-op for an empty tab
+/// `live?.load(url)` — which is a no-op for an empty tab
 /// (live is nil at that moment) since the initial page load happens through the
 /// live view's `WebSectionView.buildWebView(spec:)` on construction.
 ///
@@ -875,6 +875,9 @@ private struct BrowserSurfaceReady: View {
                         onGoForward: {
                             live?.webView.goForward()
                         },
+                        onStop: {
+                            live?.stopLoading()
+                        },
                         onNavigate: { navURL in
                             // When a live view exists, load the URL in the webview.
                             // For an empty tab (live == nil): navigateToDraft() already
@@ -882,7 +885,7 @@ private struct BrowserSurfaceReady: View {
                             // onSubmit, pinning the URL onto the tab. The @ObservedObject
                             // subscription triggers a re-render; the next body evaluation
                             // finds tab.url non-nil and builds the live view automatically.
-                            live?.webView.load(URLRequest(url: navURL))
+                            live?.load(navURL)
                         },
                         webStatus: live?.status ?? .loaded
                     )

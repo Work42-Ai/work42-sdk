@@ -94,6 +94,8 @@ public struct BrowserChromeRow: View {
     public var onGoBack: () -> Void = {}
     /// Called when the user taps the forward chevron. Disabled when model.canGoForward is false.
     public var onGoForward: () -> Void = {}
+    /// Called when the user taps Stop (shown in place of Refresh while a page is loading).
+    public var onStop: () -> Void = {}
     /// Called after the user submits the URL capsule field and the model resolves a URL.
     public var onNavigate: ((URL) -> Void)? = nil
 
@@ -118,6 +120,11 @@ public struct BrowserChromeRow: View {
     /// Navigation lifecycle status published by `WebSectionLiveView.status` (lanky-pine.3 / AC10).
     /// Drives the compact loading affordance in the chrome row.
     public var webStatus: WebSectionStatus = .loaded
+
+    private var isLoading: Bool {
+        if case .loading = webStatus { return true }
+        return false
+    }
 
     /// Optional "add this page to Bookmarks" (★) control rendered at the TRAILING
     /// edge of the URL capsule (feat/home-labels .5). Nil = no star (e.g. no page
@@ -144,6 +151,7 @@ public struct BrowserChromeRow: View {
         onRefresh: @escaping () -> Void,
         onGoBack: @escaping () -> Void = {},
         onGoForward: @escaping () -> Void = {},
+        onStop: @escaping () -> Void = {},
         onNavigate: ((URL) -> Void)? = nil,
         trailingActions: AnyView = AnyView(EmptyView()),
         pillAccessory: AnyView = AnyView(EmptyView()),
@@ -159,6 +167,7 @@ public struct BrowserChromeRow: View {
         self.onRefresh = onRefresh
         self.onGoBack = onGoBack
         self.onGoForward = onGoForward
+        self.onStop = onStop
         self.onNavigate = onNavigate
         self.trailingActions = trailingActions
         self.pillAccessory = pillAccessory
@@ -227,12 +236,13 @@ public struct BrowserChromeRow: View {
                 .buttonStyle(.plain)
                 .disabled(!model.canGoBack)
                 .help("Back")
+                .accessibilityLabel("Back")
 
-                // Refresh — between back and forward.
-                Button(action: onRefresh) {
+                // Refresh — between back and forward — becomes Stop while a page is loading.
+                Button(action: isLoading ? onStop : onRefresh) {
                     ZStack {
                         Color.clear
-                        Image(systemName: "arrow.clockwise")
+                        Image(systemName: isLoading ? "xmark" : "arrow.clockwise")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
@@ -240,7 +250,8 @@ public struct BrowserChromeRow: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Refresh")
+                .help(isLoading ? "Stop" : "Refresh")
+                .accessibilityLabel(isLoading ? "Stop loading" : "Refresh")
 
                 Button(action: onGoForward) {
                     ZStack {
@@ -255,6 +266,7 @@ public struct BrowserChromeRow: View {
                 .buttonStyle(.plain)
                 .disabled(!model.canGoForward)
                 .help("Forward")
+                .accessibilityLabel("Forward")
             }
             .frame(height: Self.controlGroupHeight)
 
@@ -297,6 +309,10 @@ public struct BrowserChromeRow: View {
                         // false (Canvas — AC12), so no extra guard is needed here.
                         .onChange(of: model.urlFocusNonce) { _, _ in
                             isURLFieldFocused = true
+                        }
+                        // Leaving the field without submitting shows the page's address again.
+                        .onChange(of: isURLFieldFocused) { _, focused in
+                            if !focused { model.revertUnsubmittedDraft() }
                         }
                 } else {
                     Text(model.urlDraft)

@@ -328,8 +328,13 @@ public struct WebSectionView: NSViewRepresentable {
         // Use OverscrollPassthroughWebView so wheel events chain to the
         // enclosing chat scroll view when the page is at its top/bottom
         // boundary (feat/spec-as-html.11).
+        // Web apps present Safari's identity (local ephemeral content has no provider to satisfy).
+        if !spec.ephemeral { WebAppBrowserConfiguration.apply(to: configuration) }
         let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: configuration, role: .interactive(source: nil))
         webView.overscrollMode = .passthroughAtBoundary
+        // Safari-style two-finger back/forward swipe on WebKit's native history. Local ephemeral content (the agent
+        // canvas) is not a browsing surface and keeps no gesture.
+        webView.allowsBackForwardNavigationGestures = !spec.ephemeral
         // Artifact pages draw their own page background (the canvas theme
         // paints --w42-backdrop on body), so the web view itself paints
         // nothing: a page that makes html/body transparent (the meet42
@@ -349,7 +354,9 @@ public struct WebSectionView: NSViewRepresentable {
         // SEAM .4: a JS->Swift message handler is wired here / on the
         // userContentController by the next subtask. Left untouched.
 
-        webView.load(URLRequest(url: spec.url))
+        let initialRequest = URLRequest(url: spec.url)
+        coordinator.navState.beginIntent(initialRequest, now: Date())
+        webView.load(initialRequest)
 
         // Wire the overscroll handler proxy AFTER the webview is created so
         // the proxy can hold a weak reference to it (avoids a retain cycle
@@ -411,6 +418,18 @@ public struct WebSectionView: NSViewRepresentable {
         /// webview actually landed on, so consumers can persist the real page
         /// after IN-PAGE navigation (link clicks), not just the last typed URL.
         var onURLChange: ((URL) -> Void)?
+
+        /// Which navigation owns the view and what recovery may do (WOR-111). Every mutation notifies the live
+        /// view so it can sync the stall flag and re-arm the watchdog.
+        var navState = WebSectionNavigationState() {
+            didSet { onNavigationStateChange?() }
+        }
+
+        /// Fired after every `navState` mutation. Set by `WebSectionLiveView`.
+        var onNavigationStateChange: (() -> Void)?
+
+        /// Fired when the web content process terminates. Set by `WebSectionLiveView`.
+        var onProcessTerminated: (() -> Void)?
 
         /// OPTIONAL text-selection callback (AC2 / AC7 — cozy-nimbus).
         /// Receives the selected text, the view-space `CGRect` bounding the
@@ -625,17 +644,52 @@ public struct WebSectionView: NSViewRepresentable {
             handler(selector, viewRect, text, url)
         }
 
+        /// The navigation token for a callback; WebKit always supplies one, the placeholder keeps a nil from trapping.
+        private func token(_ navigation: WKNavigation?) -> AnyObject { navigation ?? Self.missingToken }
+        private static let missingToken = NSObject()
+
+        /// Records a top-level request the page (not the host) made, so Retry knows what the user was after.
+        /// Everything is allowed through; the link policy in front of this delegate has already decided ownership.
+        public func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            preferences: WKWebpagePreferences,
+            decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
+        ) {
+            if navigationAction.targetFrame?.isMainFrame == true,
+               Self.recordsAsIntent(navigationAction.navigationType),
+               let url = navigationAction.request.url,
+               !Self.isSameDocumentAnchor(url, currentURL: webView.url) {
+                navState.recordPageRequest(navigationAction.request, now: Date())
+            }
+            decisionHandler(.allow, preferences)
+        }
+
+        /// Reloads and history moves are not new intents; everything else is a request someone asked for.
+        static func recordsAsIntent(_ type: WKNavigationType) -> Bool {
+            switch type {
+            case .reload, .backForward: return false
+            default: return true
+            }
+        }
+
         /// Set status to `.loading` when a provisional navigation begins.
         /// Covers both initial page loads and navigations triggered by the
         /// user typing a new URL in the chrome address bar.
         public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            navState.didStart(token: token(navigation), now: Date())
             onStatusChange?(.loading)
+        }
+
+        public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            navState.didCommit(token: token(navigation), url: webView.url)
         }
 
         /// Re-apply isolation after each finished navigation (covers SPA
         /// route changes that fire `didFinish` without a full reload), and
-        /// set status to `.loaded`.
+        /// set status to `.loaded`. A finish from a superseded navigation changes nothing.
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard navState.didFinish(token: token(navigation), url: webView.url) else { return }
             onStatusChange?(.loaded)
             // Report the actually-loaded page so consumers can persist it (a
             // link-click navigation moves the URL without any typed input).
@@ -643,6 +697,11 @@ public struct WebSectionView: NSViewRepresentable {
                 onURLChange?(current)
             }
             reapplyIsolation(in: webView)
+        }
+
+        /// The web content process died (memory pressure, crash). The live view owns the bounded recovery.
+        public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            onProcessTerminated?()
         }
 
         static func isSameDocumentAnchor(_ candidate: URL, currentURL: URL?) -> Bool {
@@ -654,28 +713,32 @@ public struct WebSectionView: NSViewRepresentable {
             return lhs?.url == rhs?.url
         }
 
-        /// Set status to `.failed` when a committed navigation fails (e.g.
-        /// the server closes the connection mid-stream). `didFail` fires after
-        /// a response was already received; `didFailProvisionalNavigation`
-        /// fires when the request itself could not be made (DNS failure, no
-        /// network, SSL error, etc.).
+        /// A committed navigation failed (the server closed the connection mid-stream). `didFail` fires after a
+        /// response was already received.
         public func webView(
             _ webView: WKWebView,
             didFail navigation: WKNavigation!,
             withError error: Error
         ) {
-            onStatusChange?(.failed(description: error.localizedDescription))
+            handleFailure(token(navigation), error)
         }
 
-        /// Set status to `.failed` when a provisional navigation fails before
-        /// a response is received (DNS failure, network unreachable, SSL
-        /// error, etc.).
+        /// A provisional navigation failed before a response (DNS failure, network unreachable, SSL error, ...).
         public func webView(
             _ webView: WKWebView,
             didFailProvisionalNavigation navigation: WKNavigation!,
             withError error: Error
         ) {
-            onStatusChange?(.failed(description: error.localizedDescription))
+            handleFailure(token(navigation), error)
+        }
+
+        /// Stale failures are dropped; an expected cancellation (Stop, replacement) is not an error.
+        private func handleFailure(_ token: AnyObject, _ error: Error) {
+            switch navState.didFail(token: token, error: error) {
+            case .ignored: return
+            case .cancelled: onStatusChange?(.loaded)
+            case .failed(let description): onStatusChange?(.failed(description: description))
+            }
         }
 
         /// Re-apply isolation on same-document navigation (history
@@ -1292,6 +1355,39 @@ public final class WebSectionLiveView {
     /// deinit — a nonisolated deinit can't touch this @MainActor property).
     private var urlObservation: NSKeyValueObservation?
 
+    /// True while the current navigation has been incomplete for 30 seconds and the page offers "Retry" and
+    /// "Keep waiting". Additive to `status` so existing exhaustive switches over `WebSectionStatus` keep compiling.
+    public private(set) var isStalled: Bool = false
+
+    /// True after the web content process died and the page was reloaded (or could not be). In-page state that
+    /// lived only in memory (an unsent draft) is gone; cookies and the address were kept. The host may disclose it.
+    public private(set) var didRecoverFromProcessTermination: Bool = false
+
+    /// The pending stall timer and the deadline it was armed for, so repeated state changes re-arm only when the
+    /// deadline actually moved.
+    private var watchdog: Task<Void, Never>?
+    private var watchdogDeadline: Date?
+
+    /// True when the visibility probe got no answer within five seconds (or failed): the page may be frozen. The
+    /// cached view shows recovery controls; the page itself is left untouched so a healthy SPA keeps its state.
+    public private(set) var isUnresponsive: Bool = false
+
+    /// How long a returning-to-visible page has to answer the probe.
+    var probeTimeout: Duration = .seconds(5)
+
+    /// Test seam: stands in for the JavaScript round-trip. Receives a completion to call with whether the page
+    /// answered. Nil uses the real page.
+    var probeEvaluator: ((@escaping @MainActor (Bool) -> Void) -> Void)?
+
+    /// Probes started by this view, ever. Widget-owned work is the probe only; tests read this to prove nothing
+    /// runs while hidden.
+    private(set) var probeCount = 0
+
+    private var probeTask: Task<Void, Never>?
+    private var probeToken = 0
+    private var probeGeneration = 0
+    private var lastVisible: Bool?
+
     init(webView: WKWebView, coordinator: WebSectionView.Coordinator) {
         self.webView = webView
         self.coordinator = coordinator
@@ -1305,8 +1401,18 @@ public final class WebSectionLiveView {
             if case .loading = newStatus { self?.hasPaintedContent = false }
         }
         // The injected readiness script reports a real first paint here.
+        // Paint readiness counts only once the active navigation has finished: a readiness message from a page
+        // that was already replaced must not lift the overlay over the one now loading. (A page whose message is
+        // dropped here still lifts the overlay through the `.loaded` fallback in `CachedWebSectionView`.)
         coordinator.onContentReady = { [weak self] in
-            self?.hasPaintedContent = true
+            guard let self, self.coordinator.navState.phase == .finished else { return }
+            self.hasPaintedContent = true
+        }
+        coordinator.onNavigationStateChange = { [weak self] in
+            self?.navigationStateDidChange()
+        }
+        coordinator.onProcessTerminated = { [weak self] in
+            self?.handleProcessTermination()
         }
         // Observe url so same-document (pushState) navigations report through
         // onURLChange too — `didFinish` alone misses Turbo/PJAX route changes.
@@ -1399,21 +1505,169 @@ public final class WebSectionLiveView {
 
     /// Reload the current page in the cached webview.
     ///
-    /// Re-fetches the loaded URL (`WKWebView.reload()`), keeping the same
-    /// data store, delegates, and SPA/login state. The agent canvas widget
-    /// calls this when its `content.html` changes on disk: the canvas
-    /// server re-composes the themed shell around the latest content on
-    /// every request, so a plain reload surfaces the new content live
-    /// (spec AC2) without rebuilding the webview. No-op semantics if no
-    /// page is loaded yet — `reload()` simply re-requests the last URL.
+    /// A committed, healthy page is re-fetched (`WKWebView.reload()`), keeping the same data store, delegates and
+    /// login state — the agent canvas widget calls this when its `content.html` changes on disk. When there is
+    /// nothing committed to reload (the first load failed or never finished) or the reload cannot start, the
+    /// latest safe address the user or page asked for is loaded instead. A POST is never replayed.
     public func reload() {
-        webView.reload()
+        switch coordinator.navState.retryAction() {
+        case .reload:
+            if webView.url != nil, webView.reload() != nil {
+                setLoading()
+            } else if let url = coordinator.navState.lastSafeURL {
+                load(url)
+            }
+        case .load(let request):
+            load(request)
+        case .none:
+            if let url = webView.url { load(url) }
+        }
+    }
+
+    /// Make a fresh attempt at the current intended address (the error overlay's and the stall notice's Retry).
+    /// Same recovery rules as `reload()`.
+    public func retry() {
+        reload()
+    }
+
+    /// Stop the load in flight. The view keeps whatever page it had, no error is shown for the cancellation, and
+    /// the stall watchdog is cancelled. Refresh afterwards reloads normally.
+    public func stopLoading() {
+        // The state first: the navigation WebKit is about to cancel must already count as stale.
+        coordinator.navState.stop()
+        webView.stopLoading()
+        if case .loading = status { status = .loaded }
+    }
+
+    /// "Keep waiting" on the stall notice: hide it and allow another 30 seconds without restarting the request.
+    public func keepWaiting() {
+        coordinator.navState.keepWaiting(now: Date())
     }
 
     /// Load `url` in this view (what "keep it here" does after the router declined or the user
-    /// chose to stay).
+    /// chose to stay, and what the address bar does).
     public func load(_ url: URL) {
-        webView.load(URLRequest(url: url))
+        load(URLRequest(url: url))
+    }
+
+    func load(_ request: URLRequest) {
+        coordinator.navState.beginIntent(request, now: Date())
+        setLoading()
+        webView.load(request)
+    }
+
+    private func setLoading() {
+        status = .loading
+        isUnresponsive = false
+        hasPaintedContent = false
+        didRecoverFromProcessTermination = false
+    }
+
+    // MARK: - Visibility
+
+    /// The hosting tab became visible or hidden. Hiding only invalidates a probe in flight: nothing runs while
+    /// hidden. Becoming visible repaints natively and, if the page had finished loading, probes it once.
+    func visibilityChanged(_ visible: Bool) {
+        let previous = lastVisible
+        lastVisible = visible
+        guard visible else {
+            invalidateProbe()
+            return
+        }
+        guard previous == false else { return }
+        // A cached page can finish its first paint while hidden with a frozen frame; ask AppKit to re-composite.
+        webView.setNeedsDisplay(webView.bounds)
+        webView.layer?.setNeedsDisplay()
+        guard status == .loaded else { return }
+        startProbe()
+    }
+
+    private func startProbe() {
+        invalidateProbe()
+        probeCount += 1
+        let token = probeToken
+        probeGeneration = coordinator.navState.generation
+        let respond: @MainActor (Bool) -> Void = { [weak self] answered in
+            guard let self, self.probeToken == token else { return }
+            self.probeTask?.cancel()
+            self.probeTask = nil
+            self.isUnresponsive = !answered
+        }
+        probeTask = Task { @MainActor [weak self, timeout = probeTimeout] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled, let self, self.probeToken == token else { return }
+            self.probeTask = nil
+            self.isUnresponsive = true
+        }
+        if let probeEvaluator {
+            probeEvaluator(respond)
+        } else {
+            webView.evaluateJavaScript("1") { _, error in
+                DispatchQueue.main.async { MainActor.assumeIsolated { respond(error == nil) } }
+            }
+        }
+    }
+
+    /// Drops the pending probe: a late answer or timeout of an older probe no longer counts.
+    private func invalidateProbe() {
+        probeToken += 1
+        probeTask?.cancel()
+        probeTask = nil
+    }
+
+    /// "Keep waiting" on the unresponsive notice: leave the page as it is.
+    public func dismissUnresponsiveNotice() {
+        isUnresponsive = false
+    }
+
+    // MARK: - Navigation health
+
+    /// Syncs the observable stall flag and keeps exactly one watchdog armed for the active navigation.
+    private func navigationStateDidChange() {
+        let state = coordinator.navState
+        // A new navigation supersedes the probe, and a page that is loading again is not "unresponsive".
+        if state.phase == .loading || state.generation != probeGeneration {
+            if probeTask != nil { invalidateProbe() }
+            if state.phase == .loading, isUnresponsive { isUnresponsive = false }
+        }
+        if isStalled != state.isStalled { isStalled = state.isStalled }
+        guard state.phase == .loading, !state.isStalled, let deadline = state.stallDeadline else {
+            cancelWatchdog()
+            return
+        }
+        if watchdog != nil, watchdogDeadline == deadline { return }
+        watchdog?.cancel()
+        watchdogDeadline = deadline
+        let generation = state.generation
+        watchdog = Task { @MainActor [weak self] in
+            let delay = deadline.timeIntervalSinceNow
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            guard !Task.isCancelled, let self else { return }
+            self.watchdog = nil
+            self.watchdogDeadline = nil
+            // Dropped inside the state unless this is still the navigation the timer was armed for.
+            _ = self.coordinator.navState.stallTimerFired(generation: generation, now: Date())
+        }
+    }
+
+    private func cancelWatchdog() {
+        watchdog?.cancel()
+        watchdog = nil
+        watchdogDeadline = nil
+    }
+
+    /// One automatic reload of the safe intended address per incident chain; after that the page shows Retry.
+    private func handleProcessTermination() {
+        switch coordinator.navState.processTerminated(now: Date()) {
+        case .reload(let request):
+            status = .loading
+            hasPaintedContent = false
+            didRecoverFromProcessTermination = true
+            webView.load(request)
+        case .manual:
+            didRecoverFromProcessTermination = true
+            status = .failed(description: "The page stopped responding. Retry to reload it; anything you had not saved on the page was lost.")
+        }
     }
 
     /// Wire (or clear) the native diagram-expand sink. The `w42Diagram` message
@@ -1572,6 +1826,11 @@ public final class WebSectionLiveView {
     /// before dropping the holder so the `WKUserContentController` stops
     /// retaining the message proxy. Idempotent.
     public func teardown() {
+        invalidateProbe()
+        cancelWatchdog()
+        coordinator.onNavigationStateChange = nil
+        coordinator.onProcessTerminated = nil
+        coordinator.onContentReady = nil
         WebSectionView.dismantleNSView(webView, coordinator: coordinator)
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
@@ -1642,6 +1901,10 @@ public struct CachedWebSectionView: View {
             .overlay {
                 if case .failed(let description) = live.status {
                     errorOverlay(description: description)
+                } else if live.isUnresponsive, case .loaded = live.status {
+                    unresponsiveOverlay
+                } else if live.isStalled, case .loading = live.status {
+                    stalledOverlay
                 } else if shouldShowLoadingOverlay {
                     loadingOverlay
                 } else {
@@ -1678,6 +1941,103 @@ public struct CachedWebSectionView: View {
         }
     }
 
+    // MARK: - Unresponsive notice
+
+    @ViewBuilder
+    private var unresponsiveOverlay: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor).opacity(0.92)
+            VStack(spacing: 14) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(.secondary)
+
+                Text("This page isn't responding")
+                    .font(.system(size: 14, weight: .semibold))
+
+                Text("Retry reloads the page; anything on it you haven't saved will be lost. Or keep waiting.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+
+                HStack(spacing: 10) {
+                    Button {
+                        live.dismissUnresponsiveNotice()
+                    } label: {
+                        Text("Keep waiting")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        live.retry()
+                    } label: {
+                        Text("Retry")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 7)
+                            .background(DT.systemAccent, in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    // MARK: - Stall notice
+
+    @ViewBuilder
+    private var stalledOverlay: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor).opacity(0.92)
+            VStack(spacing: 14) {
+                Loader42()
+                    .frame(width: 40, height: 40)
+
+                Text("This page is taking too long")
+                    .font(.system(size: 14, weight: .semibold))
+
+                Text("It hasn't finished loading. You can try again or keep waiting.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+
+                HStack(spacing: 10) {
+                    Button {
+                        live.keepWaiting()
+                    } label: {
+                        Text("Keep waiting")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        live.retry()
+                    } label: {
+                        Text("Retry")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 7)
+                            .background(DT.systemAccent, in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(24)
+        }
+    }
+
     // MARK: - Error overlay (AC11)
 
     @ViewBuilder
@@ -1699,8 +2059,7 @@ public struct CachedWebSectionView: View {
                     .frame(maxWidth: 320)
 
                 Button {
-                    live.webView.reload()
-                    live.status = .loading
+                    live.retry()
                 } label: {
                     Text("Retry")
                         .font(.system(size: 13, weight: .medium))
@@ -1736,29 +2095,19 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         // changes are handled by rebuilding the cache entry under a new key,
         // not by reloading in place — so this stays a no-op for that.
         //
-        // The one thing it DOES do: when the hosting tab transitions from
-        // hidden to visible, nudge a repaint. A cached page can complete its
-        // first paint while the tab is at `opacity(0)` with a frozen frame;
-        // on re-show the frame often does not change, so WebKit never
-        // re-composites and the tab reads blank until an unrelated layout
-        // pass. Forcing an in-page reflow (display none→read→restore) makes
-        // WebKit repaint immediately, without a tab switch.
+        // The one thing it DOES do: thread this tab's visibility to the live view, which repaints natively and
+        // runs its single bounded responsiveness probe on a hidden→visible edge. Deferred a turn because this is
+        // a view update and the live view's state is observable.
         let isVisible = context.environment.widgetIsVisible
-        defer { context.coordinator.wasVisible = isVisible }
-        guard isVisible, context.coordinator.wasVisible == false else { return }
-        nsView.setNeedsDisplay(nsView.bounds)
-        nsView.evaluateJavaScript(
-            "(function(){var b=document.body;if(!b)return;var d=b.style.display;"
-                + "b.style.display='none';void b.offsetHeight;b.style.display=d;})()",
-            completionHandler: nil
-        )
+        guard context.coordinator.wasVisible != isVisible else { return }
+        context.coordinator.wasVisible = isVisible
+        let live = live
+        DispatchQueue.main.async { live.visibilityChanged(isVisible) }
     }
 
     @MainActor
     final class Coordinator {
-        /// Last visibility seen in `updateNSView`, so the repaint nudge fires
-        /// only on the hidden→visible edge. Starts `true` so a webview first
-        /// built while already visible does not nudge (it paints normally).
-        var wasVisible: Bool = true
+        /// Last visibility reported to the live view from this representable; nil until the first update.
+        var wasVisible: Bool?
     }
 }

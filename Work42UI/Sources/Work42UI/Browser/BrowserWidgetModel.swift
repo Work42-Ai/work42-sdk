@@ -207,10 +207,10 @@ public final class BrowserWidgetModel: ObservableObject {
             self.activeTabId = restored.activeTabId
             let active = restored.tabs.first { $0.id == restored.activeTabId }
             self.url = active?.url ?? restored.tabs.first?.url
-            self.urlDraft = self.url?.absoluteString ?? ""
+            self.setDraft(self.url?.absoluteString ?? "")
         } else {
             self.url = initialURL
-            self.urlDraft = initialURL?.absoluteString ?? ""
+            self.setDraft(initialURL?.absoluteString ?? "")
         }
     }
 
@@ -224,14 +224,12 @@ public final class BrowserWidgetModel: ObservableObject {
 
     // MARK: - Single-URL Actions
 
-    /// Called when the user submits the URL capsule field.
+    /// Called when the user submits the URL capsule field. Resolution lives in `BrowserAddressResolver`.
     public func navigateToDraft() {
-        var raw = urlDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !raw.isEmpty else { return }
-        if !raw.contains("://") { raw = "https://" + raw }
-        guard let resolved = URL(string: raw) else { return }
+        // An address loads directly, a phrase becomes a Google search; empty or an unsupported scheme does nothing.
+        guard let resolved = BrowserAddressResolver.resolve(urlDraft) else { return }
         url = resolved
-        urlDraft = resolved.absoluteString
+        setDraft(resolved.absoluteString)
         // Reflect the navigation onto the active tab so an empty tab pins its
         // spec URL (and its webview builds) and the tab title tracks the page.
         // For a tab that already has a webview, the host's `onNavigate` loads the
@@ -249,7 +247,7 @@ public final class BrowserWidgetModel: ObservableObject {
     /// Called when the user sets a URL programmatically (e.g. Jira assigns a ticket).
     public func setURL(_ newURL: URL?) {
         url = newURL
-        urlDraft = newURL?.absoluteString ?? ""
+        setDraft(newURL?.absoluteString ?? "")
         // Disarm the picker on programmatic URL change (lanky-pine.5).
         isPicking = false
         // Clear find so highlights never carry into a new page (AC6).
@@ -305,7 +303,7 @@ public final class BrowserWidgetModel: ObservableObject {
         // tab CLEARS the capsule so it feels like a fresh browser (no carryover
         // from the previously-active tab).
         self.url = tab.url
-        self.urlDraft = tab.url?.absoluteString ?? ""
+        self.setDraft(tab.url?.absoluteString ?? "")
         isPicking = false
         // Notify ObservableObject observers.
         objectWillChange.send()
@@ -323,7 +321,7 @@ public final class BrowserWidgetModel: ObservableObject {
         // the tab has no URL yet (empty tab), so switching to an empty tab shows
         // a blank address bar rather than the previous tab's URL.
         url = tab.url
-        urlDraft = tab.url?.absoluteString ?? ""
+        setDraft(tab.url?.absoluteString ?? "")
         isPicking = false
         // Notify ObservableObject observers (e.g. BrowserChromeRow via @ObservedObject).
         objectWillChange.send()
@@ -381,7 +379,7 @@ public final class BrowserWidgetModel: ObservableObject {
            let tab = tabs.first(where: { $0.id == activeTabId }) {
             guard tab.url == nil else { return activeTabId }
             url = fallbackURL
-            urlDraft = fallbackURL.absoluteString
+            setDraft(fallbackURL.absoluteString)
             updateTab(activeTabId, title: "New Tab", url: fallbackURL)
             return activeTabId
         }
@@ -425,6 +423,16 @@ public final class BrowserWidgetModel: ObservableObject {
 
     // MARK: - WKWebView Binding
 
+    /// The address string the page last reported; a draft equal to it is not an edit in progress.
+    var lastObservedAddress: String = ""
+
+    /// A programmatic address (a new tab, a navigation, a bound page): shown, and not counted as the user typing.
+    func setDraft(_ address: String) {
+        urlDraft = address
+        lastObservedAddress = address
+    }
+    private weak var boundWebView: WKWebView?
+
     /// Binds the model's navigation state and URL capsule to a live `WKWebView`
     /// using Combine KVO publishers. Call this once when the webview is first
     /// available (e.g. from `.onAppear` in the widget content). Safe to call
@@ -440,6 +448,22 @@ public final class BrowserWidgetModel: ObservableObject {
         // Cancel any previous subscriptions (safe to call multiple times).
         cancellables.removeAll()
 
+        // Switching to another tab's view shows that page's address. Re-binding the same view (a re-appear) keeps
+        // whatever the user is typing.
+        if boundWebView !== webView {
+            boundWebView = webView
+            if let current = webView.url?.absoluteString {
+                setDraft(current)
+            } else {
+                lastObservedAddress = urlDraft
+            }
+        }
+
+        // The publishers deliver on the next turn; show this view's history state immediately so a tab switch
+        // never flashes the previous tab's Back/Forward.
+        canGoBack = webView.canGoBack
+        canGoForward = webView.canGoForward
+
         webView.publisher(for: \.canGoBack)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] val in self?.canGoBack = val }
@@ -453,8 +477,21 @@ public final class BrowserWidgetModel: ObservableObject {
         webView.publisher(for: \.url)
             .receive(on: DispatchQueue.main)
             .compactMap { $0 }
-            .sink { [weak self] url in self?.urlDraft = url.absoluteString }
+            .sink { [weak self] url in self?.observePageURL(url) }
             .store(in: &cancellables)
+    }
+
+    /// The page's address changed (a redirect, a link, an SPA route, a history swipe). The capsule follows it
+    /// unless the user has typed something that was not submitted yet, which is kept.
+    func observePageURL(_ url: URL) {
+        let observed = url.absoluteString
+        if urlDraft == lastObservedAddress { urlDraft = observed }
+        lastObservedAddress = observed
+    }
+
+    /// The user left the address field without submitting: show the page's address again.
+    public func revertUnsubmittedDraft() {
+        if urlDraft != lastObservedAddress { urlDraft = lastObservedAddress }
     }
 
     // MARK: - Find API (dewy-flint.2)
