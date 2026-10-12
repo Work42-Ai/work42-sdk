@@ -13,9 +13,11 @@
 
 import Foundation
 
-enum BrowserAddressResolver {
+/// Public so a plugin with its own address field resolves input exactly like the shared browser chrome does.
+public enum BrowserAddressResolver {
 
-    static func resolve(_ input: String) -> URL? {
+    /// The URL to load for what the user typed: an address, a Google search, or nil (empty or an unsupported scheme).
+    public static func resolve(_ input: String) -> URL? {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         guard text.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return searchURL(for: text) }
