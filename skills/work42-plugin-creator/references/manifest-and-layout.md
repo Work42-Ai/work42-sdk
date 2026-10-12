@@ -11,6 +11,7 @@ author: Your Name
 sdk_version: 1.2.0
 sdk_abi: 11
 global_skills: optional-global-skill
+requires: [other-plugin]
 ```
 
 - `name`: lowercase slug, using letters, digits, and hyphens.
@@ -18,6 +19,8 @@ global_skills: optional-global-skill
 - `sdk_version`: semantic Work42 SDK release used to author the plugin. It must not be newer than the installed app SDK.
 - `sdk_abi`: exact native ABI generation. It must equal the app ABI.
 - `global_skills`: optional comma-separated skill slugs composed globally. Most skills should instead be scoped from a session type.
+
+- `requires`: optional list of plugin names this plugin depends on (`[a, b]`, `a, b`, or a block list). Install fails until each is installed, nothing is installed automatically, and `work42 plugin remove` refuses to remove a plugin another installed plugin requires. Declare it whenever a session type's `widgets` list names another plugin's widgets.
 
 Legacy manifests without `manifest_version` remain readable, but do not create them. In legacy manifests, integer `version` becomes `N.0.0` and integer `sdk_version` is interpreted as the ABI.
 
@@ -32,7 +35,7 @@ my-plugin/
 │   └── SKILL.md                  # optional widget-facing agent guidance
 ├── skills/<slug>/SKILL.md
 ├── workflows/<slug>.json
-├── session-types/<id>.json
+├── session-types/<id>.json       # incl. the `widgets` its sessions have
 ├── mcp/<id>/                     # MCP declaration/configuration owned by plugin
 └── intents/<id>.json
 ```

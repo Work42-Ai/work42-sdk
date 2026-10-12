@@ -4,6 +4,14 @@
 
 Run `work42 plugin inspect <path> --json`. Confirm schema v2, semantic `version` and `sdk_version`, exact `sdk_abi`, a slug-form `name`, and same-bundle references.
 
+## Install fails: requires a plugin that is not installed
+
+`error: plugin 'X' requires 'Y', which is not installed.` Install `Y` first (`work42 plugin install <source>`), then `X`. Nothing is installed for you. If `Y` lives in a subfolder of a repository, pass `--path <subdir>`.
+
+## Install fails: a session type lists a widget nobody provides
+
+`session type 'T' lists widget 'widget:W', which is not provided by …`. `W` must be a widget folder of this plugin or of a plugin in `requires`; fix the id or add the `requires` entry.
+
 ## SDK not found
 
 Install Work42 in `/Applications`, set `WORK42_APP_PATH`, or pass:
@@ -32,4 +40,4 @@ The prior active plugin should remain installed, and `.staging` should not retai
 
 ## Removal expectations
 
-Removal deletes package code and owned contributions. It preserves sessions, session/widget storage, artifacts, transcripts, recordings, files, and independent workflow forks. Reinstalling a compatible plugin may reconnect the richer experience.
+Removal deregisters the plugin, then deletes package code and owned contributions. The plugin's sessions become plain chat sessions; they keep their transcript, session/widget storage, artifacts, recordings, files and their own layout minus the plugin's widgets, and independent workflow forks are untouched. Removal is refused while another installed plugin `requires` it. Reinstalling does not turn those sessions back into the plugin's session type.
