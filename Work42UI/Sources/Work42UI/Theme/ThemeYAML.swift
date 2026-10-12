@@ -30,7 +30,7 @@
 // round-tripping), but ThemeStore rejects file-based themes that use it.
 
 import Foundation
-import Yams
+internal import Yams
 
 // MARK: - Error type
 

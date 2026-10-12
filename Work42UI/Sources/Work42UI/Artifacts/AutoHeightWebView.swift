@@ -14,6 +14,7 @@
 // never observes AutoHeightModel, so height changes never re-evaluate the
 // outer body.
 
+import Combine
 import SwiftUI
 import WebKit
 

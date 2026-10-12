@@ -84,6 +84,12 @@ let package = Package(
             // renders a real web app cropped to one section by CSS selector.
             linkerSettings: [.linkedFramework("WebKit")]
         ),
+        .testTarget(
+            name: "Work42UITests",
+            dependencies: ["Work42UI"],
+            path: "Tests/Work42UITests",
+            swiftSettings: concurrencySettings
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

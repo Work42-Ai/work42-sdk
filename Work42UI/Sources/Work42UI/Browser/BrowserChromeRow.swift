@@ -35,6 +35,7 @@
 // BrowserSelectorRow: retained as an empty-view stub so any remaining call
 // sites continue to compile. It renders nothing.
 
+import Combine
 import AppKit
 import SwiftUI
 // WebSectionStatus is declared in Work42UI (WebSectionView.swift, lanky-pine.3)

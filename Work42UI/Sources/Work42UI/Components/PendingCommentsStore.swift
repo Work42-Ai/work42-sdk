@@ -25,6 +25,7 @@
 // `@StateObject` there, so closing the panel drops the queue. On-
 // disk persistence (per-session drafts) is a follow-up.
 
+import Combine
 import CoreGraphics
 import Foundation
 import SwiftUI
