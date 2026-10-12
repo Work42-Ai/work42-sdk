@@ -18,6 +18,14 @@ let concurrencySettings: [SwiftSetting] = [
     .enableExperimentalFeature("StrictConcurrency"),
     .enableUpcomingFeature("ExistentialAny"),
     .defaultIsolation(MainActor.self),
+    // Library evolution emits a compiler-independent `.swiftinterface`, which
+    // is what the app ships so plugins build with the app's Swift or newer.
+    // Swift 6.3 omits `-default-isolation MainActor` from the interface header,
+    // so the compiler's own re-verification of it fails; skip that step. The
+    // release script patches the header and checks the shipped interface instead.
+    .unsafeFlags([
+        "-enable-library-evolution", "-emit-module-interface", "-no-verify-emitted-module-interface",
+    ]),
 ]
 
 let package = Package(
