@@ -191,16 +191,32 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
             // direction. AppKit natural-scroll convention mirrors the vertical axis:
             //   dx > 0 → toward the content's left edge
             //   dx < 0 → toward the content's right edge
-            let atLeft  = scrollLeft <= 0.5
-            let atRight = scrollLeft + clientWidth >= scrollWidth - 0.5
-            let noHorizontalScroll = scrollWidth <= clientWidth + 0.5
-
-            if noHorizontalScroll || (dx > 0 && atLeft) || (dx < 0 && atRight) {
+            if Self.shouldChainHorizontal(
+                dx: dx, scrollLeft: scrollLeft, scrollWidth: scrollWidth, clientWidth: clientWidth,
+                historySwipe: allowsBackForwardNavigationGestures,
+                canGoBack: canGoBack, canGoForward: canGoForward
+            ) {
                 nextResponder?.scrollWheel(with: event)
             } else {
                 super.scrollWheel(with: event)
             }
         }
+    }
+
+    /// Whether a mid-gesture pure-horizontal wheel event goes to the enclosing scroll view instead of WebKit.
+    /// It does when the page cannot scroll further that way — unless that edge is a native history swipe: WebKit
+    /// must keep receiving the gesture for the back/forward transition to follow the fingers, so at the left edge a
+    /// page with history behind it (and at the right edge one with history ahead) keeps the event.
+    static func shouldChainHorizontal(
+        dx: CGFloat, scrollLeft: CGFloat, scrollWidth: CGFloat, clientWidth: CGFloat,
+        historySwipe: Bool, canGoBack: Bool, canGoForward: Bool
+    ) -> Bool {
+        let atLeft = scrollLeft <= 0.5
+        let atRight = scrollLeft + clientWidth >= scrollWidth - 0.5
+        let noHorizontalScroll = scrollWidth <= clientWidth + 0.5
+        guard noHorizontalScroll || (dx > 0 && atLeft) || (dx < 0 && atRight) else { return false }
+        if historySwipe, (dx > 0 && canGoBack) || (dx < 0 && canGoForward) { return false }
+        return true
     }
 
     // MARK: Scroll state update

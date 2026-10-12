@@ -332,6 +332,9 @@ public struct WebSectionView: NSViewRepresentable {
         if !spec.ephemeral { WebAppBrowserConfiguration.apply(to: configuration) }
         let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: configuration, role: .interactive(source: nil))
         webView.overscrollMode = .passthroughAtBoundary
+        // Safari-style two-finger back/forward swipe on WebKit's native history. Local ephemeral content (the agent
+        // canvas) is not a browsing surface and keeps no gesture.
+        webView.allowsBackForwardNavigationGestures = !spec.ephemeral
         // Artifact pages draw their own page background (the canvas theme
         // paints --w42-backdrop on body), so the web view itself paints
         // nothing: a page that makes html/body transparent (the meet42

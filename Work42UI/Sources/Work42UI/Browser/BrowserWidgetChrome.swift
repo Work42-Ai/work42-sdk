@@ -12,7 +12,8 @@
 //   - `onRefresh`    → caller wraps `backends.cachedWebSectionView(key)?.reload()`
 //   - `onGoBack`     → caller wraps `backends.cachedWebSectionView(key)?.webView.goBack()`
 //   - `onGoForward`  → caller wraps `backends.cachedWebSectionView(key)?.webView.goForward()`
-//   - `onNavigate`   → caller wraps `backends.cachedWebSectionView(key)?.webView.load(...)`
+//   - `onStop`       → caller wraps `backends.cachedWebSectionView(key)?.stopLoading()`
+//   - `onNavigate`   → caller wraps `backends.cachedWebSectionView(key)?.load(url)`
 //
 // Both `SessionDetailPanel.webWidgetChrome` and `HomeView`'s widget-grid config
 // call `makeWebWidgetChrome(...)` so the two can NEVER drift: the always-docked
@@ -45,6 +46,8 @@ public func makeWebWidgetChrome(
     onRefresh: @escaping () -> Void,
     onGoBack: @escaping () -> Void = {},
     onGoForward: @escaping () -> Void = {},
+    onStop: @escaping () -> Void = {},
+    webStatus: @escaping () -> WebSectionStatus = { .loaded },
     onNavigate: ((URL) -> Void)? = nil,
     minWidth: CGFloat = 0,
     minHeight: CGFloat = 0,
@@ -70,6 +73,7 @@ public func makeWebWidgetChrome(
                 onRefresh: onRefresh,
                 onGoBack: onGoBack,
                 onGoForward: onGoForward,
+                onStop: onStop,
                 onNavigate: onNavigate,
                 // The optional per-widget accessory (Preview's Record button)
                 // joins the shared trailing glass pill after the picker.
@@ -77,6 +81,8 @@ public func makeWebWidgetChrome(
                 pillTint: headerAccessoryPillTint,
                 // Engine-owned move/close controls remain bare after the pill.
                 trailingControls: trailing,
+                // Read when the header renders, so Refresh/Stop follows the live view's status.
+                webStatus: webStatus(),
                 // ★ add-current-page control at the URL capsule's trailing edge.
                 bookmarkControl: bookmarkControl
             )
