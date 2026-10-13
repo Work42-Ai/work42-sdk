@@ -26,21 +26,40 @@ private final class Rig {
     var requests: [WebLinkRequest] = []
     var outcome: WebLinkOutcome = .keptInPlace
     var owned: Set<String> = []
+    /// Widget ids that own a link clicked in them (the right-click item is offered for these).
+    var ownedHere: Set<String> = []
+    var widgetTitle: String? = "Issue"
 
     init(source: String? = "issue") {
         webView = Work42WebView.make(role: .interactive(source: source)) as! PolicyWebView
         webView.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
         webView.navigationDelegate = loader
+        Rig.installed = ObjectIdentifier(self)
         WebLinkHost.handler = WebLinkHandler(
             open: { [unowned self] request, completion in
                 self.requests.append(request)
                 completion(self.outcome)
             },
-            ownsElsewhere: { [unowned self] url, _ in self.owned.contains(url.host ?? "") }
+            ownsElsewhere: { [unowned self] url, _ in self.owned.contains(url.host ?? "") },
+            ownsHere: { [unowned self] url, source in
+                guard let source else { return false }
+                return self.ownedHere.contains(source) && url.host == "x.test"
+            },
+            title: { [unowned self] _ in self.widgetTitle }
         )
     }
 
-    deinit { MainActor.assumeIsolated { WebLinkHost.handler = nil } }
+    /// The rig whose handler is installed. A rig that is released late must not clear a newer rig's handler.
+    nonisolated(unsafe) private static var installed: ObjectIdentifier?
+
+    deinit {
+        let me = ObjectIdentifier(self)
+        MainActor.assumeIsolated {
+            guard Rig.installed == me else { return }
+            Rig.installed = nil
+            WebLinkHost.handler = nil
+        }
+    }
 
     func load(_ html: String, base: String = "https://x.test/start") async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -253,6 +272,128 @@ struct LinkPolicyTests {
         #expect(rig.webView.navigationDelegate != nil)
         #expect(rig.webView.url != nil)
     }
+
+    // MARK: Right-click: Open in New Tab in <widget> (WOR-147)
+
+    private static let openInNewWindow = NSUserInterfaceItemIdentifier("WKMenuItemIdentifierOpenLinkInNewWindow")
+
+    /// A menu like the one WebKit builds for a link: Open Link, Open Link in New Window, Copy Link.
+    private func linkMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Open Link", action: nil, keyEquivalent: ""))
+        let newWindow = NSMenuItem(title: "Open Link in New Window", action: nil, keyEquivalent: "")
+        newWindow.identifier = Self.openInNewWindow
+        menu.addItem(newWindow)
+        menu.addItem(NSMenuItem(title: "Copy Link", action: nil, keyEquivalent: ""))
+        return menu
+    }
+
+    private func rightClick(_ rig: Rig, _ id: String) async {
+        await rig.run("document.getElementById('\(id)').dispatchEvent(new MouseEvent('contextmenu', {bubbles: true, cancelable: true}))")
+    }
+
+    @Test("right-clicking an owned link retitles WebKit's new-window item and puts it first")
+    func menuGetsOpenInNewTab() async {
+        let rig = Rig()
+        rig.ownedHere = ["issue"]
+        await rig.load(#"<a id="a" href="https://x.test/a">go</a>"#)
+        await rightClick(rig, "a")
+        #expect(await rig.eventually { rig.webView.policy.lastContextLink?.absoluteString == "https://x.test/a" })
+
+        let menu = linkMenu()
+        rig.webView.policy.customizeMenu(menu, source: rig.webView.linkSource)
+
+        #expect(menu.items.first?.title == "Open in New Tab in Issue")
+        #expect(menu.items.first?.identifier == Self.openInNewWindow)
+        #expect(menu.items[1].isSeparatorItem)
+        #expect(menu.items.dropFirst(2).map(\.title).contains("Open Link"))
+        #expect(menu.items.filter { $0.identifier == Self.openInNewWindow }.count == 1)
+    }
+
+    @Test("the menu is left alone when the link is not owned here, has no title, or was not right-clicked")
+    func menuUnchanged() async {
+        let rig = Rig()
+        await rig.load(#"<a id="a" href="https://x.test/a">go</a><p id="p">text</p><a id="o" href="https://other.test/o">o</a>"#)
+
+        // Nothing right-clicked yet.
+        var menu = linkMenu()
+        rig.webView.policy.customizeMenu(menu, source: "issue")
+        #expect(menu.items.map(\.title) == ["Open Link", "Open Link in New Window", "Copy Link"])
+
+        // Right-clicked, but the widget does not own the link.
+        await rightClick(rig, "a")
+        #expect(await rig.eventually { rig.webView.policy.lastContextLink != nil })
+        menu = linkMenu()
+        rig.webView.policy.customizeMenu(menu, source: "issue")
+        #expect(menu.items.map(\.title) == ["Open Link", "Open Link in New Window", "Copy Link"])
+
+        // Owned, but the widget has no title.
+        rig.ownedHere = ["issue"]
+        rig.widgetTitle = nil
+        menu = linkMenu()
+        rig.webView.policy.customizeMenu(menu, source: "issue")
+        #expect(menu.items.map(\.title) == ["Open Link", "Open Link in New Window", "Copy Link"])
+
+        // Owned and titled, but the link is on another host (not owned), and a non-link clears it.
+        rig.widgetTitle = "Issue"
+        await rightClick(rig, "o")
+        #expect(await rig.eventually { rig.webView.policy.lastContextLink?.host == "other.test" })
+        menu = linkMenu()
+        rig.webView.policy.customizeMenu(menu, source: "issue")
+        #expect(menu.items.first?.title == "Open Link")
+        await rightClick(rig, "p")
+        #expect(await rig.eventually { rig.webView.policy.lastContextLink == nil })
+    }
+
+    @Test("choosing the item opens the link as a separate tab: offered as a popup, no popup window")
+    func armedPopupIsRouted() async {
+        let rig = Rig()
+        rig.ownedHere = ["issue"]
+        await rig.load(#"<a id="a" href="https://x.test/a">go</a>"#)
+        await rightClick(rig, "a")
+        #expect(await rig.eventually { rig.webView.policy.lastContextLink != nil })
+        rig.webView.policy.customizeMenu(linkMenu(), source: "issue")
+        #expect(rig.webView.policy.openSeparatelyLink?.absoluteString == "https://x.test/a")
+
+        let before = NSApp.windows.count
+        await rig.run("window.open('https://x.test/a')")
+        #expect(await rig.eventually { rig.requests.count == 1 })
+        #expect(rig.requests.first?.kind == .popup)
+        #expect(rig.requests.first?.url.absoluteString == "https://x.test/a")
+        #expect(NSApp.windows.count == before)
+        #expect(rig.webView.policy.openSeparatelyLink == nil)   // one-shot
+    }
+
+    @Test("an armed item does not swallow an unrelated popup")
+    func armedPopupOnlyForThatLink() async {
+        let rig = Rig()
+        rig.ownedHere = ["issue"]
+        await rig.load(#"<a id="a" href="https://x.test/a">go</a>"#)
+        await rightClick(rig, "a")
+        #expect(await rig.eventually { rig.webView.policy.lastContextLink != nil })
+        rig.webView.policy.customizeMenu(linkMenu(), source: "issue")
+
+        let before = NSApp.windows.count
+        await rig.run("window.popup = window.open('about:blank'); 1")   // a sign-in popup, not the chosen link
+        #expect(await rig.eventually { NSApp.windows.count > before })
+        #expect(rig.requests.isEmpty)
+        await rig.run("window.popup.close()")
+    }
+
+    @Test("willOpenMenu applies the same customization to the real view")
+    func willOpenMenuCustomizes() async {
+        let rig = Rig()
+        rig.ownedHere = ["issue"]
+        await rig.load(#"<a id="a" href="https://x.test/a">go</a>"#)
+        await rightClick(rig, "a")
+        #expect(await rig.eventually { rig.webView.policy.lastContextLink != nil })
+        let event = NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                       windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        let menu = linkMenu()
+        rig.webView.willOpenMenu(menu, with: event)
+        #expect(menu.items.first?.title == "Open in New Tab in Issue")
+    }
+
 }
 
 // MARK: - A released caller (WOR-70)
@@ -322,6 +463,7 @@ private final class ChallengeSender: NSObject, URLAuthenticationChallengeSender 
     func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) {}
     func continueWithoutCredential(for challenge: URLAuthenticationChallenge) {}
     func cancel(_ challenge: URLAuthenticationChallenge) {}
+
 }
 
 @Suite("LinkPolicyProxy with a released caller", .serialized)

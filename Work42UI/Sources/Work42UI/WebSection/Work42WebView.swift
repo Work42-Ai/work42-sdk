@@ -60,6 +60,11 @@ public struct WebLinkHandler {
     public var open: (WebLinkRequest, @escaping @MainActor (WebLinkOutcome) -> Void) -> Void
     /// Whether a widget other than `source` owns `url` (decides whether a popup is routed or stays attached).
     public var ownsElsewhere: (_ url: URL, _ source: String?) -> Bool
+    /// Whether the widget `source` itself owns `url`: a link right-clicked in it that it handles by opening a tab
+    /// of its own. Nil (the default) means the right-click menu is never customized.
+    public var ownsHere: ((_ url: URL, _ source: String?) -> Bool)?
+    /// The display name of the widget `source` ("GitHub"), for the right-click item "Open in New Tab in <name>".
+    public var title: ((_ source: String) -> String?)?
 
     public init(
         open: @escaping (WebLinkRequest, @escaping @MainActor (WebLinkOutcome) -> Void) -> Void,
@@ -67,6 +72,19 @@ public struct WebLinkHandler {
     ) {
         self.open = open
         self.ownsElsewhere = ownsElsewhere
+    }
+
+    /// Adds the right-click item "Open in New Tab in <widget>" for links the source widget owns.
+    public init(
+        open: @escaping (WebLinkRequest, @escaping @MainActor (WebLinkOutcome) -> Void) -> Void,
+        ownsElsewhere: @escaping (_ url: URL, _ source: String?) -> Bool,
+        ownsHere: @escaping (_ url: URL, _ source: String?) -> Bool,
+        title: @escaping (_ source: String) -> String?
+    ) {
+        self.open = open
+        self.ownsElsewhere = ownsElsewhere
+        self.ownsHere = ownsHere
+        self.title = title
     }
 }
 
@@ -162,6 +180,14 @@ public class PolicyWebView: WKWebView {
         super.uiDelegate = policy
     }
 
+    /// A link the source widget owns gets "Open in New Tab in <widget>" first in its context menu (see
+    /// `LinkPolicyProxy.customizeMenu`). Everything else about the menu is WebKit's.
+    public override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        guard policyActive else { return }
+        policy.customizeMenu(menu, source: linkSource)
+    }
+
     public override var navigationDelegate: (any WKNavigationDelegate)? {
         get { policyActive ? callerNavigation : super.navigationDelegate }
         set {
@@ -203,6 +229,31 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
     // Read by the Objective-C forwarding hooks below, which the runtime calls on the thread WebKit uses (main).
     nonisolated(unsafe) weak var callerNavigation: (any WKNavigationDelegate)?
     nonisolated(unsafe) weak var callerUI: (any WKUIDelegate)?
+
+    /// The link under the last right-click in the page, if any (reported by the page script).
+    var lastContextLink: URL?
+    /// Set when the context menu was customized: the link a following new-window request is the user choosing
+    /// "Open in New Tab in <widget>" for. One-shot.
+    var openSeparatelyLink: URL?
+
+    private static let openLinkInNewWindowItem = NSUserInterfaceItemIdentifier("WKMenuItemIdentifierOpenLinkInNewWindow")
+
+    /// Retitles WebKit's "Open Link in New Window" item to "Open in New Tab in <widget>", moves it first and arms
+    /// the next new-window request for that link to be offered to the host as a popup (the owning widget opens
+    /// it as a tab of its own). Leaves the menu untouched unless the source widget owns the right-clicked link.
+    func customizeMenu(_ menu: NSMenu, source: String?) {
+        openSeparatelyLink = nil
+        guard let source, let link = lastContextLink,
+              let handler = WebLinkHost.handler,
+              handler.ownsHere?(link, source) == true,
+              let name = handler.title?(source),
+              let item = menu.items.first(where: { $0.identifier == Self.openLinkInNewWindowItem }) else { return }
+        item.title = "Open in New Tab in \(name)"
+        menu.removeItem(item)
+        menu.insertItem(item, at: 0)
+        menu.insertItem(.separator(), at: 1)
+        openSeparatelyLink = link
+    }
 
     /// A link the host kept in place is let through once: its replayed click (or load) must not be asked again.
     private var allowedOnce: [String: Date] = [:]
@@ -362,6 +413,11 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
                 self.allowOnce(url)
                 webView.evaluateJavaScript("window.__w42Links && window.__w42Links.replay()", completionHandler: nil)
             }
+        case "contextLink":
+            lastContextLink = url
+        case "contextClear":
+            lastContextLink = nil
+            openSeparatelyLink = nil
         case "routeChange":
             let replaced = dict["replaced"] as? Bool ?? false
             let previous = dict["previous"] as? String ?? ""
@@ -443,6 +499,13 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         guard let opener = webView as? PolicyWebView else { return nil }
+        // "Open in New Tab in <widget>" was chosen for exactly this link: the owning widget opens it as a tab of
+        // its own, never a popup window. One-shot; any other popup (a sign-in window) carries on below.
+        if let separate = openSeparatelyLink, navigationAction.request.url == separate {
+            openSeparatelyLink = nil
+            offer(separate, kind: .popup) { _ in }
+            return nil
+        }
         if let url = navigationAction.request.url,
            let scheme = url.scheme?.lowercased(),
            scheme == "work42" || scheme == "file" || (WebLinkHost.handler?.ownsElsewhere(url, opener.linkSource) ?? false) {
