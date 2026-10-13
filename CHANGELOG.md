@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.3.0
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.2.0 remain binary-compatible. Every change below is
+  additive.
+- **Open in New Tab from the right-click menu.** Right-clicking a link in a widget's web view, when that widget
+  owns the link, retitles WebKit's "Open Link in New Window" item to "Open in New Tab in <widget>" and puts it
+  first. Choosing it opens the link through the widget's own link handler as a tab of its own, never as a popup
+  window, so a link that stays in the current tab (see `isSamePage` in 2.2.0) can still be split off. Other
+  popups, such as sign-in windows, behave as before. `WebLinkHandler` gains an overload with `ownsHere` and
+  `title` (the existing initializer is unchanged); a host that does not supply them gets WebKit's menu.
+
 ## 2.2.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 and 2.1.0 remain binary-compatible. Every change below is
