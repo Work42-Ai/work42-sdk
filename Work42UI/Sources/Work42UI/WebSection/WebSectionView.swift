@@ -31,6 +31,7 @@
 import AppKit
 import Foundation
 import Observation
+import OSLog
 import SwiftUI
 import WebKit
 
@@ -1596,11 +1597,59 @@ public final class WebSectionLiveView {
             return
         }
         guard previous == false else { return }
-        // A cached page can finish its first paint while hidden with a frozen frame; ask AppKit to re-composite.
-        webView.setNeedsDisplay(webView.bounds)
-        webView.layer?.setNeedsDisplay()
+        pageReturned("visible")
         guard status == .loaded else { return }
         startProbe()
+    }
+
+    // MARK: - A page that comes back on screen
+
+    private static let returnLog = Logger(subsystem: "com.work42.browser", category: "return")
+
+    /// The in-page repaint: a one-step change of the root's opacity with a forced layout in between, undone at
+    /// once. It makes WebKit re-composite a page that painted while hidden, without destroying any layout box,
+    /// so the page's own scroll panes keep their positions.
+    private static let repaintScript =
+        "(function(){var r=document.documentElement;if(!r)return;var o=r.style.opacity;"
+        + "r.style.opacity='0.999';void r.offsetHeight;r.style.opacity=o;})()"
+
+    /// The page was shown again: it became visible after being hidden, or this view was hosted again (the Home
+    /// page re-mounts its widgets when you come back to it, with no visibility change). Two things can be wrong
+    /// then, and both are fixed here:
+    ///   1. The state says the page is loaded, or loading, but the view holds no page at all. The widget would
+    ///      never load it again, so the address it should show is loaded.
+    ///   2. The page is there but WebKit never re-composited it, so it reads blank. It is repainted.
+    /// One-shot work; nothing runs while the page is hidden.
+    func pageReturned(_ reason: String) {
+        guard !isTornDown else { return }
+        webView.setNeedsDisplay(webView.bounds)
+        webView.layer?.setNeedsDisplay()
+        webView.needsLayout = true
+
+        let current = webView.url
+        let hasPage = current != nil && current?.absoluteString != "about:blank"
+        let deferred = (webView as? OverscrollPassthroughWebView)?.hasDeferredLoad == true
+        let expected = coordinator.navState.lastSafeURL ?? coordinator.navState.intended?.url
+        Self.returnLog.info("""
+            returned (\(reason, privacy: .public)): status=\(String(describing: self.status), privacy: .public) \
+            host=\(current?.host ?? "none", privacy: .public) loading=\(self.webView.isLoading) \
+            deferred=\(deferred) painted=\(self.hasPaintedContent) window=\(self.webView.window != nil) \
+            size=\(Int(self.webView.frame.width))x\(Int(self.webView.frame.height))
+            """)
+
+        // 1. The state believes there is a page; the view has none.
+        var failed = false
+        if case .failed = status { failed = true }
+        if !hasPage, !webView.isLoading, !deferred, !failed, let expected,
+           expected.absoluteString != "about:blank", expected != current {
+            Self.returnLog.warning("no page in the view; loading \(expected.host ?? "the last address", privacy: .public) again")
+            load(URLRequest(url: expected))
+            return
+        }
+        // 2. The page is there; make sure it is painted.
+        if status == .loaded, hasPage {
+            webView.evaluateJavaScript(Self.repaintScript, completionHandler: nil)
+        }
     }
 
     private func startProbe() {
@@ -2143,7 +2192,12 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
-        live.webView
+        // Every time a view is hosted again (the Home page re-mounts its widgets when you come back to it) the page
+        // is checked and repainted. Once on the next turn, and once more when the layout has settled.
+        let live = live
+        DispatchQueue.main.async { live.pageReturned("hosted") }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { live.pageReturned("hosted, settled") }
+        return live.webView
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
