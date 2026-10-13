@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Same-page links.** New optional `Work42Widget.isSamePage(_:as:)` (default `false`). When a link is clicked in a
+  widget that owns it and the widget says it is the same page as the one shown, Open Link keeps it in the current tab
+  instead of calling the widget's `linkIntents`. Additive; ABI generation stays `12`, and plugins built for 2.1.0
+  load unchanged.
+
 ## 2.1.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 remain binary-compatible. Every change below is additive.
