@@ -202,6 +202,27 @@ struct WebSectionNavigationState {
         return .reload(request)
     }
 
+    // MARK: Idle reconciliation
+
+    /// WebKit went idle while a navigation is still marked in flight: a delegate callback was lost (a view whose
+    /// delegates were detached, a start that never came). Ends the navigation as finished when the view shows a
+    /// page, failed when it shows nothing, and returns the resulting phase. A phase that is not loading is left
+    /// alone and returned as it is.
+    mutating func reconcileIdle(url: URL?) -> Phase {
+        guard phase == .loading else { return phase }
+        activeToken = nil
+        stallDeadline = nil
+        isStalled = false
+        if let url {
+            committedURL = url
+            lastSafeURL = url
+            phase = .finished
+        } else {
+            phase = .failed("The page didn't load.")
+        }
+        return phase
+    }
+
     // MARK: Retry
 
     /// What Retry/Refresh does now. A committed healthy page reloads; otherwise the safe intended address loads

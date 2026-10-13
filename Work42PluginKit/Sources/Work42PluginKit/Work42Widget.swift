@@ -560,6 +560,14 @@ public protocol Work42Widget: AnyObject {
     /// widgets that do not handle links explicitly return `[]`.
     var linkIntents: [WidgetLinkIntentSpec] { get }
 
+    /// Whether `url` is the same page as `pageURL`, the page this widget's web view is showing. Open Link calls it
+    /// for a link clicked in this widget that the widget owns: when it returns `true` the link navigates inside
+    /// the current tab instead of going through `linkIntents` (which typically opens a tab of its own). A
+    /// sub-route of the page you are on, or an anchor in it, is the usual case. The right-click item "Open in New
+    /// Tab in <widget>" always goes through `linkIntents`, so a same-page link can still be opened separately.
+    /// Defaults to `false`: every link goes through `linkIntents`, as before.
+    func isSamePage(_ url: URL, as pageURL: URL) -> Bool
+
     /// The storage namespace this widget writes to via
     /// `SessionServices.storage.set`/`.delete` (task42-plugin-conversion,
     /// s3). `nil` (the default) means "my own slug" — the existing behavior.
@@ -634,6 +642,9 @@ extension Work42Widget {
 
     /// Default: no widget-specific intents.
     public var intents: [WidgetIntentSpec] { [] }
+
+    /// Default: no link is "the same page"; every owned link goes through `linkIntents`.
+    public func isSamePage(_ url: URL, as pageURL: URL) -> Bool { false }
 
     /// Default: write to my own slug (unchanged behavior for every widget
     /// compiled before this member existed).

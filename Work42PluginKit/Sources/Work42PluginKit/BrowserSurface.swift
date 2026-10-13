@@ -293,7 +293,8 @@ public final class BrowserSurfaceCache {
     /// `spec` on first use. With the per-tab key scheme, pass the full
     /// `"<cacheKey>:<tabID>"` key.
     public func liveView(forKey key: String, building spec: WebSectionSpec) -> WebSectionLiveView {
-        if let live = liveViews[key] { return live }
+        // Never hand back a view that was torn down: its delegates are detached, so it could not report a load.
+        if let live = liveViews[key], !live.isTornDown { return live }
         let live = WebSectionView.makeLiveView(spec: spec)
         liveViews[key] = live
         return live
@@ -365,6 +366,14 @@ private struct BrowserSurfaceScopeReader<Content: View>: View {
     init(@ViewBuilder build: @escaping (String?) -> Content) { self.build = build }
 
     var body: some View { build(scope) }
+}
+
+// MARK: - ResolveID
+
+/// Identity of a resolution run: a new value restarts `resolveIfNeeded`.
+private struct ResolveID: Equatable {
+    let retry: Int
+    let hasModel: Bool
 }
 
 // MARK: - BrowserSurfaceState
@@ -518,7 +527,14 @@ public struct BrowserSurface: View {
         BrowserSurfaceScopeReader { scope in
             let key = BrowserSurfaceCache.scopedKey(cacheKey, scope: scope)
             content(cacheKey: key)
-                .task(id: state.retryNonce) {
+                // Re-runs when Retry is pressed AND when the cached model disappears while this surface is on
+                // screen (its widget was deactivated around a session visit): the surface rebuilds its model and
+                // views instead of showing a spinner with nothing behind it. Reading the cache here is what
+                // makes the body observe it.
+                .task(id: ResolveID(
+                    retry: state.retryNonce,
+                    hasModel: BrowserSurfaceCache.shared.existingModel(forKey: key) != nil
+                )) {
                     await resolveIfNeeded(cacheKey: key)
                 }
         }
@@ -603,6 +619,14 @@ public struct BrowserSurface: View {
             }
             state.resolution = .ready
             return
+        }
+        // The model is gone but this surface resolved before: its cache entry was torn down under it. Wait a beat
+        // before rebuilding — a widget that is closing removes this view in the same pass as its deactivate, which
+        // cancels this task, so nothing is rebuilt (and leaked) for a surface nobody sees any more.
+        if state.configureInvoked {
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            state.configureInvoked = false
         }
         state.resolution = .resolving
 
