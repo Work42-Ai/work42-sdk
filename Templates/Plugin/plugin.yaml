@@ -3,6 +3,6 @@ name: my-plugin
 version: 0.1.0
 description: Describe what this plugin adds.
 author: Your Name
-sdk_version: 2.1.0
+sdk_version: 2.2.0
 sdk_abi: 12
 requires: []

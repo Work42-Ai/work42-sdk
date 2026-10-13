@@ -1,11 +1,21 @@
 # Changelog
 
-## Unreleased
+## 2.2.0
 
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 and 2.1.0 remain binary-compatible. Every change below is
+  additive.
 - **Same-page links.** New optional `Work42Widget.isSamePage(_:as:)` (default `false`). When a link is clicked in a
   widget that owns it and the widget says it is the same page as the one shown, Open Link keeps it in the current tab
-  instead of calling the widget's `linkIntents`. Additive; ABI generation stays `12`, and plugins built for 2.1.0
-  load unchanged.
+  instead of calling the widget's `linkIntents`.
+- **A browser widget can no longer get stuck on the loader.**
+  - `BrowserSurface` rebuilds its model and web views when its cache entry is torn down while it is on screen (a
+    widget `deactivate()` around a session visit), and runs `configure` again for the rebuilt model. Before, it
+    showed a spinner forever with no Refresh.
+  - `WebSectionLiveView` gains `isTornDown` and ignores load, reload, retry, stop and keep-waiting once torn down;
+    `BrowserSurfaceCache` never hands back a torn-down view.
+  - One second after WebKit goes idle with the status still loading, the status is corrected from what the view
+    shows (loaded with a page, failed with Retry without). A load waiting for a hidden view to get a window, and a
+    slow load WebKit is still running, are left alone.
 
 ## 2.1.0
 
