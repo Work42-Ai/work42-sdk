@@ -765,6 +765,13 @@ public enum WebSectionScript {
           }
           wrap('pushState', origPush);
           wrap('replaceState', origReplace);
+          // The link under a right-click, so the host can offer "Open in New Tab in <widget>" for it. Capture
+          // phase and no preventDefault: the page's own context-menu handling and WebKit's menu are untouched.
+          window.addEventListener('contextmenu', function(e) {
+            var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+            if (a && typeof a.href === 'string' && routable(a)) { post({ kind: 'contextLink', url: a.href }); }
+            else { post({ kind: 'contextClear', url: location.href }); }
+          }, true);
         })();
         """
     }
