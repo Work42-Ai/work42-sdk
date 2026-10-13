@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.1
+
+- Retain ABI generation `12`; no API changes.
+- **A browser page that comes back on screen is checked and repainted.** When a cached page becomes visible again,
+  or its view is hosted again (the Home page re-mounts its widgets when you return to it), a view whose state says
+  the page is loaded but which holds no page loads its last address again, and a loaded page is repainted so it
+  does not read blank. The repaint keeps the scroll position of the page's own scroll panes. Each return is
+  logged to the unified log (subsystem `com.work42.browser`), with host names only.
+
 ## 2.3.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.2.0 remain binary-compatible. Every change below is
