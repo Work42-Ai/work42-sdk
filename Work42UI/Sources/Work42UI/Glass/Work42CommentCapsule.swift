@@ -106,18 +106,27 @@ private struct Work42CapsulePressStyle: ButtonStyle {
 }
 
 public extension View {
-    /// Places a view centred on a text selection, just above it (or just below
-    /// when the selection is too close to the top edge). Positions with layout
-    /// alignment guides rather than `.offset`, so a popover attached to the view
-    /// anchors to where it is drawn.
+    /// Places a view centred horizontally on a text selection and a few points
+    /// above its top edge (below it when there isn't room above). Meant to be
+    /// applied inside a `.topLeading` overlay that shares the selection's
+    /// coordinate space.
     ///
-    /// - Parameter selectionRect: the selection's rect in the container's space.
-    func work42CentredOnSelection(_ selectionRect: CGRect) -> some View {
-        let above = selectionRect.minY > 48
-        return self
-            .alignmentGuide(.leading) { $0[HorizontalAlignment.center] }
-            .alignmentGuide(.top) { above ? $0[.bottom] + 6 : -(selectionRect.height + 6) }
+    /// The view hangs off a zero-size anchor point: it is laid out (not offset),
+    /// so a popover attached to the view anchors to where it is drawn, and the
+    /// view can change width (the label opening) while staying centred.
+    ///
+    /// - Parameters:
+    ///   - selectionRect: the selection's rect in the container's space.
+    ///   - gap: points between the selection and the view.
+    func work42CentredOnSelection(_ selectionRect: CGRect, gap: CGFloat = 8) -> some View {
+        let above = selectionRect.minY >= 40
+        let anchorY = above ? selectionRect.minY - gap : selectionRect.maxY + gap
+        return Color.clear
+            .frame(width: 0, height: 0)
+            .overlay(alignment: above ? .bottom : .top) {
+                self.fixedSize()
+            }
             .padding(.leading, max(selectionRect.midX, 0))
-            .padding(.top, max(selectionRect.minY, 0))
+            .padding(.top, max(anchorY, 0))
     }
 }
