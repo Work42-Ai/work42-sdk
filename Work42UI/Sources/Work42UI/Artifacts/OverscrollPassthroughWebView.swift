@@ -58,6 +58,7 @@
 //   coordinator.overscrollProxy = nil
 
 import AppKit
+import OSLog
 import WebKit
 
 // MARK: - OverscrollMode
@@ -138,10 +139,13 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
     /// page is still on its way: nothing may treat the idle view as a finished or failed load.
     var hasDeferredLoad: Bool { deferredLoad != nil }
 
+    private static let loadLog = Logger(subsystem: "com.work42.browser", category: "load")
+
     @discardableResult
     public override func load(_ request: URLRequest) -> WKNavigation? {
         guard window != nil else {
             deferredLoad = request
+            Self.loadLog.notice("load held: the view has no window yet (\(request.url?.host ?? "no host", privacy: .public))")
             return nil
         }
         deferredLoad = nil
@@ -152,6 +156,7 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
         super.viewDidMoveToWindow()
         guard window != nil, let request = deferredLoad else { return }
         deferredLoad = nil
+        Self.loadLog.notice("held load replayed: the view got a window (\(request.url?.host ?? "no host", privacy: .public))")
         super.load(request)
     }
 

@@ -1527,7 +1527,7 @@ public final class WebSectionLiveView {
     /// nothing committed to reload (the first load failed or never finished) or the reload cannot start, the
     /// latest safe address the user or page asked for is loaded instead. A POST is never replayed.
     public func reload() {
-        guard !isTornDown else { return }
+        guard !isTornDown else { Self.returnLog.notice("reload ignored: the view was torn down"); return }
         switch coordinator.navState.retryAction() {
         case .reload:
             if webView.url != nil, webView.reload() != nil {
@@ -1551,7 +1551,7 @@ public final class WebSectionLiveView {
     /// Stop the load in flight. The view keeps whatever page it had, no error is shown for the cancellation, and
     /// the stall watchdog is cancelled. Refresh afterwards reloads normally.
     public func stopLoading() {
-        guard !isTornDown else { return }
+        guard !isTornDown else { Self.returnLog.notice("stop ignored: the view was torn down"); return }
         // The state first: the navigation WebKit is about to cancel must already count as stale.
         coordinator.navState.stop()
         webView.stopLoading()
@@ -1560,7 +1560,7 @@ public final class WebSectionLiveView {
 
     /// "Keep waiting" on the stall notice: hide it and allow another 30 seconds without restarting the request.
     public func keepWaiting() {
-        guard !isTornDown else { return }
+        guard !isTornDown else { Self.returnLog.notice("keep waiting ignored: the view was torn down"); return }
         coordinator.navState.keepWaiting(now: Date())
     }
 
@@ -1571,7 +1571,10 @@ public final class WebSectionLiveView {
     }
 
     func load(_ request: URLRequest) {
-        guard !isTornDown else { return }
+        guard !isTornDown else {
+            Self.returnLog.notice("load ignored: the view was torn down (\(request.url?.host ?? "no host", privacy: .public))")
+            return
+        }
         coordinator.navState.beginIntent(request, now: Date())
         setLoading()
         webView.load(request)
@@ -1630,7 +1633,7 @@ public final class WebSectionLiveView {
         let hasPage = current != nil && current?.absoluteString != "about:blank"
         let deferred = (webView as? OverscrollPassthroughWebView)?.hasDeferredLoad == true
         let expected = coordinator.navState.lastSafeURL ?? coordinator.navState.intended?.url
-        Self.returnLog.info("""
+        Self.returnLog.notice("""
             returned (\(reason, privacy: .public)): status=\(String(describing: self.status), privacy: .public) \
             host=\(current?.host ?? "none", privacy: .public) loading=\(self.webView.isLoading) \
             deferred=\(deferred) painted=\(self.hasPaintedContent) window=\(self.webView.window != nil) \
@@ -2003,6 +2006,11 @@ public struct CachedWebSectionView: View {
 
     public var body: some View {
         _CachedWebViewRepresentable(live: live)
+            // The web view on screen must be the live view the host hands over: that is the one its Refresh, Stop
+            // and address bar drive. Without this identity the representable keeps the first NSView it made, so a
+            // host that rebuilds a cached view for the same tab leaves the old one showing and the new one never
+            // gets a window (and a view without a window holds every load back).
+            .id(ObjectIdentifier(live))
             .overlay {
                 if case .failed(let description) = live.status {
                     errorOverlay(description: description)
