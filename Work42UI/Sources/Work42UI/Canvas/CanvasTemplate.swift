@@ -286,12 +286,13 @@ public enum CanvasTemplate {
     """
     }
 
-    /// The **shared prose stylesheet** — the single source of truth for
-    /// markdown-to-HTML text styling. It defines exactly the typography the
-    /// spec uses (body 15px / 1.65 line-height, em-sized headings with h1/h2
-    /// rules, code, pre, tables, lists, blockquotes, hr, img) but drives every
-    /// COLOR from the `--w42-*` design tokens, so a theme change flows through
-    /// automatically and the app + spec + artifacts stay visually identical.
+    /// The **shared prose stylesheet** — the single source of truth for the
+    /// RHYTHM of markdown-to-HTML text: body 15px / 1.65 line-height, heading,
+    /// paragraph and list margins, task lists, image width. How elements LOOK
+    /// (type weight, links, code, tables, blockquotes, rules, controls) is the
+    /// Liquid Glass element defaults in `w42-components.css`, driven by the
+    /// `--w42-*` design tokens, so a theme change flows through automatically
+    /// and the app + spec + artifacts stay visually identical.
     ///
     /// Scoped to `.w42-prose`: apply that class to the spec `<body>` and the
     /// artifact content mount so both render prose the same way. Kept in sync
@@ -305,52 +306,23 @@ public enum CanvasTemplate {
       word-wrap: break-word;
       overflow-wrap: anywhere;
     }
-    /* Element rules are wrapped in :where() so they carry ZERO specificity from
-       the scope — the component classes (.w42-table, .w42-code-block, …) always
-       win when applied to the same element inside prose. */
+    /* Prose RHYTHM only: margins, list indents and task lists. How elements look
+       (type weight, links, code, tables, quotes, rules) comes from the Liquid
+       Glass element defaults in w42-components.css. Element rules are wrapped in
+       :where() so they carry ZERO specificity from the scope: component classes
+       (.w42-table, .w42-code-block, …) always win on the same element. */
     :where(.w42-prose) > :first-child { margin-top: 0; }
-    :where(.w42-prose) a { color: var(--w42-primary); text-decoration: none; }
-    :where(.w42-prose) a:hover { text-decoration: underline; }
     :where(.w42-prose) h1, :where(.w42-prose) h2, :where(.w42-prose) h3,
     :where(.w42-prose) h4, :where(.w42-prose) h5, :where(.w42-prose) h6 {
-      color: var(--w42-text-primary);
-      font-weight: 600;
       line-height: 1.3;
       margin: 1.4em 0 0.5em;
     }
-    :where(.w42-prose) h1 { font-size: 1.7em; padding-bottom: .3em; border-bottom: 1px solid var(--w42-elevated); }
-    :where(.w42-prose) h2 { font-size: 1.4em; padding-bottom: .25em; border-bottom: 1px solid var(--w42-elevated); }
-    :where(.w42-prose) h3 { font-size: 1.2em; }
-    :where(.w42-prose) h4 { font-size: 1.05em; }
     :where(.w42-prose) p { margin: 0 0 0.9em; }
     :where(.w42-prose) ul, :where(.w42-prose) ol { margin: 0 0 0.9em; padding-left: 1.6em; }
     :where(.w42-prose) li { margin: 0.2em 0; }
     :where(.w42-prose) li.task-list-item { list-style: none; margin-left: -1.3em; }
     :where(.w42-prose) li.task-list-item input { margin-right: 0.5em; }
-    :where(.w42-prose) blockquote {
-      margin: 0 0 0.9em; padding: 0.2em 0.9em;
-      border-left: 3px solid var(--w42-elevated); color: var(--w42-text-secondary);
-    }
-    :where(.w42-prose) code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.88em;
-      background: var(--w42-surface);
-      color: var(--w42-text-primary);
-      padding: 0.15em 0.35em;
-      border-radius: var(--w42-r-input, 6px);
-    }
-    :where(.w42-prose) pre {
-      background: var(--w42-surface);
-      border: 1px solid var(--w42-elevated);
-      border-radius: var(--w42-r-card, 8px);
-      padding: 12px 14px; overflow: auto; margin: 0 0 0.9em;
-    }
-    :where(.w42-prose) pre code { background: transparent; padding: 0; font-size: 0.85em; color: var(--w42-text-primary); }
-    :where(.w42-prose) img { max-width: 100%; height: auto; border-radius: var(--w42-r-input, 6px); }
-    :where(.w42-prose) hr { border: none; border-top: 1px solid var(--w42-elevated); margin: 1.6em 0; }
-    :where(.w42-prose) table { border-collapse: collapse; margin: 0 0 0.9em; display: block; overflow: auto; }
-    :where(.w42-prose) th, :where(.w42-prose) td { border: 1px solid var(--w42-elevated); padding: 6px 12px; }
-    :where(.w42-prose) th { background: var(--w42-surface); font-weight: 600; }
+    :where(.w42-prose) img { max-width: 100%; height: auto; }
     """
 
     /// The **syntax-highlight theme** — maps highlight.js token scopes onto the

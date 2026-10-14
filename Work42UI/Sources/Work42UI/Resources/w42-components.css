@@ -1,52 +1,583 @@
-/* w42-components.css — Work42 tokenized component library
+/* w42-components.css — Work42 tokenized Liquid Glass component library (Web Kit)
  *
- * Provides ready-made CSS classes for agent-authored HTML artifacts and
- * task specs. Every rule uses only --w42-* custom properties emitted by
- * CanvasTheme.css() so light/dark switching and the system accent color
- * come for free with zero extra effort from the author.
+ * Styles agent-authored HTML artifacts, task specs and every markdown
+ * surface. Every rule uses only --w42-* custom properties emitted by
+ * CanvasTheme.css(), so light/dark switching and the system accent come for
+ * free with zero extra effort from the author.
  *
- * NEVER hardcode a color, size, or font value here.
- * Always use var(--w42-<token>) — the full catalog is in canvas.md § 5.
+ * NEVER hardcode a color, size or font value here. Always use
+ * var(--w42-<token>); the token catalog is CanvasTheme.swift. A test fails on
+ * any color or font-family literal in this file.
  *
- * Components (class names exactly as documented):
+ * Source order for every look (WOR-151): the Work42 Design System component or
+ * token for the concept first, then the Apple macOS kit values, then pieces
+ * composed from both. The Figma "Web Kit" page is the visual source of truth.
  *
- *   Callout / admonition:
- *     .w42-callout
- *     .w42-callout-info  .w42-callout-warn  .w42-callout-success  .w42-callout-danger
- *
- *   Badge / pill:
- *     .w42-badge  .w42-badge-info  .w42-badge-warn  .w42-badge-success  .w42-badge-danger
- *     .w42-pill   .w42-pill-info   .w42-pill-warn   .w42-pill-success   .w42-pill-danger
- *
- *   Striped data table:
- *     .w42-table  (apply to <table>)
- *
- *   Metric / stat card:
- *     .w42-metric-card  .w42-metric-value  .w42-metric-label  .w42-metric-delta
- *
- *   Mermaid diagram wrapper:
- *     .w42-mermaid
- *
- *   Spec section (wraps <section data-spec-section="…">):
- *     .w42-spec-section
- *
- *   Acceptance-criteria list:
- *     .w42-ac-list  (apply to <ol>)
- *     .w42-ac       (apply to <li data-ac-id="AC…">)
- *
- *   Keyboard shortcut:
- *     .w42-kbd  (apply to <kbd> or <span>)
- *
- *   Code block (fenced):
- *     .w42-code-block  (apply to <pre>)
- *
- *   Layout:
- *     .w42-columns  .w42-columns-2  .w42-columns-3
- *     .w42-grid     .w42-grid-2     .w42-grid-3
- *
- *   Section header:
- *     .w42-section-header  .w42-section-header-title  .w42-section-header-sub
+ * Section order:
+ *   1. Glass           .w42-glass · .w42-glass-lg · .w42-glass-sm · .w42-material-*
+ *   2. Element defaults  plain HTML renders as the Liquid Glass families
+ *                        (zero specificity: any class or author rule wins)
+ *   3. Controls        (filled by WOR-157)
+ *   4. Containers      (filled by WOR-158)
+ *   5. Overlays        (filled by WOR-159)
+ *   6. Spec / doc      (filled by WOR-160)
+ *   7. Layout          .w42-columns · .w42-grid · .w42-stack · .w42-row
+ *   8. Back-compat aliases   (each family sub-issue maps its legacy classes)
+ *   Legacy             pre-Liquid-Glass rules, kept verbatim until the family
+ *                      sub-issue that restyles them moves them into 3 to 8.
  */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   1. Glass
+   ══════════════════════════════════════════════════════════════════
+   The Liquid Glass material from the Apple macOS kit (Liquid Glass - Medium
+   and Large), as web tokens:
+     fill        glass-fill over glass-tint
+     blur        glass-blur, saturated
+     shadow      0 18 48 glass-shadow
+     rim         0.5 hairline glass-rim, plus +-1.25 side edges glass-edge
+     glow        inner top and bottom highlights glass-glow
+   Usage:
+     <div class="w42-glass">…</div>        regular (12 panel)
+     <div class="w42-glass-lg">…</div>     large (34): popover, menu, dialog, hero
+     <div class="w42-glass-sm">…</div>     capsule: tab strip, toolbar, icon buttons
+   ══════════════════════════════════════════════════════════════════ */
+.w42-glass,
+.w42-glass-lg,
+.w42-glass-sm,
+:where(fieldset, pre, table) {
+  position: relative;
+  background:
+    linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  border-radius: var(--w42-r-panel);
+  box-shadow:
+    0 18px 48px var(--w42-glass-shadow),
+    0 0 0 0.5px var(--w42-glass-rim),
+    -1.25px 0 0 -0.75px var(--w42-glass-edge),
+    1.25px 0 0 -0.75px var(--w42-glass-edge),
+    inset 0 40px 10px -40px var(--w42-glass-glow),
+    inset 0 -40px 10px -40px var(--w42-glass-glow),
+    inset 0 1px 0 var(--w42-glass-glow);
+}
+.w42-glass,
+.w42-glass-lg { padding: var(--w42-s16); }
+.w42-glass-lg { border-radius: var(--w42-r-glass-lg); padding: var(--w42-s24); }
+.w42-glass-sm {
+  border-radius: var(--w42-r-pill);
+  box-shadow:
+    0 8px 15px color-mix(in srgb, var(--w42-glass-shadow) 16%, transparent),
+    0 0 0 0.5px var(--w42-glass-rim),
+    inset 0 1px 0 var(--w42-glass-glow);
+}
+
+/* Materials: large flat areas (sidebars, hero bands). Background blur only: no
+   rim or shadow, unlike glass. */
+.w42-material-ultra-thin,
+.w42-material-thin,
+.w42-material-medium,
+.w42-material-thick,
+.w42-material-ultra-thick {
+  -webkit-backdrop-filter: blur(var(--w42-material-blur));
+  backdrop-filter: blur(var(--w42-material-blur));
+}
+.w42-material-ultra-thin  { background: var(--w42-material-ultra-thin); }
+.w42-material-thin        { background: var(--w42-material-thin); }
+.w42-material-medium      { background: var(--w42-material-medium); }
+.w42-material-thick       { background: var(--w42-material-thick); }
+.w42-material-ultra-thick { background: var(--w42-material-ultra-thick); }
+
+/* Reduce Transparency, or no backdrop-filter support: opaque surface, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .w42-glass,
+  .w42-glass-lg,
+  .w42-glass-sm,
+  :where(fieldset, pre, table),
+  .w42-material-ultra-thin,
+  .w42-material-thin,
+  .w42-material-medium,
+  .w42-material-thick,
+  .w42-material-ultra-thick {
+    background: var(--w42-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .w42-glass,
+  .w42-glass-lg,
+  .w42-glass-sm,
+  :where(fieldset, pre, table),
+  .w42-material-ultra-thin,
+  .w42-material-thin,
+  .w42-material-medium,
+  .w42-material-thick,
+  .w42-material-ultra-thick {
+    background: var(--w42-surface);
+  }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   2. Element defaults
+   ══════════════════════════════════════════════════════════════════
+   Plain HTML with no classes renders as the matching Liquid Glass family, so
+   even lazy markup looks right. Every selector is wrapped in :where(), so it
+   carries ZERO specificity: any class, tag expansion, or author rule wins.
+   Controls and inputs that carry a w42-* class style themselves and are
+   skipped here.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* — Type (sizes come from the base reset in CanvasTheme.css) — */
+:where(h1, h2, h3, h4, h5, h6) {
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+:where(a) { color: var(--w42-primary); text-decoration: none; }
+:where(a:hover) { text-decoration: underline; }
+:where(h5) { font-size: var(--w42-f13); }
+:where(h6) { font-size: var(--w42-f11); }
+:where(strong, b) { font-weight: 600; }
+:where(mark) {
+  color: inherit;
+  background: color-mix(in srgb, var(--w42-amber) 35%, transparent);
+  border-radius: var(--w42-r-input);
+  padding: 0 var(--w42-s4);
+}
+::selection { background: color-mix(in srgb, var(--w42-accent) 30%, transparent); }
+:where(img, video) { max-width: 100%; height: auto; border-radius: var(--w42-r-button); }
+
+/* — Button: Action Button, bordered treatment (36 capsule) — */
+:where(button:not([class*="w42-"]), input[type="button"]:not([class*="w42-"]),
+       input[type="submit"]:not([class*="w42-"]), input[type="reset"]:not([class*="w42-"])) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--w42-s8);
+  height: var(--w42-h-action);
+  padding: 0 var(--w42-s16);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--w42-label-primary);
+  background: var(--w42-fill-secondary);
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.12s ease;
+}
+:where(button:not([class*="w42-"]):hover, input[type="button"]:not([class*="w42-"]):hover,
+       input[type="submit"]:not([class*="w42-"]):hover) { background: var(--w42-fill-primary); }
+:where(button:not([class*="w42-"]):active, input[type="button"]:not([class*="w42-"]):active,
+       input[type="submit"]:not([class*="w42-"]):active) { background: var(--w42-fill-primary); }
+:where(button:not([class*="w42-"]):disabled, input[type="button"]:not([class*="w42-"]):disabled,
+       input[type="submit"]:not([class*="w42-"]):disabled) { color: var(--w42-label-tertiary); cursor: default; }
+:where(button, input, select, textarea, summary):focus-visible {
+  outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
+  outline-offset: 0;
+}
+
+/* — Text field, search field, textarea: kit Text Field (24 high, r6, 1 ring) — */
+:where(input:not([type]):not([class*="w42-"]),
+       input[type="text"]:not([class*="w42-"]), input[type="search"]:not([class*="w42-"]),
+       input[type="email"]:not([class*="w42-"]), input[type="url"]:not([class*="w42-"]),
+       input[type="tel"]:not([class*="w42-"]), input[type="password"]:not([class*="w42-"]),
+       input[type="number"]:not([class*="w42-"]), input[type="date"]:not([class*="w42-"]),
+       input[type="time"]:not([class*="w42-"]), textarea:not([class*="w42-"]),
+       select:not([class*="w42-"])) {
+  box-sizing: border-box;
+  height: var(--w42-h-control);
+  max-width: 100%;
+  padding: 0 var(--w42-s8);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  line-height: 1.2;
+  color: var(--w42-label-primary);
+  background: var(--w42-field-bg);
+  border: 0;
+  border-radius: var(--w42-r-button);
+  box-shadow: 0 0 0 1px var(--w42-field-ring);
+  outline: none;
+}
+:where(input[type="search"]:not([class*="w42-"])) { border-radius: var(--w42-r-pill); padding: 0 var(--w42-s12); }
+:where(textarea:not([class*="w42-"])) {
+  height: auto;
+  min-height: 64px;
+  padding: var(--w42-s8);
+  resize: vertical;
+}
+:where(input:not([type]):not([class*="w42-"]):focus, input[type="text"]:not([class*="w42-"]):focus,
+       input[type="search"]:not([class*="w42-"]):focus, input[type="email"]:not([class*="w42-"]):focus,
+       input[type="url"]:not([class*="w42-"]):focus, input[type="tel"]:not([class*="w42-"]):focus,
+       input[type="password"]:not([class*="w42-"]):focus, input[type="number"]:not([class*="w42-"]):focus,
+       textarea:not([class*="w42-"]):focus, select:not([class*="w42-"]):focus) {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--w42-accent) 50%, transparent),
+    0 0 0 var(--w42-focus-ring) color-mix(in srgb, var(--w42-accent) 50%, transparent);
+}
+:where(input:not([class*="w42-"]))::placeholder,
+:where(textarea:not([class*="w42-"]))::placeholder { color: var(--w42-label-tertiary); }
+:where(input:not([class*="w42-"]):disabled, textarea:not([class*="w42-"]):disabled,
+       select:not([class*="w42-"]):disabled) { opacity: 0.5; }
+
+/* — Pop-up button: <select> with a chevron — */
+:where(select:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: calc(var(--w42-s8) + 18px);
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--w42-label-secondary) 50%),
+    linear-gradient(135deg, var(--w42-label-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  background-color: var(--w42-fill-secondary);
+  box-shadow: none;
+}
+
+/* — Checkbox, radio, switch: kit Toggles — */
+:where(input[type="checkbox"]:not([class*="w42-"]), input[type="radio"]:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0 var(--w42-s4) 0 0;
+  vertical-align: -3px;
+  background: var(--w42-fill-primary);
+  border-radius: 5.5px;
+  cursor: pointer;
+}
+:where(input[type="radio"]:not([class*="w42-"])) { border-radius: 50%; }
+:where(input[type="checkbox"]:not([class*="w42-"]):checked, input[type="radio"]:not([class*="w42-"]):checked,
+       input[type="checkbox"]:not([class*="w42-"]):indeterminate) { background: var(--w42-accent); }
+:where(input[type="checkbox"]:not([class*="w42-"]):checked)::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--w42-on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+:where(input[type="checkbox"]:not([class*="w42-"]):indeterminate)::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 7px;
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--w42-on-accent);
+}
+:where(input[type="radio"]:not([class*="w42-"]):checked)::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--w42-on-accent);
+}
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"])) {
+  width: 54px;
+  height: var(--w42-h-control);
+  margin: 0;
+  vertical-align: middle;
+  border-radius: var(--w42-r-pill);
+  background: color-mix(in srgb, var(--w42-label-primary) 10%, transparent);
+  transition: background 0.15s ease;
+}
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"]))::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-field-bg);
+  box-shadow: 0 1px 3px var(--w42-glass-shadow);
+  transform: none;
+  transition: left 0.15s ease;
+}
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"]):checked) { background: var(--w42-accent); }
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"]):checked)::after { left: 20px; }
+:where(input[type="checkbox"]:not([class*="w42-"]):disabled, input[type="radio"]:not([class*="w42-"]):disabled) { opacity: 0.5; cursor: default; }
+
+/* — Slider: kit Slider (6 track, 20x16 knob). --w42-range-fill is the filled
+     share (0% to 100%); the tag runtime keeps it in sync. — */
+:where(input[type="range"]:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--w42-h-control);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+:where(input[type="range"]:not([class*="w42-"]))::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--w42-r-pill);
+  background:
+    linear-gradient(var(--w42-accent), var(--w42-accent)) 0 / var(--w42-range-fill, 0%) 100% no-repeat,
+    var(--w42-fill-secondary);
+}
+:where(input[type="range"]:not([class*="w42-"]))::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-field-bg);
+  box-shadow: 0 0 0 0.5px var(--w42-field-ring), 0 1px 3px var(--w42-glass-shadow);
+}
+
+/* — Progress: kit Linear - Determinate (6 high) — */
+:where(progress:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 6px;
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-fill-secondary);
+  overflow: hidden;
+}
+:where(progress:not([class*="w42-"]))::-webkit-progress-bar { background: var(--w42-fill-secondary); }
+:where(progress:not([class*="w42-"]))::-webkit-progress-value {
+  background: var(--w42-accent);
+  border-radius: var(--w42-r-pill);
+}
+
+/* — Group box: <fieldset> on glass with the legend as the Group Title — */
+:where(fieldset) {
+  min-width: 0;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s16);
+  border: 0;
+}
+:where(legend) {
+  padding: 0 var(--w42-s4);
+  font-size: var(--w42-f10);
+  font-weight: 600;
+  color: var(--w42-label-secondary);
+}
+
+/* — Table: kit Column Header + Table Rows on glass (28 header, 20 rows) — */
+:where(table) {
+  width: 100%;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4) var(--w42-s8) var(--w42-s8);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--w42-f11);
+}
+:where(th) {
+  height: var(--w42-h-table-header);
+  padding: 0 var(--w42-s8);
+  text-align: left;
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+}
+:where(th + th, td + td) { border-left: 1px solid transparent; }
+:where(th + th) { border-left-color: var(--w42-separator); }
+:where(td) {
+  height: var(--w42-h-row);
+  padding: 0 var(--w42-s8);
+  font-weight: 500;
+  color: var(--w42-label-primary);
+}
+:where(tbody tr:nth-child(even) td) { background: var(--w42-row-alt); }
+:where(tbody tr:nth-child(even) td:first-child) { border-radius: var(--w42-r-card) 0 0 var(--w42-r-card); }
+:where(tbody tr:nth-child(even) td:last-child) { border-radius: 0 var(--w42-r-card) var(--w42-r-card) 0; }
+:where(tbody tr[aria-selected="true"] td, tbody tr.is-selected td) {
+  background: var(--w42-row-selected);
+  color: var(--w42-on-accent);
+}
+
+/* — Code: inline code, kbd, and <pre> on glass (kit-style mono 12) — */
+:where(code, kbd, samp) {
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+}
+:where(:not(pre) > code) {
+  padding: 2px 6px;
+  color: var(--w42-label-primary);
+  background: var(--w42-fill-tertiary);
+  border-radius: var(--w42-r-button);
+}
+:where(kbd) {
+  display: inline-block;
+  padding: 2px 6px;
+  color: var(--w42-label-primary);
+  background: var(--w42-field-bg);
+  border-radius: var(--w42-r-button);
+  box-shadow: 0 0 0 1px var(--w42-separator);
+}
+:where(pre) {
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s12) var(--w42-s16);
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  line-height: 1.5;
+  color: var(--w42-label-secondary);
+  overflow: auto;
+}
+:where(pre code) { padding: 0; background: transparent; box-shadow: none; font-size: inherit; color: inherit; }
+
+/* — Blockquote and divider — */
+:where(blockquote) {
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4) 0 var(--w42-s4) var(--w42-s12);
+  color: var(--w42-label-secondary);
+  border-left: 3px solid var(--w42-fill-primary);
+  border-radius: 2px;
+}
+:where(hr) {
+  height: 1px;
+  margin: var(--w42-s24) 0;
+  border: 0;
+  background: var(--w42-separator);
+}
+
+/* — Disclosure: <details><summary> with the kit Disclosure Button chevron — */
+:where(details) { margin: 0 0 var(--w42-s8); }
+:where(summary) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  min-height: var(--w42-h-control);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-primary);
+  cursor: pointer;
+  list-style: none;
+}
+:where(summary)::-webkit-details-marker { display: none; }
+:where(summary)::before {
+  content: "";
+  flex: none;
+  width: var(--w42-h-control);
+  height: var(--w42-h-control);
+  border-radius: var(--w42-r-button);
+  background: var(--w42-fill-secondary);
+}
+:where(summary)::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border: solid var(--w42-label-primary);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+:where(details[open] > summary)::after { top: 11px; transform: rotate(225deg); }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   3. Controls   (filled by WOR-157: tabs, toolbar, chip, button tags, …)
+   ══════════════════════════════════════════════════════════════════ */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   4. Containers   (filled by WOR-158: card, group, table, list, metric,
+      callout, code, embed chrome)
+   ══════════════════════════════════════════════════════════════════ */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   5. Overlays   (filled by WOR-159: popover, menu, tooltip, dialog, sheet,
+      toast)
+   ══════════════════════════════════════════════════════════════════ */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   6. Spec / doc   (filled by WOR-160: hero, toc, section, acceptance
+      criteria)
+   ══════════════════════════════════════════════════════════════════ */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   7. Layout
+   ══════════════════════════════════════════════════════════════════
+   .w42-columns  flex-based equal-width columns
+   .w42-grid     CSS grid with auto-fill
+   .w42-stack    vertical flow, 12 gap
+   .w42-row      horizontal flow, 12 gap, wraps, centred
+   ══════════════════════════════════════════════════════════════════ */
+
+.w42-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--w42-s16);
+  margin: var(--w42-s16) 0;
+}
+
+.w42-columns > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.w42-columns-2 > * { flex-basis: calc(50% - var(--w42-s8));  min-width: 200px; }
+.w42-columns-3 > * { flex-basis: calc(33% - var(--w42-s12)); min-width: 160px; }
+
+.w42-grid {
+  display: grid;
+  gap: var(--w42-s16);
+  margin: var(--w42-s16) 0;
+}
+
+.w42-grid-2 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.w42-grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
+.w42-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--w42-s12);
+}
+.w42-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--w42-s12);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   8. Back-compat aliases   (each family sub-issue maps its legacy class names
+      onto the new look here)
+   ══════════════════════════════════════════════════════════════════ */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   LEGACY — pre-Liquid-Glass rules, kept verbatim until restyled
+   ══════════════════════════════════════════════════════════════════
+   Callout, badge/pill, table, metric card, mermaid, spec section, acceptance
+   criteria, keyboard shortcut, code block, section header, the rich spec
+   visual language, the artifact embed, buttons, surfaces and the segmented
+   control. Each family sub-issue (WOR-157 to WOR-160) moves its rules into
+   sections 3 to 8 above and deletes them from here.
+   ══════════════════════════════════════════════════════════════════ */
 
 /* ─────────────────────────────────────────────
    1. Callout / Admonition
@@ -211,7 +742,7 @@
 .w42-table th.w42-table-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
-  font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  font-family: var(--w42-font-mono);
 }
 
 
@@ -496,7 +1027,7 @@ pre.mermaid {
   display: inline;
   padding: 1px var(--w42-s4);
   border-radius: var(--w42-r-input);
-  font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  font-family: var(--w42-font-mono);
   font-size: 0.88em;
   background: color-mix(in srgb, var(--w42-backdrop) 30%, var(--w42-elevated));
   color: var(--w42-text-primary);
@@ -510,7 +1041,7 @@ pre.w42-code-block,
   border-radius: var(--w42-r-card);
   border: 1px solid var(--w42-elevated);
   overflow-x: auto;
-  font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  font-family: var(--w42-font-mono);
   font-size: var(--w42-f12);
   line-height: 1.55;
   color: var(--w42-text-primary);
@@ -523,7 +1054,7 @@ pre.w42-code-block,
 .w42-code-block-lang {
   display: inline-block;
   padding: 2px var(--w42-s8);
-  font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  font-family: var(--w42-font-mono);
   font-size: var(--w42-f10);
   font-weight: 600;
   color: var(--w42-text-tertiary);
@@ -548,49 +1079,6 @@ pre.w42-code-block code,
   background: transparent;
   padding: 0;
 }
-
-
-/* ─────────────────────────────────────────────
-   10. Columns / grid layout
-   ─────────────────────────────────────────────
-   .w42-columns  — flex-based equal-width columns
-   .w42-grid     — CSS grid with auto-fill
-
-   Usage:
-     <div class="w42-columns w42-columns-2">
-       <div>…</div>
-       <div>…</div>
-     </div>
-
-     <div class="w42-grid w42-grid-3">
-       <div class="w42-metric-card">…</div>
-       …
-     </div>
-   ───────────────────────────────────────────── */
-
-.w42-columns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--w42-s16);
-  margin: var(--w42-s16) 0;
-}
-
-.w42-columns > * {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.w42-columns-2 > * { flex-basis: calc(50% - var(--w42-s8));  min-width: 200px; }
-.w42-columns-3 > * { flex-basis: calc(33% - var(--w42-s12)); min-width: 160px; }
-
-.w42-grid {
-  display: grid;
-  gap: var(--w42-s16);
-  margin: var(--w42-s16) 0;
-}
-
-.w42-grid-2 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
-.w42-grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
 
 
 /* ─────────────────────────────────────────────
@@ -1162,7 +1650,7 @@ pre.w42-code-block code,
 
 /* Artifact id in monospace */
 .w42-artifact-embed-id {
-  font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  font-family: var(--w42-font-mono);
   font-size: var(--w42-f11);
   color: var(--w42-text-primary);
   font-weight: 600;
@@ -1241,9 +1729,9 @@ pre.w42-code-block code,
 }
 .w42-btn[disabled], .w42-btn:disabled { opacity: 0.45; cursor: default; }
 .w42-btn-primary {
-  color: #fff;
+  color: var(--w42-on-accent);
   background: var(--w42-accent);
-  border-color: color-mix(in srgb, var(--w42-accent) 65%, black);
+  border-color: color-mix(in srgb, var(--w42-accent) 65%, var(--w42-text-primary));
 }
 .w42-btn-secondary {
   color: var(--w42-accent);
@@ -1257,8 +1745,8 @@ pre.w42-code-block code,
   border-color: color-mix(in srgb, var(--w42-text-primary) 12%, transparent);
   -webkit-backdrop-filter: blur(14px) saturate(180%);
   backdrop-filter: blur(14px) saturate(180%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12),
-              inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--w42-glass-shadow) 50%, transparent),
+              inset 0 1px 0 var(--w42-glass-glow);
 }
 .w42-btn-sm { padding: 4px 10px; font-size: var(--w42-f11); border-radius: var(--w42-r-input, 6px); }
 .w42-btn-lg { padding: 10px 20px; font-size: var(--w42-f15); }
@@ -1271,25 +1759,13 @@ pre.w42-code-block code,
   border: 1px solid var(--w42-elevated);
   border-radius: var(--w42-r-card, 10px);
   padding: var(--w42-s16);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--w42-glass-shadow) 25%, transparent);
 }
 .w42-panel {
   background: var(--w42-backdrop);
   border: 1px solid var(--w42-elevated);
   border-radius: var(--w42-r-panel, 12px);
   padding: var(--w42-s20);
-}
-/* Liquid-glass surface — translucent + backdrop blur, soft top highlight, and
-   a hairline border, echoing the app's Liquid Glass material. */
-.w42-glass {
-  background: color-mix(in srgb, var(--w42-surface) 56%, transparent);
-  border: 1px solid color-mix(in srgb, var(--w42-text-primary) 10%, transparent);
-  border-radius: var(--w42-r-card, 12px);
-  padding: var(--w42-s16);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14),
-              inset 0 1px 0 color-mix(in srgb, white 26%, transparent);
 }
 .w42-toolbar {
   display: inline-flex;
@@ -1301,7 +1777,7 @@ pre.w42-code-block code,
   border-radius: var(--w42-r-pill, 999px);
   -webkit-backdrop-filter: blur(14px) saturate(180%);
   backdrop-filter: blur(14px) saturate(180%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--w42-glass-shadow) 55%, transparent);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1337,7 +1813,7 @@ pre.w42-code-block code,
 .w42-segmented > [aria-selected="true"] {
   background: var(--w42-surface);
   color: var(--w42-text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--w42-glass-shadow) 40%, transparent);
 }
 
 /* ══════════════════════════════════════════════════════════════════

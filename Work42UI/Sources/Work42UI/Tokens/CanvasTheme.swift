@@ -42,8 +42,6 @@ public enum CanvasTheme {
     /// in `:root` and dark values under `@media (prefers-color-scheme:
     /// dark)`.
     ///
-    /// - Returns: a complete CSS stylesheet string (UTF-8 safe, hex
-    ///   colors as `#rrggbb`).
     /// The theme-dependent color tokens (name → DT Color). Order is stable so
     /// the CSS output stays deterministic. Shared by `css()` (bakes both
     /// appearances) and `currentColorTokens()` (the live push).
@@ -64,25 +62,127 @@ public enum CanvasTheme {
             ("green",           DT.green),
             ("red",             DT.red),
             ("amber",           DT.amber),
+            // Chip surface (Title Bar Label): DT's translucent fill + hairline.
+            ("chip-fill",       DT.chipFill),
+            ("chip-stroke",     DT.chipStroke),
+            // Accent-hue text for tint-on-tint surfaces, and the readable
+            // foreground for solid accent fills (replaces a hard-coded white).
+            ("accent-fg",       DT.accentForeground),
+            ("on-accent",       DT.onAccent),
         ]
     }
 
+    /// One color token with its explicit light and dark values, each a
+    /// `#rrggbb` (opaque) or `#rrggbbaa` (translucent) hex string.
+    struct ColorToken: Equatable {
+        let name: String
+        let light: String
+        let dark: String
+    }
+
+    /// Web Kit tokens (WOR-151) whose values are fixed in the Figma Work42
+    /// Design System ("Work42 · Color": Label, Fill, Table, Field, Overlay,
+    /// Glass and Material groups). They mirror the Apple macOS 26/27 kit
+    /// values the Figma components are built from, so they are literals here
+    /// by design: there is no native `DT` counterpart to read. Order is stable
+    /// so `css()` stays deterministic.
+    static let kitColorTokens: [ColorToken] = [
+        // Labels (kit Labels/Primary·Secondary·Tertiary)
+        ColorToken(name: "label-primary",   light: "#000000d9", dark: "#ffffffd9"),
+        ColorToken(name: "label-secondary", light: "#00000080", dark: "#ffffff8c"),
+        ColorToken(name: "label-tertiary",  light: "#00000040", dark: "#ffffff40"),
+        // Fills (kit Fills - Opaque)
+        ColorToken(name: "fill-primary",    light: "#0000001a", dark: "#ffffff1a"),
+        ColorToken(name: "fill-secondary",  light: "#00000014", dark: "#ffffff14"),
+        ColorToken(name: "fill-tertiary",   light: "#0000000d", dark: "#ffffff0d"),
+        ColorToken(name: "fill-quaternary", light: "#00000008", dark: "#ffffff08"),
+        ColorToken(name: "fill-quinary",    light: "#00000005", dark: "#ffffff05"),
+        // Table and field (kit Tables, _Input Fields)
+        ColorToken(name: "separator",             light: "#0000001a", dark: "#ffffff1a"),
+        ColorToken(name: "row-alt",               light: "#0000000d", dark: "#ffffff0d"),
+        ColorToken(name: "row-selected",          light: "#0165e2",   dark: "#0158d2"),
+        ColorToken(name: "row-selected-inactive", light: "#00000024", dark: "#ffffff2e"),
+        ColorToken(name: "field-bg",              light: "#ffffff",   dark: "#1e1e1e"),
+        ColorToken(name: "field-ring",            light: "#00000014", dark: "#ffffff0a"),
+        ColorToken(name: "overlay",               light: "#ababab99", dark: "#1717179e"),
+        // Liquid Glass (kit Liquid Glass - Medium / Large)
+        ColorToken(name: "glass-fill",   light: "#ffffffb3", dark: "#1a1a1ab8"),
+        ColorToken(name: "glass-tint",   light: "#bfbfbf1a", dark: "#00000000"),
+        ColorToken(name: "glass-shadow", light: "#00000040", dark: "#00000073"),
+        ColorToken(name: "glass-rim",    light: "#00000024", dark: "#ffffff1f"),
+        ColorToken(name: "glass-edge",   light: "#0000001a", dark: "#ffffff14"),
+        ColorToken(name: "glass-glow",   light: "#ffffff29", dark: "#ffffff1a"),
+        // Materials (kit Materials, ultra thin to ultra thick)
+        ColorToken(name: "material-ultra-thin",  light: "#f6f6f65c", dark: "#0000001a"),
+        ColorToken(name: "material-thin",        light: "#f6f6f67a", dark: "#00000033"),
+        ColorToken(name: "material-medium",      light: "#f6f6f699", dark: "#0000004a"),
+        ColorToken(name: "material-thick",       light: "#f6f6f6b8", dark: "#00000066"),
+        ColorToken(name: "material-ultra-thick", light: "#ececece0", dark: "#00000080"),
+    ]
+
+    /// Every color token (adaptive DT tokens, chip foregrounds, Web Kit
+    /// literals) with its light and dark hex, in emission order. The single
+    /// source for `css()` (bakes both) and `currentColorTokens()` (the live
+    /// push), so the two can never drift.
+    @MainActor
+    static func resolvedColorTokens(light: NSAppearance, dark: NSAppearance) -> [ColorToken] {
+        var out: [ColorToken] = colorTokenList.map {
+            ColorToken(name: $0.name,
+                       light: hex($0.color, under: light),
+                       dark: hex($0.color, under: dark))
+        }
+        // Chip foregrounds follow DT.resolveChipTint (the native Title Bar
+        // Label rule), evaluated per scheme so the result is deterministic.
+        let chipTints: [(name: String, tint: Color)] = [
+            ("chip-fg-success", DT.green),
+            ("chip-fg-warning", DT.orange),
+            ("chip-fg-failure", DT.red),
+            ("chip-fg-accent",  DT.systemAccent),
+        ]
+        for entry in chipTints {
+            out.append(ColorToken(
+                name: entry.name,
+                light: chipForegroundHex(entry.tint, appearance: light, scheme: .light),
+                dark: chipForegroundHex(entry.tint, appearance: dark, scheme: .dark)))
+        }
+        out.append(contentsOf: kitColorTokens)
+        return out
+    }
+
+    /// `DT.resolveChipTint(...).foreground` for one scheme, resolved to hex
+    /// under the matching appearance (the formula reads the tint's live
+    /// NSColor, so it has to run inside that appearance).
+    @MainActor
+    private static func chipForegroundHex(
+        _ tint: Color, appearance: NSAppearance, scheme: ColorScheme
+    ) -> String {
+        var result = "#000000"
+        appearance.performAsCurrentDrawingAppearance {
+            let foreground = DT.resolveChipTint(tint, colorScheme: scheme).foreground
+            result = hex(foreground, under: appearance)
+        }
+        return result
+    }
+
     /// The color tokens resolved under the CURRENTLY-active app appearance,
-    /// as `name → "#rrggbb"`. Pushed into an open artifact via
-    /// `window.__w42.theme.apply(...)` on a theme change so the `--w42-*`
-    /// vars re-resolve LIVE, with no reload (AC-C5). Only colors change with
-    /// the theme — spacing / radii / fonts are appearance-independent.
+    /// as `name → "#rrggbb"` (or `"#rrggbbaa"` for translucent tokens). Pushed
+    /// into an open artifact via `window.__w42.theme.apply(...)` on a theme
+    /// change so the `--w42-*` vars re-resolve LIVE, with no reload (AC-C5).
+    /// Only colors change with the theme — spacing / radii / fonts are
+    /// appearance-independent.
     @MainActor
     public static func currentColorTokens() -> [String: String] {
         let appearance = NSApplication.shared.effectiveAppearance
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let light = NSAppearance(named: .aqua) ?? appearance
+        let dark = NSAppearance(named: .darkAqua) ?? appearance
         var out: [String: String] = [:]
-        for token in colorTokenList {
-            out[token.name] = hex(token.color, under: appearance)
+        for token in resolvedColorTokens(light: light, dark: dark) {
+            out[token.name] = isDark ? token.dark : token.light
         }
         // Push the shared syntax palette too, so a code block in an open artifact
         // recolours live on a theme change exactly like the editor — not just on
         // reload / OS light-dark flip.
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         for entry in EditorSyntaxPalette.resolvedHex(dark: isDark) {
             out[entry.name] = entry.hex
         }
@@ -94,9 +194,9 @@ public enum CanvasTheme {
         let light = NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing()
         let dark = NSAppearance(named: .darkAqua) ?? light
 
-        // Color tokens: name → SwiftUI Color from DT (shared so the live
-        // theme push in `currentColorTokens()` stays in lock-step).
-        let colorTokens = Self.colorTokenList
+        // Color tokens: light + dark hex per token (shared with the live
+        // theme push in `currentColorTokens()`, so the two stay in lock-step).
+        let colorTokens = Self.resolvedColorTokens(light: light, dark: dark)
 
         // Non-color tokens are appearance-independent — emitted once in
         // `:root`. Spacing / radii / font-size values are CSS px.
@@ -108,6 +208,17 @@ public enum CanvasTheme {
         let radiusTokens: [(name: String, value: CGFloat)] = [
             ("r-window", DT.rWindow), ("r-panel", DT.rPanel), ("r-card", DT.rCard),
             ("r-button", DT.rButton), ("r-input", DT.rInput), ("r-pill", DT.rPill),
+            // Liquid Glass Large corner (popover, menu, dialog, sheet, hero).
+            ("r-glass-lg", 34),
+        ]
+
+        // Control, row and glass metrics from the Web Kit Figma ("Work42 ·
+        // Spacing"): 24 pt controls and table rows, 36 pt Action Button
+        // capsules, 28 pt table header, 16 pt glass blur, 60 pt materials blur,
+        // 3.5 pt focus ring.
+        let sizeTokens: [(name: String, value: CGFloat)] = [
+            ("h-control", 24), ("h-action", 36), ("h-row", 20), ("h-table-header", 28),
+            ("glass-blur", 16), ("material-blur", 60), ("focus-ring", 3.5),
         ]
 
         let fontTokens: [(name: String, value: CGFloat)] = [
@@ -120,14 +231,18 @@ public enum CanvasTheme {
         let fontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", "
             + "\"Helvetica Neue\", Helvetica, Arial, sans-serif"
 
+        // Monospace stack for code, inline code and keys.
+        let fontMono = "ui-monospace, \"SF Mono\", Menlo, Monaco, \"Courier New\", monospace"
+
         // --- :root (light values + appearance-independent tokens) ---
         var root = ""
         root += "  /* Colors (light) */\n"
         for token in colorTokens {
-            root += "  --w42-\(token.name): \(hex(token.color, under: light));\n"
+            root += "  --w42-\(token.name): \(token.light);\n"
         }
         root += "\n  /* Typography */\n"
         root += "  --w42-font-family: \(fontFamily);\n"
+        root += "  --w42-font-mono: \(fontMono);\n"
         for token in fontTokens {
             root += "  --w42-\(token.name): \(px(token.value));\n"
         }
@@ -137,6 +252,10 @@ public enum CanvasTheme {
         }
         root += "\n  /* Corner radii */\n"
         for token in radiusTokens {
+            root += "  --w42-\(token.name): \(px(token.value));\n"
+        }
+        root += "\n  /* Controls, rows and glass */\n"
+        for token in sizeTokens {
             root += "  --w42-\(token.name): \(px(token.value));\n"
         }
         // Syntax palette — the SAME tokens the native code editor uses (base One
@@ -151,7 +270,7 @@ public enum CanvasTheme {
         // --- dark color overrides (media query, 4-space indent) ---
         var darkRoot = ""
         for token in colorTokens {
-            darkRoot += "    --w42-\(token.name): \(hex(token.color, under: dark));\n"
+            darkRoot += "    --w42-\(token.name): \(token.dark);\n"
         }
         for entry in EditorSyntaxPalette.resolvedHex(dark: true) {
             darkRoot += "    --w42-\(entry.name): \(entry.hex);\n"
@@ -268,7 +387,13 @@ public enum CanvasTheme {
         let r = Int((srgb.redComponent * 255).rounded())
         let g = Int((srgb.greenComponent * 255).rounded())
         let b = Int((srgb.blueComponent * 255).rounded())
+        let a = Int((srgb.alphaComponent * 255).rounded())
         let clamp: (Int) -> Int = { Swift.max(0, Swift.min(255, $0)) }
+        // Opaque colors stay `#rrggbb`; translucent ones (chip fills, glass) keep
+        // their alpha as `#rrggbbaa` so the web token matches the native one.
+        if clamp(a) < 255 {
+            return String(format: "#%02x%02x%02x%02x", clamp(r), clamp(g), clamp(b), clamp(a))
+        }
         return String(format: "#%02x%02x%02x", clamp(r), clamp(g), clamp(b))
     }
 
