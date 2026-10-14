@@ -86,6 +86,16 @@ public enum CanvasTemplate {
         return css
     }
 
+    /// The bundled `<w42-*>` tag runtime (`w42-components.js`), for surfaces that
+    /// inline it (markdown documents) instead of loading `_w42/w42-components.js`.
+    @MainActor
+    public static func componentLibraryJS() -> String {
+        guard let url = Bundle.module.url(
+            forResource: "w42-components", withExtension: "js"
+        ), let js = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        return js
+    }
+
     /// JS that auto-renders mermaid diagrams in the canvas with zero effort
     /// from the agent.
     ///

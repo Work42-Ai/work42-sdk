@@ -51,6 +51,9 @@ enum MarkdownDocumentTemplate {
         // so spec-embedded HTML — trailing components, raw HTML — uses the same
         // `.w42-*` classes as artifacts.
         let componentCSS = CanvasTemplate.componentLibraryCSS()
+        // The `<w42-*>` tag runtime is inlined for the same reason, so tags work
+        // in markdown documents exactly as they do in artifacts.
+        let componentRuntime = CanvasTemplate.componentLibraryJS()
         return """
         <!doctype html>
         <html>
@@ -90,6 +93,9 @@ enum MarkdownDocumentTemplate {
         </script>
         <script>
         \(CanvasTemplate.componentsJS)
+        </script>
+        <script>
+        \(componentRuntime)
         </script>
         <script>
         \(CanvasTemplate.highlightJS(src: MarkdownImageRewriter.highlightScriptURL))
