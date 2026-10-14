@@ -121,6 +121,11 @@
       if (t.panel) { t.panel.hidden = !on; }
     });
     if (focus && tab.focus) { tab.focus(); }
+    var pill = set.__w42pill;
+    if (pill && tab.offsetWidth) {
+      pill.style.width = tab.offsetWidth + "px";
+      pill.style.transform = "translateX(" + tab.offsetLeft + "px)";
+    }
   }
   define("w42-tabs", {
     render: function (host) {
@@ -155,9 +160,20 @@
       host.appendChild(strip);
       panels.forEach(function (p) { host.appendChild(p); });
       host.__w42tabs = entries;
+      var pill = el("span", "w42-tab-pill");
+      strip.insertBefore(pill, strip.firstChild);
+      addClass(strip, "w42-tabs-glide");
+      host.__w42pill = pill;
       var live = entries.filter(function (e) { return e.el.getAttribute("aria-disabled") !== "true"; });
       var initial = (live.filter(function (e) { return flag(e.el, "selected"); })[0] || live[0]);
       if (initial) { selectTab(host, initial.el, false); }
+      // Fonts and layout settle after first paint; re-seat the pill then.
+      function reseat() {
+        var cur = entries.filter(function (e) { return e.el.getAttribute("aria-selected") === "true"; })[0];
+        if (cur) { selectTab(host, cur.el, false); }
+      }
+      if (window.requestAnimationFrame) { window.requestAnimationFrame(reseat); }
+      window.addEventListener("resize", reseat);
       function choose(tab, focus) {
         if (tab.getAttribute("aria-disabled") === "true") { return; }
         selectTab(host, tab, focus);
@@ -822,6 +838,70 @@
     }
   });
 
+  /* — <w42-capsule label="Comment" size="sm|md|lg"> the 42 mark in a liquid-glass capsule — */
+  define("w42-capsule", {
+    render: function (host) {
+      var label = attr(host, "label", "");
+      var size = enumAttr("w42-capsule", host, "size", ["sm", "md", "lg"], "md");
+      host.textContent = "";
+      addClass(host, "w42-capsule");
+      if (size !== "md") { addClass(host, "w42-capsule-" + size); }
+      host.appendChild(el("span", "w42-capsule-mark"));
+      if (label) { host.appendChild(el("span", "w42-capsule-label", label)); }
+      host.setAttribute("role", "button");
+      host.setAttribute("tabindex", "0");
+      if (label) { host.setAttribute("aria-label", label); }
+      keyActivate(host);
+    }
+  });
+
+  /* ── Soft selection ──────────────────────────────────────────────────
+     Native selection is hidden (CSS, once .w42-soft-selection is set) and a
+     rounded, per-line merged highlight is painted that glides between
+     selections. Skipped for selections inside form fields. */
+  function installSoftSelection() {
+    if (window.__w42SoftSelection || !document.body) { return; }
+    window.__w42SoftSelection = true;
+    var layer = el("div");
+    layer.id = "w42-sel";
+    document.body.appendChild(layer);
+    var pool = [];
+    function merged(range) {
+      var out = [];
+      Array.prototype.slice.call(range.getClientRects()).forEach(function (r) {
+        if (r.width <= 1 || r.height <= 1) { return; }
+        var last = out[out.length - 1];
+        if (last && Math.abs(last.top - r.top) < 3 && r.left <= last.left + last.width + 2) {
+          last.width = Math.max(last.width, r.left + r.width - last.left);
+        } else { out.push({ left: r.left, top: r.top, width: r.width, height: r.height }); }
+      });
+      return out;
+    }
+    function paint(rects) {
+      while (pool.length < rects.length) { var n = el("i"); layer.appendChild(n); pool.push(n); }
+      pool.forEach(function (n, k) {
+        var r = rects[k];
+        if (!r) { n.classList.remove("on"); return; }
+        n.style.left = (r.left - 3) + "px";
+        n.style.top = (r.top - 1) + "px";
+        n.style.width = (r.width + 6) + "px";
+        n.style.height = (r.height + 2) + "px";
+        n.classList.add("on");
+      });
+    }
+    function update() {
+      var sel = window.getSelection ? window.getSelection() : null;
+      var active = document.activeElement;
+      var inField = active && (active.localName === "input" || active.localName === "textarea");
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed || inField) { paint([]); return; }
+      paint(merged(sel.getRangeAt(0)));
+    }
+    document.addEventListener("selectionchange", update);
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    document.documentElement.classList.add("w42-soft-selection");
+  }
+
   /* ── Spacing ─────────────────────────────────────────────────────── */
 
   var GAPS = /^s(4|8|12|16|20|24|32|40)$/;
@@ -907,6 +987,7 @@
   function watch() {
     reportUnknown(document);
     layout();
+    try { installSoftSelection(); } catch (e) { fail("selection", e); }
     if (!window.MutationObserver) { return; }
     new MutationObserver(function (muts) {
       muts.forEach(function (m) {

@@ -191,7 +191,7 @@
   border-radius: var(--w42-r-input);
   padding: 0 var(--w42-s4);
 }
-::selection { background: color-mix(in srgb, var(--w42-accent) 30%, transparent); }
+::selection { background: color-mix(in srgb, var(--w42-label-primary) 14%, transparent); }
 :where(img, video) { max-width: 100%; height: auto; border-radius: var(--w42-r-button); }
 
 /* — Button: Action Button, bordered treatment (36 capsule) — */
@@ -214,12 +214,17 @@
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  transition: background 0.12s ease;
+  transition: background var(--w42-dur-fast) var(--w42-ease),
+              transform var(--w42-dur-base) var(--w42-spring);
 }
 :where(button:not([class*="w42-"]):hover, input[type="button"]:not([class*="w42-"]):hover,
-       input[type="submit"]:not([class*="w42-"]):hover) { background: var(--w42-fill-primary); }
+       input[type="submit"]:not([class*="w42-"]):hover) { background: var(--w42-fill-primary); transform: translateY(-1px); }
 :where(button:not([class*="w42-"]):active, input[type="button"]:not([class*="w42-"]):active,
-       input[type="submit"]:not([class*="w42-"]):active) { background: var(--w42-fill-primary); }
+       input[type="submit"]:not([class*="w42-"]):active) {
+  background: var(--w42-fill-primary);
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
 :where(button:not([class*="w42-"]):disabled, input[type="button"]:not([class*="w42-"]):disabled,
        input[type="submit"]:not([class*="w42-"]):disabled) { color: var(--w42-label-tertiary); cursor: default; }
 :where(button, input, select, textarea, summary):focus-visible {
@@ -339,7 +344,7 @@
   vertical-align: middle;
   border-radius: var(--w42-r-pill);
   background: color-mix(in srgb, var(--w42-label-primary) 10%, transparent);
-  transition: background 0.15s ease;
+  transition: background var(--w42-dur-fast) var(--w42-ease);
 }
 :where(input[type="checkbox"][role="switch"]:not([class*="w42-"]))::after {
   content: "";
@@ -353,7 +358,7 @@
   background: var(--w42-field-bg);
   box-shadow: 0 1px 3px var(--w42-glass-shadow);
   transform: none;
-  transition: left 0.15s ease;
+  transition: left var(--w42-dur-base) var(--w42-spring);
 }
 :where(input[type="checkbox"][role="switch"]:not([class*="w42-"]):checked) { background: var(--w42-accent); }
 :where(input[type="checkbox"][role="switch"]:not([class*="w42-"]):checked)::after { left: 20px; }
@@ -569,10 +574,15 @@
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  transition: background 0.12s ease;
+  transition: background var(--w42-dur-fast) var(--w42-ease),
+              transform var(--w42-dur-base) var(--w42-spring);
 }
-:is(.w42-button, .w42-btn):hover,
-:is(.w42-button, .w42-btn):active { background: var(--w42-fill-primary); }
+:is(.w42-button, .w42-btn):hover { background: var(--w42-fill-primary); transform: translateY(-1px); }
+:is(.w42-button, .w42-btn):active {
+  background: var(--w42-fill-primary);
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
 :is(.w42-button, .w42-btn):focus-visible {
   outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
   outline-offset: 0;
@@ -651,9 +661,29 @@
   user-select: none;
   -webkit-user-select: none;
 }
+:is(.w42-tab, .w42-segment) {
+  position: relative;
+  transition: color var(--w42-dur-fast) var(--w42-ease), background var(--w42-dur-fast) var(--w42-ease);
+}
 :is(.w42-tab, .w42-segment):hover { background: var(--w42-fill-quaternary); }
 :is(.w42-tab, .w42-segment)[aria-selected="true"],
 :is(.w42-tab-selected, .w42-segment-active) { color: var(--w42-label-primary); background: var(--w42-fill-primary); }
+/* One pill glides between tabs (added by the runtime); the selected tab itself
+   then drops its own fill so the two never double up. */
+.w42-tab-pill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  z-index: 0;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-fill-primary);
+  pointer-events: none;
+  transition: transform var(--w42-dur-slow) var(--w42-spring), width var(--w42-dur-slow) var(--w42-spring);
+}
+.w42-tabs-glide { position: relative; }
+.w42-tabs-glide > .w42-tab { z-index: 1; }
+.w42-tabs-glide > .w42-tab[aria-selected="true"] { background: transparent; }
 :is(.w42-tab, .w42-segment):focus-visible {
   outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
   outline-offset: 0;
@@ -671,6 +701,107 @@
   background: var(--w42-accent);
   border-radius: var(--w42-r-pill);
 }
+
+/* — Capsule: the 42 mark in a liquid-glass capsule (also the comment bubble) —
+   <w42-capsule label="Comment" size="sm|md|lg"> — the label slides out on hover. */
+.w42-capsule {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 44px;
+  padding: 0 var(--w42-s12);
+  gap: 0;
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 550;
+  line-height: 1;
+  color: var(--w42-label-primary);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--w42-glass-glow) 160%, transparent),
+                    color-mix(in srgb, var(--w42-glass-glow) 30%, transparent)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(1.5);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(1.5);
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow:
+    0 0 0 0.5px var(--w42-glass-rim),
+    inset 0 1px 0 var(--w42-glass-glow),
+    inset 0 -6px 10px -6px color-mix(in srgb, var(--w42-glass-shadow) 30%, transparent),
+    0 8px 20px -8px color-mix(in srgb, var(--w42-glass-shadow) 70%, transparent);
+  transition: transform var(--w42-dur-slow) var(--w42-spring),
+              padding var(--w42-dur-slow) var(--w42-spring),
+              gap var(--w42-dur-slow) var(--w42-spring);
+}
+.w42-capsule::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 3px;
+  height: 36%;
+  border-radius: var(--w42-r-pill);
+  background: linear-gradient(180deg, var(--w42-glass-glow), transparent);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.w42-capsule-mark {
+  position: relative;
+  display: block;
+  width: 29px;
+  height: 15px;
+  background: url("data:image/png;base64,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") center / contain no-repeat;
+}
+.w42-capsule-label {
+  position: relative;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width var(--w42-dur-slow) var(--w42-spring), opacity var(--w42-dur-fast) var(--w42-ease);
+}
+.w42-capsule:hover { transform: scale(1.06); gap: var(--w42-s8); padding: 0 14px 0 var(--w42-s12); }
+.w42-capsule:hover .w42-capsule-label { max-width: 96px; opacity: 1; }
+.w42-capsule:active { transform: scale(0.92); transition-duration: 80ms; }
+.w42-capsule:focus-visible {
+  outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
+  outline-offset: 2px;
+}
+.w42-capsule-sm { height: 26px; min-width: 36px; padding: 0 var(--w42-s8); }
+.w42-capsule-sm .w42-capsule-mark { width: 23px; height: 12px; }
+.w42-capsule-lg { height: 40px; min-width: 56px; padding: 0 var(--w42-s16); }
+.w42-capsule-lg .w42-capsule-mark { width: 37px; height: 19px; }
+
+/* The runtime paints a rounded, gliding highlight (see "Soft selection" below)
+   and adds .w42-soft-selection; native selection is then hidden, except inside
+   form fields, which keep it. */
+html.w42-soft-selection ::selection { background: transparent; }
+html.w42-soft-selection :is(input, textarea)::selection {
+  background: color-mix(in srgb, var(--w42-label-primary) 14%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  html:root { --w42-dur-fast: 1ms; --w42-dur-base: 1ms; --w42-dur-slow: 1ms; }
+}
+
+/* — Soft selection: rounded, merged, gliding highlight painted by the runtime — */
+#w42-sel { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+#w42-sel i {
+  position: fixed;
+  border-radius: var(--w42-r-input);
+  background: color-mix(in srgb, var(--w42-label-primary) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w42-label-primary) 7%, transparent);
+  opacity: 0;
+  transition: left var(--w42-dur-fast) var(--w42-ease), top var(--w42-dur-fast) var(--w42-ease),
+              width var(--w42-dur-fast) var(--w42-ease), height var(--w42-dur-fast) var(--w42-ease),
+              opacity var(--w42-dur-fast) var(--w42-ease);
+}
+#w42-sel i.on { opacity: 1; }
 
 /* — Tab set: the glass strip with the selected tab's panel below — */
 .w42-tabset { display: block; margin: 0 0 var(--w42-s12); }

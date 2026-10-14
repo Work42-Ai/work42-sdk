@@ -137,29 +137,22 @@ enum MarkdownDocumentTemplate {
           box-shadow: 0 1px 3px rgba(0,0,0,0.35);
         }
         .w42-comment-host { position: relative; }
-        /* Gutter-style "+" affordance in the left margin, mirroring the file
-           editor's gutter "+" — a small accent circle at the start of the
-           selection, not a floating pill. */
+        /* The comment bubble: the 42 capsule, labelled "Comment", pinned to the
+           left margin at the start of the selection. It pops with the kit
+           spring and bursts away when the selection clears. Individual
+           `scale` / `opacity` are animated so the capsule's own hover and press
+           transforms still compose. */
         #w42-add {
           position: fixed;
           z-index: 9999;
           display: none;
-          align-items: center;
-          justify-content: center;
-          width: 18px; height: 18px;
-          padding: 0;
-          font: 700 14px -apple-system, system-ui, sans-serif;
-          line-height: 1;
-          color: #fff;
-          background: \(accent.rgb);
-          border: none;
-          border-radius: 50%;
-          cursor: pointer;
-          user-select: none;
-          -webkit-user-select: none;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+          transform-origin: 50% 100%;
         }
-        #w42-add:hover { filter: brightness(1.1); }
+        #w42-add.w42-pop { animation: w42-bubble-in 620ms var(--w42-spring) backwards; }
+        #w42-add.w42-out { animation: w42-bubble-out 260ms var(--w42-ease) forwards; pointer-events: none; }
+        @keyframes w42-bubble-in { from { scale: 0.2; opacity: 0; } 35% { opacity: 1; } to { scale: 1; opacity: 1; } }
+        @keyframes w42-bubble-out { from { scale: 1; opacity: 1; } 45% { scale: 1.14; opacity: 1; } to { scale: 1.5; opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { #w42-add.w42-pop, #w42-add.w42-out { animation: none; } }
         """
     }
 

@@ -258,6 +258,16 @@ public enum CanvasTheme {
         for token in sizeTokens {
             root += "  --w42-\(token.name): \(px(token.value));\n"
         }
+        // Motion: one spring and a short/base/slow scale shared by every family,
+        // so the kit moves with a single feel. `prefers-reduced-motion` collapses
+        // the durations in w42-components.css.
+        root += "\n  /* Motion */\n"
+        root += "  --w42-ease: cubic-bezier(0.2, 0.8, 0.2, 1);\n"
+        root += "  --w42-spring: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, "
+            + "1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, "
+            + "1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, "
+            + "1.003 76.9%, 1);\n"
+        root += "  --w42-dur-fast: 140ms;\n  --w42-dur-base: 240ms;\n  --w42-dur-slow: 420ms;\n"
         // Syntax palette — the SAME tokens the native code editor uses (base One
         // Dark/Light overlaid with the active theme's `editor:` overrides), so
         // artifact/markdown code highlighting matches the editor. See
