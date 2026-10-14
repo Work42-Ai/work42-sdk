@@ -3,6 +3,6 @@ name: example-plugin
 version: 0.1.0
 description: Example Work42 plugin
 author: Your Name
-sdk_version: 2.4.0
+sdk_version: 2.4.1
 sdk_abi: 12
 requires: []
