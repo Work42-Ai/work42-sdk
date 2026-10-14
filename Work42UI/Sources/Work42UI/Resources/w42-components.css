@@ -175,15 +175,14 @@
    ══════════════════════════════════════════════════════════════════ */
 
 /* — Type (sizes come from the base reset in CanvasTheme.css) — */
+/* Type mirrors the native chat text: heading scale and weights are set in the
+   base reset (24 bold, then 21 / 18 / 16 semibold); no heading tracking. */
 :where(h1, h2, h3, h4, h5, h6) {
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  line-height: 1.25;
 }
-:where(a) { color: var(--w42-primary); text-decoration: none; }
-:where(a:hover) { text-decoration: underline; }
-:where(h5) { font-size: var(--w42-f13); }
-:where(h6) { font-size: var(--w42-f11); }
+:where(a) { color: var(--w42-primary); text-decoration: underline; }
+:where(h5) { font-size: 16px; font-weight: 600; }
+:where(h6) { font-size: 14px; font-weight: 600; }
 :where(strong, b) { font-weight: 600; }
 :where(mark) {
   color: inherit;
@@ -463,13 +462,13 @@
 /* — Code: inline code, kbd, and <pre> on glass (kit-style mono 12) — */
 :where(code, kbd, samp) {
   font-family: var(--w42-font-mono);
-  font-size: var(--w42-f10);
+  font-size: 15px;
 }
 :where(:not(pre) > code) {
-  padding: 2px 6px;
+  padding: 1px 5px;
   color: var(--w42-label-primary);
-  background: var(--w42-fill-tertiary);
-  border-radius: var(--w42-r-button);
+  background: color-mix(in srgb, var(--w42-label-primary) 8%, transparent);
+  border-radius: 4px;
 }
 :where(kbd) {
   display: inline-block;
@@ -481,11 +480,11 @@
 }
 :where(pre) {
   margin: 0 0 var(--w42-s12);
-  padding: var(--w42-s12) var(--w42-s16);
+  padding: var(--w42-s12);
   font-family: var(--w42-font-mono);
-  font-size: var(--w42-f10);
+  font-size: 14px;
   line-height: 1.5;
-  color: var(--w42-label-secondary);
+  color: var(--w42-label-primary);
   overflow: auto;
 }
 :where(pre code) { padding: 0; background: transparent; box-shadow: none; font-size: inherit; color: inherit; }
@@ -495,14 +494,14 @@
   margin: 0 0 var(--w42-s12);
   padding: var(--w42-s4) 0 var(--w42-s4) var(--w42-s12);
   color: var(--w42-label-secondary);
-  border-left: 3px solid var(--w42-fill-primary);
+  border-left: 3px solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
   border-radius: 2px;
 }
 :where(hr) {
   height: 1px;
-  margin: var(--w42-s24) 0;
+  margin: var(--w42-s12) 0;
   border: 0;
-  background: var(--w42-separator);
+  background: color-mix(in srgb, var(--w42-label-primary) 10%, transparent);
 }
 
 /* — Disclosure: <details><summary> with the kit Disclosure Button chevron — */
@@ -721,6 +720,7 @@
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--w42-glass-glow) 160%, transparent),
                     color-mix(in srgb, var(--w42-glass-glow) 30%, transparent)),
+    linear-gradient(var(--w42-capsule-tint), var(--w42-capsule-tint)),
     var(--w42-glass-fill);
   -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(1.5);
   backdrop-filter: blur(var(--w42-glass-blur)) saturate(1.5);

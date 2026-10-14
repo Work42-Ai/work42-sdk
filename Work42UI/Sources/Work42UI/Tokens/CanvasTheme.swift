@@ -105,6 +105,8 @@ public enum CanvasTheme {
         ColorToken(name: "field-bg",              light: "#ffffff",   dark: "#1e1e1e"),
         ColorToken(name: "field-ring",            light: "#00000014", dark: "#ffffff0a"),
         ColorToken(name: "overlay",               light: "#ababab99", dark: "#1717179e"),
+        // Brand tile tint for the 42 capsule (#C3EEFF), strong in light, softer in dark.
+        ColorToken(name: "capsule-tint",          light: "#c3eeffad", dark: "#c3eeff6b"),
         // Liquid Glass (kit Liquid Glass - Medium / Large)
         ColorToken(name: "glass-fill",   light: "#ffffffb3", dark: "#1a1a1ab8"),
         ColorToken(name: "glass-tint",   light: "#bfbfbf1a", dark: "#00000000"),
@@ -321,10 +323,10 @@ public enum CanvasTheme {
           background: var(--w42-backdrop);
           color: var(--w42-text-primary);
           font-family: var(--w42-font-family);
-          font-size: var(--w42-f13);
-          line-height: 1.5;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
+          /* Mirrors the native chat text (MarkdownUI .work42 theme): 16pt body,
+             6pt extra line spacing (about 1.55), system smoothing. */
+          font-size: var(--w42-f14);
+          line-height: 1.55;
         }
 
         a {
@@ -337,19 +339,21 @@ public enum CanvasTheme {
         }
 
         h1, h2, h3, h4, h5, h6 {
-          margin: 0 0 var(--w42-s12);
-          line-height: 1.2;
+          margin: var(--w42-s16) 0 var(--w42-s4);
+          line-height: 1.25;
           color: var(--w42-text-primary);
         }
 
-        h1 { font-size: var(--w42-f32); }
-        h2 { font-size: var(--w42-f22); }
-        h3 { font-size: var(--w42-f17); }
-        h4 { font-size: var(--w42-f15); }
+        /* The chat heading scale: 24 bold, then 21 / 18 / 16 semibold. */
+        h1 { font-size: 24px; font-weight: 700; margin-bottom: var(--w42-s8); }
+        h2 { font-size: 21px; font-weight: 600; }
+        h3 { font-size: 18px; font-weight: 600; margin-top: var(--w42-s12); }
+        h4 { font-size: 16px; font-weight: 600; margin-top: var(--w42-s8); margin-bottom: 0; }
 
+        /* Body paragraphs are primary text, as in chat (not the secondary grey). */
         p {
           margin: 0 0 var(--w42-s12);
-          color: var(--w42-text-secondary);
+          color: var(--w42-text-primary);
         }
 
         small {
@@ -359,7 +363,7 @@ public enum CanvasTheme {
 
         code, pre {
           font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
-          font-size: var(--w42-f12);
+          font-size: 14px;
         }
 
         pre {
@@ -372,7 +376,7 @@ public enum CanvasTheme {
         hr {
           border: none;
           border-top: 1px solid var(--w42-elevated);
-          margin: var(--w42-s24) 0;
+          margin: var(--w42-s12) 0;
         }
         """
     }

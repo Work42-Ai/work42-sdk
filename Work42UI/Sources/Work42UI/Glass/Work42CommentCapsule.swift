@@ -38,6 +38,15 @@ public struct Work42CommentCapsule: View {
     @State private var revealed = false
     @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// The brand tile's pale blue (#C3EEFF, sampled from the 42 mark's tile),
+    /// laid over Liquid Glass so the capsule reads as tinted glass, not a flat
+    /// fill. Strong in light mode; lower in dark so the glass still shows.
+    private var glassTint: Color {
+        Color(red: 195 / 255, green: 238 / 255, blue: 255 / 255)
+            .opacity(colorScheme == .dark ? 0.42 : 0.68)
+    }
 
     /// - Parameters:
     ///   - label: text that slides out on hover; `nil` for the icon-only capsule.
@@ -76,7 +85,7 @@ public struct Work42CommentCapsule: View {
             }
             .padding(.horizontal, size.hPadding)
             .frame(minWidth: size == .regular ? 44 : 28, minHeight: size.height, maxHeight: size.height)
-            .glassCapsuleSurface()
+            .glassShowcasePillSurface(tint: glassTint)
             .contentShape(Capsule())
         }
         .buttonStyle(Work42CapsulePressStyle(reduceMotion: reduceMotion))

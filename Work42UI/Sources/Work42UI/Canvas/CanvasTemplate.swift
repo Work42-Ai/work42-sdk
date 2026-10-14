@@ -310,8 +310,8 @@ public enum CanvasTemplate {
     public nonisolated static let proseCSS = """
     /* Container: strong enough (a class) to set the base size/color over `body`. */
     .w42-prose {
-      font-size: var(--w42-f13, 15px);
-      line-height: 1.65;
+      font-size: var(--w42-f14, 16px);
+      line-height: 1.55;
       color: var(--w42-text-primary);
       word-wrap: break-word;
       overflow-wrap: anywhere;
@@ -324,12 +324,15 @@ public enum CanvasTemplate {
     :where(.w42-prose) > :first-child { margin-top: 0; }
     :where(.w42-prose) h1, :where(.w42-prose) h2, :where(.w42-prose) h3,
     :where(.w42-prose) h4, :where(.w42-prose) h5, :where(.w42-prose) h6 {
-      line-height: 1.3;
-      margin: 1.4em 0 0.5em;
+      line-height: 1.25;
+      margin: var(--w42-s16, 16px) 0 var(--w42-s4, 4px);
     }
-    :where(.w42-prose) p { margin: 0 0 0.9em; }
-    :where(.w42-prose) ul, :where(.w42-prose) ol { margin: 0 0 0.9em; padding-left: 1.6em; }
-    :where(.w42-prose) li { margin: 0.2em 0; }
+    :where(.w42-prose) h1 { margin-bottom: var(--w42-s8, 8px); }
+    :where(.w42-prose) h3 { margin-top: var(--w42-s12, 12px); }
+    :where(.w42-prose) h4 { margin-top: var(--w42-s8, 8px); margin-bottom: 0; }
+    :where(.w42-prose) p { margin: 0 0 var(--w42-s12, 12px); }
+    :where(.w42-prose) ul, :where(.w42-prose) ol { margin: 0 0 var(--w42-s12, 12px); padding-left: 1.6em; }
+    :where(.w42-prose) li { margin: var(--w42-s4, 4px) 0; }
     :where(.w42-prose) li.task-list-item { list-style: none; margin-left: -1.3em; }
     :where(.w42-prose) li.task-list-item input { margin-right: 0.5em; }
     :where(.w42-prose) img { max-width: 100%; height: auto; }
