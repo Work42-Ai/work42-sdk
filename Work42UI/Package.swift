@@ -92,6 +92,9 @@ let package = Package(
                 // picker-core.js — transport-agnostic element-picker DOM
                 // logic loaded into the WKWebView tiles.
                 .copy("Resources/picker-core.js"),
+                // work42-mark42.png — the brand 42 mark with its tile removed, drawn
+                // by Work42CommentCapsule (the native comment bubble).
+                .copy("Resources/work42-mark42.png"),
             ],
             swiftSettings: concurrencySettings,
             // WebKit powers the reusable WebSectionView: a WKWebView that
