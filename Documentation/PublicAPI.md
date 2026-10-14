@@ -19,6 +19,14 @@ Supported UI includes design tokens, theme values, cards, toolbars, loading
 states, widget chrome, browser chrome, annotation controls, Markdown views, and
 the `WebSection` surface used by plugin widgets.
 
+### Loader42 playback (2.5.0)
+
+`Loader42(style:playback:)` takes `Loader42.Playback`: `.loop` (the default, as before) or
+`.manual(progress:)`. Manual playback shows only the paint lap, frozen at `progress` (0 to 1, clamped); it never
+erases and never loops, and updating `progress` just moves the frozen clock, so it is cheap to set every frame.
+`Loader42.fourCompleteProgress` is the progress at which the 4 is fully painted and the 2 has not started.
+`Loader42View.playback` is the AppKit equivalent. Reduced motion shows the fully painted mark in both modes.
+
 App-shell coordination types, Work42 database models, Settings screens,
 session navigation, capture/recording services, and process-management types
 are intentionally absent from the SDK contract. A public declaration used by

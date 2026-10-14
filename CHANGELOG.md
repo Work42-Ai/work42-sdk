@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.5.0
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.4.0 remain binary-compatible. Additive: Loader42 manual
+  playback.
+- **`Loader42(playback:)`.** `Loader42.Playback` is `.loop` (the default, unchanged) or `.manual(progress:)`, which
+  freezes the animation clock and shows the paint lap at `progress` (0 to 1, clamped). It never erases, never loops, and
+  changing the progress only moves the frozen clock, so an app can set it every frame from its own clock.
+  `Loader42.fourCompleteProgress` (0.3178) is the progress at which the 4 is fully painted and the 2 has not started.
+  `Loader42View.playback` is the AppKit equivalent. Reduced motion still shows the fully painted mark.
+
 ## 2.4.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.3.1 remain binary-compatible. Every change below is

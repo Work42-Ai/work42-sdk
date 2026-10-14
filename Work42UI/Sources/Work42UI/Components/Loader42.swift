@@ -24,6 +24,12 @@
 //     Loader42(style: .mono(DT.cyan))
 //         .frame(width: 90, height: 90)   // size via frame; mark keeps aspect
 //
+// Playback: `.loop` (default) paints and erases forever. `.manual(progress:)` freezes the animation
+// clock and shows the paint lap at `progress` (0...1), so an app can drive the paint from its own
+// clock (the launch screen ties it to a sound). The erase lap never plays in manual mode.
+//
+//     Loader42(playback: .manual(progress: Loader42.fourCompleteProgress))
+//
 // Reduced motion: renders the fully-painted static mark.
 
 import SwiftUI
@@ -44,32 +50,50 @@ public struct Loader42: View {
         case mono(Color)
     }
 
+    /// How the mark animates.
+    public enum Playback: Equatable {
+        /// Paint lap then erase lap, forever.
+        case loop
+        /// The paint lap frozen at `progress` (0...1, clamped). Never erases, never loops. Updating the
+        /// progress only moves the frozen clock, so it is cheap to set every frame.
+        case manual(progress: Double)
+    }
+
     /// The mark is illegible below this — the component enforces it.
     public static let minimumSize: CGFloat = 26
 
-    private let style: Style
+    /// `.manual` progress at which the 4 is fully painted: the last orange window ends at keyTime 0.1589
+    /// (0.5403 s of the 1.7 s paint lap), so 0.3178 is the first 4-digit value at or past it.
+    public static let fourCompleteProgress: Double = 0.3178
 
-    public init(style: Style = .brand) {
+    private let style: Style
+    private let playback: Playback
+
+    public init(style: Style = .brand, playback: Playback = .loop) {
         self.style = style
+        self.playback = playback
     }
 
     public var body: some View {
-        Loader42Representable(style: style)
+        Loader42Representable(style: style, playback: playback)
             .frame(minWidth: Self.minimumSize, minHeight: Self.minimumSize)
     }
 }
 
 private struct Loader42Representable: NSViewRepresentable {
     let style: Loader42.Style
+    let playback: Loader42.Playback
 
     func makeNSView(context: Context) -> Loader42View {
         let view = Loader42View()
         view.style = style
+        view.playback = playback
         return view
     }
 
     func updateNSView(_ view: Loader42View, context: Context) {
         view.style = style
+        view.playback = playback
     }
 }
 
@@ -79,6 +103,10 @@ public final class Loader42View: NSView {
 
     public var style: Loader42.Style = .brand {
         didSet { if style != oldValue { applyColors() } }
+    }
+
+    public var playback: Loader42.Playback = .loop {
+        didSet { if playback != oldValue { applyPlayback() } }
     }
 
     /// One full cycle: paint lap + erase lap.
@@ -92,6 +120,13 @@ public final class Loader42View: NSView {
     private var orangeFill = CAShapeLayer()
     private var violetFills: [CAShapeLayer] = []
     private var pencils: [CAShapeLayer] = []
+    /// The orange (4) pencils come first in `pencils`; the rest are violet (2).
+    private var orangePencilCount = 0
+    /// Which kind of animations are currently installed, so a progress update does not re-add them.
+    private enum Installed { case none, loop, manual, still }
+    private var installed: Installed = .none
+    /// Tests set this; nil follows the system Reduce Motion setting.
+    var reduceMotionOverride: Bool?
 
     // MARK: Init
 
@@ -259,6 +294,7 @@ public final class Loader42View: NSView {
             clip: CGRect(x: 0, y: 0, width: 135, height: 256),
             pencils: Self.orangePencils(), into: &pencils
         )
+        orangePencilCount = pencils.count
         container.addSublayer(orangeFill)
 
         let violetGroup = CALayer()
@@ -367,49 +403,122 @@ public final class Loader42View: NSView {
     // MARK: Animation
 
     private var reduceMotion: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        reduceMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        restartAnimationsIfNeeded()
+        installed = .none
+        applyPlayback()
+    }
+
+    /// Orange pencil layers, for tests.
+    var orangePencils: [CAShapeLayer] { Array(pencils.prefix(orangePencilCount)) }
+    var violetPencils: [CAShapeLayer] { Array(pencils.dropFirst(orangePencilCount)) }
+
+    private func applyPlayback() {
+        guard window != nil else { return }
+        if reduceMotion {
+            showStillMark()
+            return
+        }
+        switch playback {
+        case .loop:
+            if installed != .loop { restartAnimationsIfNeeded() }
+        case .manual(let progress):
+            if installed != .manual { installManualAnimations() }
+            let clamped = min(max(progress, 0), 1)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            let offset = clamped * (Self.cycleDuration / 2)
+            for pencil in pencils { pencil.timeOffset = offset }
+            CATransaction.commit()
+        }
+    }
+
+    /// Pencils sit inside mask layers, which do not inherit the container's clock, so the frozen clock
+    /// of manual playback lives on each pencil.
+    private func setPencilClock(speed: Float, timeOffset: CFTimeInterval) {
+        for pencil in pencils {
+            pencil.speed = speed
+            pencil.timeOffset = timeOffset
+        }
+    }
+
+    private func showStillMark() {
+        setPencilClock(speed: 1, timeOffset: 0)
+        for pencil in pencils {
+            pencil.removeAllAnimations()
+            pencil.strokeStart = 0
+            pencil.strokeEnd = 1
+        }
+        installed = .still
+    }
+
+    /// The paint and erase keyframes of one pencil (same choreography for loop and manual playback).
+    private func animations(for pencil: CAShapeLayer) -> [(key: String, animation: CAKeyframeAnimation)]? {
+        guard
+            let windows = pencil.value(forKey: "loader42.windows") as? [Double],
+            let timing = pencil.value(forKey: "loader42.timing") as? CAMediaTimingFunction
+        else { return nil }
+        // Paint: strokeEnd 0→1 inside the paint window.
+        let paint = CAKeyframeAnimation(keyPath: "strokeEnd")
+        paint.values = [0, 0, 1, 1]
+        paint.keyTimes = [0, NSNumber(value: windows[0]), NSNumber(value: windows[1]), 1]
+        paint.timingFunctions = [Self.linearFn, timing, Self.linearFn]
+        // Erase: strokeStart 0→1 inside the erase window. Both reset
+        // to 0 at the cycle wrap — empty→empty, invisible.
+        let erase = CAKeyframeAnimation(keyPath: "strokeStart")
+        erase.values = [0, 0, 1, 1]
+        erase.keyTimes = [0, NSNumber(value: windows[2]), NSNumber(value: windows[3]), 1]
+        erase.timingFunctions = [Self.linearFn, timing, Self.linearFn]
+        return [("loader42.paint", paint), ("loader42.erase", erase)]
+    }
+
+    /// The same keyframes, played once on a frozen clock that `playback` moves.
+    private func installManualAnimations() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for pencil in pencils {
+            guard let list = animations(for: pencil) else { continue }
+            pencil.removeAllAnimations()
+            pencil.strokeStart = 0
+            pencil.strokeEnd = 0
+            for (key, anim) in list {
+                anim.duration = Self.cycleDuration
+                anim.repeatCount = 1
+                anim.beginTime = 0
+                anim.fillMode = .both
+                anim.isRemovedOnCompletion = false
+                pencil.add(anim, forKey: key)
+            }
+        }
+        // Freeze the clock only after the animations exist: freezing first makes Core Animation latch
+        // the animations at time 0 and ignore later offsets.
+        setPencilClock(speed: 0, timeOffset: 0)
+        CATransaction.commit()
+        // Commit the frozen animations before the first offset lands; an offset set in the same
+        // transaction that adds the animations is ignored.
+        CATransaction.flush()
+        installed = .manual
     }
 
     private func restartAnimationsIfNeeded() {
         guard window != nil else { return }
         if reduceMotion {
-            // Static, fully painted mark.
-            for pencil in pencils {
-                pencil.removeAllAnimations()
-                pencil.strokeStart = 0
-                pencil.strokeEnd = 1
-            }
+            showStillMark()
             return
         }
+        setPencilClock(speed: 1, timeOffset: 0)
+        installed = .loop
         // One shared timebase so every limb stays phase-locked.
         let now = container.convertTime(CACurrentMediaTime(), from: nil)
         for pencil in pencils {
-            guard
-                let windows = pencil.value(forKey: "loader42.windows") as? [Double],
-                let timing = pencil.value(forKey: "loader42.timing") as? CAMediaTimingFunction
-            else { continue }
+            guard let list = animations(for: pencil) else { continue }
             pencil.removeAllAnimations()
             pencil.strokeStart = 0
             pencil.strokeEnd = 0
-
-            // Paint: strokeEnd 0→1 inside the paint window.
-            let paint = CAKeyframeAnimation(keyPath: "strokeEnd")
-            paint.values = [0, 0, 1, 1]
-            paint.keyTimes = [0, NSNumber(value: windows[0]), NSNumber(value: windows[1]), 1]
-            paint.timingFunctions = [Self.linearFn, timing, Self.linearFn]
-            // Erase: strokeStart 0→1 inside the erase window. Both reset
-            // to 0 at the cycle wrap — empty→empty, invisible.
-            let erase = CAKeyframeAnimation(keyPath: "strokeStart")
-            erase.values = [0, 0, 1, 1]
-            erase.keyTimes = [0, NSNumber(value: windows[2]), NSNumber(value: windows[3]), 1]
-            erase.timingFunctions = [Self.linearFn, timing, Self.linearFn]
-
-            for (key, anim) in [("loader42.paint", paint), ("loader42.erase", erase)] {
+            for (key, anim) in list {
                 anim.duration = Self.cycleDuration
                 anim.repeatCount = .infinity
                 anim.beginTime = now
