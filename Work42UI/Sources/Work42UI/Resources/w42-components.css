@@ -543,7 +543,7 @@
    ══════════════════════════════════════════════════════════════════
    Tag-first: the <w42-*> tags (w42-components.js) expand to these classes.
    Usage:
-     <w42-button variant="prominent">Save</w42-button>
+     <w42-button variant="solid">Save</w42-button>
      <w42-tabs><w42-tab label="Overview" selected></w42-tab></w42-tabs>
      <w42-chip tone="success">Passing</w42-chip>
    ══════════════════════════════════════════════════════════════════ */
@@ -580,11 +580,11 @@
 :is(.w42-button, .w42-btn)[disabled],
 :is(.w42-button, .w42-btn):disabled,
 :is(.w42-button, .w42-btn)[aria-disabled="true"] { color: var(--w42-label-tertiary); cursor: default; pointer-events: none; }
-:is(.w42-button-prominent, .w42-btn-primary) { color: var(--w42-on-accent); background: var(--w42-accent); }
-:is(.w42-button-prominent, .w42-btn-primary):hover,
-:is(.w42-button-prominent, .w42-btn-primary):active { background: var(--w42-accent); filter: brightness(1.08); }
-:is(.w42-button-prominent, .w42-btn-primary):disabled,
-:is(.w42-button-prominent, .w42-btn-primary)[aria-disabled="true"] { color: var(--w42-label-tertiary); background: var(--w42-fill-secondary); }
+:is(.w42-button-solid, .w42-btn-primary) { color: var(--w42-on-accent); background: var(--w42-accent); }
+:is(.w42-button-solid, .w42-btn-primary):hover,
+:is(.w42-button-solid, .w42-btn-primary):active { background: var(--w42-accent); filter: brightness(1.08); }
+:is(.w42-button-solid, .w42-btn-primary):disabled,
+:is(.w42-button-solid, .w42-btn-primary)[aria-disabled="true"] { color: var(--w42-label-tertiary); background: var(--w42-fill-secondary); }
 :is(.w42-button-glass, .w42-btn-glass) {
   background:
     linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
@@ -596,10 +596,16 @@
     0 0 0 0.5px var(--w42-glass-rim),
     inset 0 1px 0 var(--w42-glass-glow);
 }
-.w42-button-plain { background: transparent; color: var(--w42-accent-fg); padding: 0 var(--w42-s8); }
-.w42-button-plain:hover,
-.w42-button-plain:active { background: var(--w42-fill-quaternary); }
-.w42-button-destructive { color: var(--w42-chip-fg-failure); }
+.w42-button-menu { padding-right: var(--w42-s12); }
+.w42-button-menu::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-left: var(--w42-s4);
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
 .w42-button-icon { width: var(--w42-h-action); padding: 0; }
 .w42-button-icon > svg,
 :is(.w42-button, .w42-btn) > svg { width: 16px; height: 16px; flex: none; }
@@ -665,6 +671,12 @@
   background: var(--w42-accent);
   border-radius: var(--w42-r-pill);
 }
+
+/* — Tab set: the glass strip with the selected tab's panel below — */
+.w42-tabset { display: block; margin: 0 0 var(--w42-s12); }
+.w42-tabset > .w42-tabs { margin: 0; }
+.w42-tab-panel { margin-top: var(--w42-s12); }
+.w42-tab-panel[hidden] { display: none; }
 
 /* — Toolbar: glass capsule holding buttons, tabs and a separator — */
 .w42-toolbar {

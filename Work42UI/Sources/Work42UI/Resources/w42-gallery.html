@@ -5,7 +5,7 @@
      View it:  work42 artifact set web-kit-gallery "$(work42 artifact gallery-path)" -->
 <w42-hero eyebrow="Web Kit, Liquid Glass, Gallery" title="Liquid Glass Web Kit"
           subtitle="Every family and variant, in the order of the Figma Web Kit page.">
-  <w42-button variant="prominent">Prominent</w42-button>
+  <w42-button variant="solid">Solid</w42-button>
   <w42-button>Default</w42-button>
 </w42-hero>
 <w42-toc></w42-toc>
@@ -48,10 +48,10 @@
 <w42-section n="4" title="Button">
   <div class="w42-row" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
     <w42-button>Default</w42-button>
-    <w42-button variant="prominent">Prominent</w42-button>
+    <w42-button variant="solid">Solid</w42-button>
     <w42-button variant="glass">Glass</w42-button>
-    <w42-button variant="plain">Plain</w42-button>
-    <w42-button variant="destructive">Destructive</w42-button>
+    <w42-button variant="bordered">Bordered</w42-button>
+    <w42-button variant="menu">Menu</w42-button>
     <w42-button icon="＋">With icon</w42-button>
     <w42-button icon="＋" icon-only></w42-button>
     <w42-button disabled>Disabled</w42-button>
@@ -61,10 +61,10 @@
 
 <w42-section n="5" title="Tabs and toolbar">
   <w42-tabs>
-    <w42-tab label="Overview" selected></w42-tab>
-    <w42-tab label="Files" badge="3"></w42-tab>
-    <w42-tab label="History"></w42-tab>
-    <w42-tab label="Disabled" disabled></w42-tab>
+    <w42-tab label="Overview" selected>Overview panel</w42-tab>
+    <w42-tab label="Files" badge="3">Files panel</w42-tab>
+    <w42-tab label="History">History panel</w42-tab>
+    <w42-tab label="Disabled" disabled>Never shown</w42-tab>
   </w42-tabs>
   <p></p>
   <w42-toolbar>
@@ -76,7 +76,7 @@
 </w42-section>
 
 <w42-section n="6" title="Chip">
-  <w42-chip>Neutral</w42-chip>
+  <w42-chip tone="neutral">Neutral</w42-chip>
   <w42-chip tone="accent" icon="●">Accent</w42-chip>
   <w42-chip tone="success" icon="✓">Passing</w42-chip>
   <w42-chip tone="warning">Review</w42-chip>
@@ -85,7 +85,7 @@
 
 <w42-section n="7" title="Section header, empty state and loading">
   <w42-section-header title="Results" sub="Last run 5 min ago"><w42-button>Export</w42-button></w42-section-header>
-  <w42-empty title="No results" icon="◌">Try another filter.<w42-button>Reset filters</w42-button></w42-empty>
+  <w42-empty title="No results" icon="◌" message="Try another filter."><w42-button>Reset filters</w42-button></w42-empty>
   <w42-loading label="Building the kit…"></w42-loading>
   <w42-spinner></w42-spinner>
 </w42-section>
@@ -108,9 +108,9 @@
 </w42-section>
 
 <w42-section n="10" title="Progress and disclosure">
-  <w42-progress value="62"></w42-progress>
+  <w42-progress value="0.62"></w42-progress>
   <p></p>
-  <w42-progress circular value="45"></w42-progress>
+  <w42-progress circular value="0.45"></w42-progress>
   <w42-progress></w42-progress>
   <progress max="100" value="30"></progress>
   <w42-disclosure title="Details" open>Disclosure content stays hidden until opened.</w42-disclosure>
@@ -152,8 +152,8 @@
 <w42-section n="14" title="Metric">
   <div class="w42-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
     <w42-metric label="Components" value="128"></w42-metric>
-    <w42-metric label="Families" value="42" delta="▲ 12%" tone="up"></w42-metric>
-    <w42-metric label="Lint errors" value="7" delta="▼ 3" tone="down"></w42-metric>
+    <w42-metric label="Families" value="42" delta="▲ 12%" tone="success"></w42-metric>
+    <w42-metric label="Lint errors" value="7" delta="▼ 3" tone="failure"></w42-metric>
   </div>
 </w42-section>
 
@@ -177,7 +177,7 @@ return shell.inject(css, into: fragment)</code></pre>
   <w42-popover for="gal-share" edge="top">
     <strong>Share session</strong>
     <p>Anyone with the link can view.</p>
-    <w42-button variant="prominent">Done</w42-button>
+    <w42-button variant="solid">Done</w42-button>
   </w42-popover>
 </w42-section>
 
@@ -199,13 +199,13 @@ return shell.inject(css, into: fragment)</code></pre>
   <w42-dialog for="gal-dialog" title="Delete the artifact?">
     This cannot be undone.
     <w42-button data-close>Cancel</w42-button>
-    <w42-button variant="prominent" data-close>Delete</w42-button>
+    <w42-button variant="solid" data-close>Delete</w42-button>
   </w42-dialog>
   <w42-button id="gal-sheet">Rename…</w42-button>
   <w42-sheet for="gal-sheet" title="Rename session">
     <w42-field label="Name" hint="Shown in the title bar."><input value="Liquid Glass Web Kit"></w42-field>
     <w42-button data-close>Cancel</w42-button>
-    <w42-button variant="prominent" data-close>Rename</w42-button>
+    <w42-button variant="solid" data-close>Rename</w42-button>
   </w42-sheet>
 </w42-section>
 

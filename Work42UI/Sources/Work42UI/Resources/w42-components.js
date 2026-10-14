@@ -45,6 +45,18 @@
     return v == null ? fallback : v;
   }
 
+  // An enumerated attribute: an invalid value logs the documented component error
+  // and falls back to the default (AC11), so the tag still renders.
+  function enumAttr(tag, host, name, allowed, fallback) {
+    var v = host.getAttribute(name);
+    if (v == null || v === "") { return fallback; }
+    if (allowed.indexOf(v) < 0) {
+      fail(tag, name + " must be " + allowed.join(", ") + " (got \"" + v + "\")");
+      return fallback;
+    }
+    return v;
+  }
+
   function flag(host, name) {
     var v = host.getAttribute(name);
     return v != null && v !== "false";
@@ -83,12 +95,12 @@
     });
   }
 
-  /* — <w42-button variant="prominent|glass|plain|destructive" icon="" icon-only disabled> — */
+  /* — <w42-button variant="solid|bordered|glass|menu" icon="" icon-only disabled> — */
   define("w42-button", {
     render: function (host) {
       addClass(host, "w42-button");
-      var variant = attr(host, "variant", "");
-      if (variant) { addClass(host, "w42-button-" + variant); }
+      var variant = enumAttr("w42-button", host, "variant", ["solid", "bordered", "glass", "menu"], "bordered");
+      addClass(host, "w42-button-" + variant);
       var glyph = attr(host, "icon", "");
       if (glyph) { host.insertBefore(iconNode(glyph), host.firstChild); }
       if (flag(host, "icon-only")) { addClass(host, "w42-button-icon"); }
@@ -99,25 +111,76 @@
     }
   });
 
-  /* — <w42-tabs><w42-tab label="" badge="" selected disabled></w42-tab></w42-tabs> — */
+  /* — <w42-tabs><w42-tab label="" badge="" selected disabled>panel</w42-tab></w42-tabs>
+       The strip is a glass capsule; a tab's content is its panel, shown below. — */
+  function selectTab(set, tab, focus) {
+    set.__w42tabs.forEach(function (t) {
+      var on = t.el === tab;
+      t.el.setAttribute("aria-selected", on ? "true" : "false");
+      t.el.setAttribute("tabindex", on ? "0" : "-1");
+      if (t.panel) { t.panel.hidden = !on; }
+    });
+    if (focus && tab.focus) { tab.focus(); }
+  }
   define("w42-tabs", {
     render: function (host) {
-      addClass(host, "w42-tabs");
-      host.setAttribute("role", "tablist");
-      host.addEventListener("click", function (e) {
-        var tab = e.target.closest ? e.target.closest("w42-tab") : null;
-        if (!tab || !host.contains(tab) || tab.getAttribute("aria-disabled") === "true") { return; }
-        var tabs = host.querySelectorAll("w42-tab");
-        for (var i = 0; i < tabs.length; i++) {
-          tabs[i].setAttribute("aria-selected", tabs[i] === tab ? "true" : "false");
-          tabs[i].setAttribute("tabindex", tabs[i] === tab ? "0" : "-1");
+      addClass(host, "w42-tabset");
+      var els = Array.prototype.filter.call(host.children, function (c) { return c.localName === "w42-tab"; });
+      var strip = el("div", "w42-tabs");
+      strip.setAttribute("role", "tablist");
+      var entries = [], panels = [];
+      els.forEach(function (tab) {
+        tab.setAttribute("data-w42-ready", "1");
+        var kids = Array.prototype.slice.call(tab.childNodes);
+        tab.textContent = "";
+        addClass(tab, "w42-tab");
+        tab.appendChild(document.createTextNode(attr(tab, "label", "")));
+        var badge = attr(tab, "badge", "");
+        if (badge) { tab.appendChild(el("span", "w42-tab-badge", badge)); }
+        tab.setAttribute("role", "tab");
+        if (flag(tab, "disabled")) { tab.setAttribute("aria-disabled", "true"); }
+        keyActivate(tab);
+        var panel = null;
+        var hasContent = kids.some(function (k) { return k.nodeType === 1 || (k.nodeType === 3 && k.nodeValue.trim()); });
+        if (hasContent) {
+          panel = el("div", "w42-tab-panel");
+          panel.setAttribute("role", "tabpanel");
+          kids.forEach(function (k) { panel.appendChild(k); });
+          panels.push(panel);
         }
+        entries.push({ el: tab, panel: panel });
+        strip.appendChild(tab);
+      });
+      host.textContent = "";
+      host.appendChild(strip);
+      panels.forEach(function (p) { host.appendChild(p); });
+      host.__w42tabs = entries;
+      var live = entries.filter(function (e) { return e.el.getAttribute("aria-disabled") !== "true"; });
+      var initial = (live.filter(function (e) { return flag(e.el, "selected"); })[0] || live[0]);
+      if (initial) { selectTab(host, initial.el, false); }
+      function choose(tab, focus) {
+        if (tab.getAttribute("aria-disabled") === "true") { return; }
+        selectTab(host, tab, focus);
         host.dispatchEvent(new CustomEvent("w42-select", {
           bubbles: true, detail: { label: tab.getAttribute("label") || tab.textContent.trim() }
         }));
+      }
+      strip.addEventListener("click", function (e) {
+        var tab = e.target.closest ? e.target.closest("w42-tab") : null;
+        if (tab && strip.contains(tab)) { choose(tab, false); }
+      });
+      strip.addEventListener("keydown", function (e) {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") { return; }
+        var order = live.map(function (x) { return x.el; });
+        var i = order.indexOf(document.activeElement);
+        if (i < 0) { return; }
+        e.preventDefault();
+        var next = order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
+        choose(next, true);
       });
     }
   });
+  // A w42-tab outside a w42-tabs just renders as a tab; w42-tabs builds its own.
   define("w42-tab", {
     render: function (host) {
       addClass(host, "w42-tab");
@@ -125,10 +188,8 @@
       if (label) { host.textContent = label; }
       var badge = attr(host, "badge", "");
       if (badge) { host.appendChild(el("span", "w42-tab-badge", badge)); }
-      var selected = flag(host, "selected");
       host.setAttribute("role", "tab");
-      host.setAttribute("aria-selected", selected ? "true" : "false");
-      host.setAttribute("tabindex", selected ? "0" : "-1");
+      host.setAttribute("aria-selected", flag(host, "selected") ? "true" : "false");
       if (flag(host, "disabled")) { host.setAttribute("aria-disabled", "true"); }
       keyActivate(host);
     }
@@ -152,8 +213,8 @@
   define("w42-chip", {
     render: function (host) {
       addClass(host, "w42-chip");
-      var tone = attr(host, "tone", "");
-      if (tone) { addClass(host, "w42-chip-" + tone); }
+      var tone = enumAttr("w42-chip", host, "tone", ["neutral", "success", "warning", "failure", "accent"], "neutral");
+      if (tone !== "neutral") { addClass(host, "w42-chip-" + tone); }
       var glyph = attr(host, "icon", "");
       if (glyph) { host.insertBefore(iconNode(glyph), host.firstChild); }
     }
@@ -187,6 +248,8 @@
       if (glyph) { host.appendChild(iconNode(glyph)); }
       host.appendChild(el("p", "w42-empty-title", attr(host, "title", "Nothing here yet")));
       var body = el("div", "w42-empty-body");
+      var msg = attr(host, "message", "");
+      if (msg) { body.appendChild(document.createTextNode(msg)); }
       kids.forEach(function (k) { body.appendChild(k); });
       if (body.childNodes.length) { host.appendChild(body); }
       host.removeAttribute("title");
@@ -212,12 +275,17 @@
     }
   });
 
-  /* — <w42-progress value="0..100" circular> — omit value for indeterminate — */
+  /* — <w42-progress value="0..1" circular> — omit value for indeterminate — */
   define("w42-progress", {
     render: function (host) {
       var circular = flag(host, "circular");
       var raw = host.getAttribute("value");
-      var value = raw == null ? null : Math.max(0, Math.min(100, parseFloat(raw) || 0));
+      var value = null;
+      if (raw != null && raw !== "") {
+        var n = parseFloat(raw);
+        if (isNaN(n) || n < 0 || n > 1) { fail("w42-progress", "value must be a number from 0 to 1 (got \"" + raw + "\")"); }
+        else { value = n * 100; }
+      }
       host.setAttribute("role", "progressbar");
       host.setAttribute("aria-valuemin", "0");
       host.setAttribute("aria-valuemax", "100");
@@ -226,7 +294,7 @@
         addClass(host, "w42-spinner");
         return;
       }
-      host.setAttribute("aria-valuenow", String(value));
+      host.setAttribute("aria-valuenow", String(Math.round(value)));
       if (circular) {
         addClass(host, "w42-progress-circular");
         host.style.setProperty("--w42-progress", String(value));
@@ -330,8 +398,9 @@
       host.appendChild(el("span", "w42-metric-value", attr(host, "value", "")));
       var delta = attr(host, "delta", "");
       if (delta) {
-        var tone = attr(host, "tone", "");
-        host.appendChild(el("span", "w42-metric-delta" + (tone ? " w42-metric-delta-" + tone : ""), delta));
+        var tone = enumAttr("w42-metric", host, "tone", ["success", "failure", "up", "down"], "");
+        var cls = { success: "up", up: "up", failure: "down", down: "down" }[tone];
+        host.appendChild(el("span", "w42-metric-delta" + (cls ? " w42-metric-delta-" + cls : ""), delta));
       }
     }
   });
@@ -340,8 +409,7 @@
   var CALLOUT_GLYPH = { info: "i", success: "\u2713", warning: "!", failure: "\u00d7" };
   define("w42-callout", {
     render: function (host) {
-      var tone = attr(host, "tone", "info");
-      if (!CALLOUT_GLYPH[tone]) { throw new Error("tone must be info, success, warning or failure (got \"" + tone + "\")"); }
+      var tone = enumAttr("w42-callout", host, "tone", ["info", "success", "warning", "failure"], "info");
       addClass(host, "w42-callout w42-callout-icon w42-callout-" + tone);
       var kids = Array.prototype.slice.call(host.childNodes);
       host.textContent = "";
@@ -429,8 +497,7 @@
   define("w42-popover", {
     render: function (host) {
       addClass(host, "w42-popover");
-      var edge = attr(host, "edge", "top");
-      if (["top", "bottom", "leading", "trailing"].indexOf(edge) < 0) { throw new Error("edge must be top, bottom, leading or trailing"); }
+      var edge = enumAttr("w42-popover", host, "edge", ["top", "bottom", "leading", "trailing"], "bottom");
       host.setAttribute("data-edge", edge);
       host.setAttribute("role", "dialog");
       wireOverlay("w42-popover", host, edge, "button, [role=button], input, select, textarea, a[href]");
@@ -562,8 +629,7 @@
   }
   define("w42-toast", {
     render: function (host) {
-      var tone = attr(host, "tone", "info");
-      if (!TOAST_GLYPH[tone]) { throw new Error("tone must be info, success, warning or failure (got \"" + tone + "\")"); }
+      var tone = enumAttr("w42-toast", host, "tone", ["info", "success", "warning", "failure"], "info");
       addClass(host, "w42-toast w42-toast-" + tone);
       var kids = Array.prototype.slice.call(host.childNodes);
       host.textContent = "";
