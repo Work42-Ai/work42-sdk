@@ -265,6 +265,99 @@
     }
   });
 
+  /* — <w42-card title="">content</w42-card> and <w42-group title=""> — */
+  define("w42-card", {
+    render: function (host) {
+      addClass(host, "w42-card");
+      var title = attr(host, "title", "");
+      if (title) {
+        var head = el("div", "w42-section-header");
+        head.appendChild(el("h3", "w42-section-header-title", title));
+        host.insertBefore(head, host.firstChild);
+        host.removeAttribute("title");
+      }
+    }
+  });
+  define("w42-group", {
+    render: function (host) {
+      addClass(host, "w42-group");
+      var title = attr(host, "title", "");
+      if (title) {
+        host.insertBefore(el("div", "w42-group-title", title), host.firstChild);
+        host.removeAttribute("title");
+      }
+    }
+  });
+
+  /* — <w42-list><w42-row title="" detail="" icon="" selected>nested rows</w42-row></w42-list>
+       Nested <w42-row> elements indent one level each, up to level 4. — */
+  define("w42-list", {
+    render: function (host) {
+      addClass(host, "w42-list");
+      host.setAttribute("role", "tree");
+    }
+  });
+  define("w42-row", {
+    render: function (host) {
+      var depth = 0;
+      for (var p = host.parentElement; p; p = p.parentElement) {
+        if (p.localName === "w42-row") { depth++; }
+      }
+      depth = Math.min(depth, 4);
+      var kids = Array.prototype.filter.call(host.children, function (c) { return c.localName === "w42-row"; });
+      var line = el("div", "w42-list-row");
+      line.setAttribute("data-depth", String(depth));
+      if (kids.length) { line.setAttribute("data-has-children", ""); }
+      if (flag(host, "selected")) { line.classList.add("is-selected"); line.setAttribute("aria-selected", "true"); }
+      var glyph = attr(host, "icon", "");
+      if (glyph) { line.appendChild(iconNode(glyph)); }
+      line.appendChild(el("span", "w42-list-row-title", attr(host, "title", "")));
+      var detail = attr(host, "detail", "");
+      if (detail) { line.appendChild(el("span", "w42-list-row-detail", detail)); }
+      host.setAttribute("role", "treeitem");
+      host.style.display = "contents";
+      host.insertBefore(line, host.firstChild);
+      host.removeAttribute("title");
+    }
+  });
+
+  /* — <w42-metric label="" value="" delta="" tone="up|down"> — */
+  define("w42-metric", {
+    render: function (host) {
+      addClass(host, "w42-metric");
+      host.textContent = "";
+      host.appendChild(el("span", "w42-metric-label", attr(host, "label", "")));
+      host.appendChild(el("span", "w42-metric-value", attr(host, "value", "")));
+      var delta = attr(host, "delta", "");
+      if (delta) {
+        var tone = attr(host, "tone", "");
+        host.appendChild(el("span", "w42-metric-delta" + (tone ? " w42-metric-delta-" + tone : ""), delta));
+      }
+    }
+  });
+
+  /* — <w42-callout tone="info|success|warning|failure" title="">body</w42-callout> — */
+  var CALLOUT_GLYPH = { info: "i", success: "\u2713", warning: "!", failure: "\u00d7" };
+  define("w42-callout", {
+    render: function (host) {
+      var tone = attr(host, "tone", "info");
+      if (!CALLOUT_GLYPH[tone]) { throw new Error("tone must be info, success, warning or failure (got \"" + tone + "\")"); }
+      addClass(host, "w42-callout w42-callout-icon w42-callout-" + tone);
+      var kids = Array.prototype.slice.call(host.childNodes);
+      host.textContent = "";
+      var ico = el("span", "w42-callout-icon-ico", CALLOUT_GLYPH[tone]);
+      ico.setAttribute("aria-hidden", "true");
+      var body = el("div");
+      var title = attr(host, "title", "");
+      if (title) { body.appendChild(el("span", "w42-callout-icon-label", title)); }
+      kids.forEach(function (k) { body.appendChild(k); });
+      host.appendChild(ico);
+      host.appendChild(body);
+      host.setAttribute("role", "note");
+      host.removeAttribute("title");
+    }
+  });
+
   function reportUnknown(root) {
     var all = root.querySelectorAll ? root.querySelectorAll("*") : [];
     for (var i = 0; i < all.length; i++) {

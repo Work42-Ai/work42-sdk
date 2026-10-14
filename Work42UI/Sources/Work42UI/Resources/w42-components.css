@@ -48,6 +48,16 @@
 .w42-glass,
 .w42-glass-lg,
 .w42-glass-sm,
+.w42-card,
+.w42-panel,
+.w42-group,
+.w42-list,
+.w42-metric,
+.w42-metric-card,
+.w42-metric-card-rich,
+.w42-callout,
+.w42-mermaid,
+.w42-artifact-embed,
 :where(fieldset, pre, table) {
   position: relative;
   background:
@@ -97,6 +107,16 @@
   .w42-glass,
   .w42-glass-lg,
   .w42-glass-sm,
+  .w42-card,
+  .w42-panel,
+  .w42-group,
+  .w42-list,
+  .w42-metric,
+  .w42-metric-card,
+  .w42-metric-card-rich,
+  .w42-callout,
+  .w42-mermaid,
+  .w42-artifact-embed,
   :where(fieldset, pre, table),
   .w42-material-ultra-thin,
   .w42-material-thin,
@@ -112,6 +132,16 @@
   .w42-glass,
   .w42-glass-lg,
   .w42-glass-sm,
+  .w42-card,
+  .w42-panel,
+  .w42-group,
+  .w42-list,
+  .w42-metric,
+  .w42-metric-card,
+  .w42-metric-card-rich,
+  .w42-callout,
+  .w42-mermaid,
+  .w42-artifact-embed,
   :where(fieldset, pre, table),
   .w42-material-ultra-thin,
   .w42-material-thin,
@@ -771,9 +801,289 @@
 
 
 /* ══════════════════════════════════════════════════════════════════
-   4. Containers   (filled by WOR-158: card, group, table, list, metric,
-      callout, code, embed chrome)
+   4. Containers
+   ══════════════════════════════════════════════════════════════════
+   Everything here sits on Liquid Glass (the surface list in section 1).
+   Tables, <pre>, <code>, <kbd>, <blockquote> and <fieldset> are styled by the
+   element defaults in section 2; this section adds the classed and tagged
+   containers on top.
+   Usage:
+     <w42-card title="Build"> … </w42-card>
+     <w42-metric label="Families" value="42" delta="+12%" tone="up"></w42-metric>
+     <w42-callout tone="warning" title="Check the badge">Body</w42-callout>
    ══════════════════════════════════════════════════════════════════ */
+
+/* — Card and group box — */
+.w42-card,
+.w42-panel,
+.w42-group {
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s16);
+  min-width: 0;
+}
+.w42-card > :last-child,
+.w42-group > :last-child { margin-bottom: 0; }
+.w42-card > .w42-section-header { margin-top: 0; }
+.w42-group-title {
+  margin: 0 0 var(--w42-s8);
+  font-size: var(--w42-f10);
+  font-weight: 600;
+  color: var(--w42-label-secondary);
+}
+
+/* — Table wrapper: horizontal scroll for wide tables (the glass sits on the table) — */
+.w42-table-wrap { margin: 0 0 var(--w42-s12); overflow-x: auto; }
+.w42-table-wrap > table { margin: 0; }
+td.w42-table-num,
+th.w42-table-num,
+td[data-num],
+th[data-num] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* — List: outline rows (title, detail, icon, disclosure) — */
+.w42-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4);
+}
+.w42-list-row {
+  --w42-depth: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  box-sizing: border-box;
+  min-height: var(--w42-h-control);
+  padding: 0 var(--w42-s8) 0 calc(var(--w42-s8) + var(--w42-depth) * 16px);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-primary);
+  border-radius: var(--w42-r-button);
+}
+.w42-list-row-title { flex: none; }
+.w42-list-row-detail { flex: 1 1 auto; color: var(--w42-label-secondary); }
+.w42-list-row[aria-selected="true"],
+.w42-list-row.is-selected { color: var(--w42-on-accent); background: var(--w42-row-selected); }
+.w42-list-row[aria-selected="true"] .w42-list-row-detail,
+.w42-list-row.is-selected .w42-list-row-detail { color: var(--w42-on-accent); }
+.w42-list-row[data-has-children]::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+}
+.w42-list-row[data-depth="1"] { --w42-depth: 1; }
+.w42-list-row[data-depth="2"] { --w42-depth: 2; }
+.w42-list-row[data-depth="3"] { --w42-depth: 3; }
+.w42-list-row[data-depth="4"] { --w42-depth: 4; }
+
+/* — Metric: label over a large tabular value, optional change chip — */
+.w42-metric,
+.w42-metric-card,
+.w42-metric-card-rich {
+  display: flex;
+  flex-direction: column;
+  gap: var(--w42-s4);
+  min-width: 120px;
+  box-sizing: border-box;
+  padding: var(--w42-s12) var(--w42-s16);
+}
+.w42-metric-label,
+.w42-metric-lab {
+  order: -1;
+  display: block;
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+}
+.w42-metric-value,
+.w42-metric-val {
+  display: block;
+  font-size: var(--w42-f30);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--w42-label-primary);
+}
+.w42-metric-delta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-metric-delta-up   { color: var(--w42-chip-fg-success); }
+.w42-metric-delta-down { color: var(--w42-chip-fg-failure); }
+.w42-metrics-row,
+.w42-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--w42-s12);
+  margin: 0 0 var(--w42-s12);
+}
+
+/* — Callout: tinted circular glyph, title and text on glass — */
+.w42-callout {
+  --w42-tone: var(--w42-chip-fg-accent);
+  display: block;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s12) var(--w42-s16);
+  font-size: var(--w42-f11);
+  line-height: 1.45;
+  color: var(--w42-label-secondary);
+}
+.w42-callout-info { --w42-tone: var(--w42-chip-fg-accent); }
+:is(.w42-callout-success) { --w42-tone: var(--w42-chip-fg-success); }
+:is(.w42-callout-warning, .w42-callout-warn) { --w42-tone: var(--w42-chip-fg-warning); }
+:is(.w42-callout-failure, .w42-callout-danger) { --w42-tone: var(--w42-chip-fg-failure); }
+.w42-callout > :first-child { margin-top: 0; }
+.w42-callout > :last-child { margin-bottom: 0; }
+.w42-callout-label {
+  display: block;
+  margin-bottom: var(--w42-s4);
+  font-size: var(--w42-f11);
+  font-weight: 600;
+  color: var(--w42-tone);
+}
+.w42-callout-icon {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--w42-s12);
+  align-items: start;
+}
+.w42-callout-icon-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  font-size: var(--w42-f11);
+  font-weight: 700;
+  color: var(--w42-tone);
+  background: color-mix(in srgb, var(--w42-tone) 16%, transparent);
+  border-radius: 50%;
+}
+.w42-callout-icon-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--w42-f11);
+  font-weight: 600;
+  color: var(--w42-label-primary);
+}
+:is(.w42-callout-failure, .w42-callout-danger) .w42-callout-icon-label { color: var(--w42-chip-fg-failure); }
+
+/* — Code block: figure with a language chip over the glass <pre> — */
+.w42-code-block { margin: 0 0 var(--w42-s12); }
+pre.w42-code-block { margin: 0 0 var(--w42-s12); }
+.w42-code-block pre { margin: 0; }
+.w42-code-block-lang {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin: 0 0 var(--w42-s4) var(--w42-s4);
+  padding: 0 var(--w42-s8);
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  color: var(--w42-label-primary);
+  background: var(--w42-field-bg);
+  border-radius: var(--w42-r-button);
+  box-shadow: 0 0 0 1px var(--w42-separator);
+}
+
+/* — Diagram wrapper — */
+.w42-mermaid {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s16);
+  overflow-x: auto;
+}
+.w42-mermaid pre.mermaid {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+pre.mermaid { text-align: center; }
+
+/* — Artifact embed: a live same-origin artifact in a glass figure — */
+.w42-artifact-embed {
+  display: block;
+  margin: 0 0 var(--w42-s12);
+  overflow: hidden;
+}
+.w42-artifact-embed-caption {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--w42-s8);
+  padding: var(--w42-s8) var(--w42-s12);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--w42-label-secondary);
+  border-bottom: 0.5px solid var(--w42-separator);
+}
+.w42-artifact-embed-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  color: var(--w42-chip-fg-accent);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-artifact-embed-id { font-family: var(--w42-font-mono); font-size: var(--w42-f11); font-weight: 600; color: var(--w42-label-primary); }
+.w42-artifact-embed-label { flex: 1 1 auto; color: var(--w42-label-secondary); }
+.w42-artifact-embed-frame {
+  display: block;
+  width: 100%;
+  height: 200px; /* initial; the auto-height bridge updates it */
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
+.w42-artifact-embed-placeholder {
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  padding: var(--w42-s16) var(--w42-s20);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-chip-fg-warning);
+}
+.w42-artifact-embed-placeholder::before { content: "⚠"; font-size: var(--w42-f15); line-height: 1; flex: none; }
 
 
 /* ══════════════════════════════════════════════════════════════════
@@ -875,238 +1185,6 @@
    control. Each family sub-issue (WOR-157 to WOR-160) moves its rules into
    sections 3 to 8 above and deletes them from here.
    ══════════════════════════════════════════════════════════════════ */
-
-/* ─────────────────────────────────────────────
-   1. Callout / Admonition
-   ─────────────────────────────────────────────
-   Usage:
-     <div class="w42-callout w42-callout-info">
-       <strong class="w42-callout-label">Note</strong>
-       <p>Body text.</p>
-     </div>
-   ───────────────────────────────────────────── */
-
-.w42-callout {
-  display: block;
-  margin: var(--w42-s16) 0;
-  padding: var(--w42-s12) var(--w42-s16);
-  border-radius: var(--w42-r-card);
-  border-left: 4px solid var(--w42-elevated);
-  background: var(--w42-surface);
-  color: var(--w42-text-primary);
-  font-size: var(--w42-f13);
-  line-height: 1.55;
-}
-
-.w42-callout > :first-child { margin-top: 0; }
-.w42-callout > :last-child  { margin-bottom: 0; }
-
-.w42-callout-label {
-  display: block;
-  font-size: var(--w42-f10);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-bottom: var(--w42-s4);
-  opacity: 0.75;
-}
-
-/* Info → cyan */
-.w42-callout-info {
-  border-left-color: var(--w42-cyan);
-  background: color-mix(in srgb, var(--w42-cyan) 10%, var(--w42-surface));
-}
-.w42-callout-info .w42-callout-label { color: var(--w42-cyan); opacity: 1; }
-
-/* Warn → amber */
-.w42-callout-warn {
-  border-left-color: var(--w42-amber);
-  background: color-mix(in srgb, var(--w42-amber) 10%, var(--w42-surface));
-}
-.w42-callout-warn .w42-callout-label { color: var(--w42-amber); opacity: 1; }
-
-/* Success → green */
-.w42-callout-success {
-  border-left-color: var(--w42-green);
-  background: color-mix(in srgb, var(--w42-green) 10%, var(--w42-surface));
-}
-.w42-callout-success .w42-callout-label { color: var(--w42-green); opacity: 1; }
-
-/* Danger → red */
-.w42-callout-danger {
-  border-left-color: var(--w42-red);
-  background: color-mix(in srgb, var(--w42-red) 10%, var(--w42-surface));
-}
-.w42-callout-danger .w42-callout-label { color: var(--w42-red); opacity: 1; }
-
-
-/* ─────────────────────────────────────────────
-   3. Striped data table
-   ─────────────────────────────────────────────
-   Usage:
-     <table class="w42-table">
-       <thead><tr><th>Col A</th><th>Col B</th></tr></thead>
-       <tbody>
-         <tr><td>…</td><td>…</td></tr>
-       </tbody>
-     </table>
-   ───────────────────────────────────────────── */
-
-.w42-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--w42-f13);
-  color: var(--w42-text-primary);
-  margin: var(--w42-s16) 0;
-}
-
-.w42-table thead {
-  background: var(--w42-elevated);
-}
-
-.w42-table th,
-.w42-table td {
-  padding: var(--w42-s8) var(--w42-s12);
-  text-align: left;
-  border-bottom: 1px solid var(--w42-elevated);
-}
-
-.w42-table th {
-  font-weight: 600;
-  font-size: var(--w42-f11);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--w42-text-secondary);
-}
-
-/* Zebra striping */
-.w42-table tbody tr:nth-child(even) {
-  background: color-mix(in srgb, var(--w42-elevated) 40%, transparent);
-}
-
-.w42-table tbody tr:hover {
-  background: color-mix(in srgb, var(--w42-primary) 6%, var(--w42-surface));
-}
-
-/* Numeric / mono columns */
-.w42-table td.w42-table-num,
-.w42-table th.w42-table-num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-family: var(--w42-font-mono);
-}
-
-
-/* ─────────────────────────────────────────────
-   4. Metric / stat card
-   ─────────────────────────────────────────────
-   Usage:
-     <div class="w42-metric-card">
-       <span class="w42-metric-value">42</span>
-       <span class="w42-metric-label">Issues closed</span>
-       <span class="w42-metric-delta w42-metric-delta-up">+12%</span>
-     </div>
-   ───────────────────────────────────────────── */
-
-.w42-metric-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--w42-s4);
-  padding: var(--w42-s16) var(--w42-s20);
-  background: var(--w42-surface);
-  border-radius: var(--w42-r-card);
-  border: 1px solid var(--w42-elevated);
-  min-width: 120px;
-}
-
-.w42-metric-value {
-  display: block;
-  font-size: var(--w42-f30);
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--w42-text-primary);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-.w42-metric-label {
-  display: block;
-  font-size: var(--w42-f11);
-  color: var(--w42-text-secondary);
-  font-weight: 500;
-}
-
-.w42-metric-delta {
-  display: inline-block;
-  font-size: var(--w42-f10);
-  font-weight: 600;
-  padding: 1px var(--w42-s4);
-  border-radius: var(--w42-r-input);
-  color: var(--w42-text-tertiary);
-  background: var(--w42-elevated);
-}
-
-.w42-metric-delta-up {
-  color: var(--w42-green);
-  background: color-mix(in srgb, var(--w42-green) 14%, var(--w42-surface));
-}
-
-.w42-metric-delta-down {
-  color: var(--w42-red);
-  background: color-mix(in srgb, var(--w42-red) 14%, var(--w42-surface));
-}
-
-/* Convenience row of cards */
-.w42-metrics-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--w42-s12);
-  margin: var(--w42-s16) 0;
-}
-
-.w42-metrics-row .w42-metric-card {
-  flex: 1 1 120px;
-}
-
-
-/* ─────────────────────────────────────────────
-   5. Mermaid diagram wrapper
-   ─────────────────────────────────────────────
-   Wrap a <pre class="mermaid"> in .w42-mermaid to
-   center it and give it breathing room.
-
-   Usage:
-     <div class="w42-mermaid">
-       <pre class="mermaid">graph TD; A-->B;</pre>
-     </div>
-   ───────────────────────────────────────────── */
-
-.w42-mermaid {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  margin: var(--w42-s24) 0;
-  padding: var(--w42-s16);
-  background: var(--w42-surface);
-  border-radius: var(--w42-r-card);
-  border: 1px solid var(--w42-elevated);
-  overflow-x: auto;
-}
-
-.w42-mermaid pre.mermaid {
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-}
-
-/* Standalone <pre class="mermaid"> without the wrapper also gets some margin */
-pre.mermaid {
-  margin: var(--w42-s20) auto;
-  text-align: center;
-}
-
 
 /* ─────────────────────────────────────────────
    6. Spec section
@@ -1222,113 +1300,6 @@ pre.mermaid {
 .w42-ac strong {
   color: var(--w42-text-primary);
   font-weight: 700;
-}
-
-
-/* ─────────────────────────────────────────────
-   8. Keyboard shortcut
-   ─────────────────────────────────────────────
-   Usage:
-     Press <kbd class="w42-kbd">⌘</kbd>+<kbd class="w42-kbd">K</kbd>
-     or: <span class="w42-kbd">⌘K</span>
-   ───────────────────────────────────────────── */
-
-.w42-kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  padding: 1px var(--w42-s4);
-  font-family: var(--w42-font-family);
-  font-size: var(--w42-f10);
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--w42-text-secondary);
-  background: var(--w42-surface);
-  border: 1px solid var(--w42-elevated);
-  border-bottom-width: 2px;
-  border-radius: var(--w42-r-input);
-  vertical-align: baseline;
-  white-space: nowrap;
-}
-
-
-/* ─────────────────────────────────────────────
-   9. Code block
-   ─────────────────────────────────────────────
-   Extends the base reset's <pre> with a header
-   row for an optional language label.
-
-   Also styles inline <code> elements so they
-   stand out from surrounding prose with a subtle
-   backdrop-tinted background — no extra class
-   needed, matches the shell body's --w42-backdrop.
-
-   Usage:
-     <pre class="w42-code-block"><code>…</code></pre>
-     or with label:
-     <figure class="w42-code-block">
-       <figcaption class="w42-code-block-lang">swift</figcaption>
-       <pre><code>…</code></pre>
-     </figure>
-   ───────────────────────────────────────────── */
-
-/* Inline <code> not inside a <pre> */
-:not(pre) > code {
-  display: inline;
-  padding: 1px var(--w42-s4);
-  border-radius: var(--w42-r-input);
-  font-family: var(--w42-font-mono);
-  font-size: 0.88em;
-  background: color-mix(in srgb, var(--w42-backdrop) 30%, var(--w42-elevated));
-  color: var(--w42-text-primary);
-}
-
-pre.w42-code-block,
-.w42-code-block pre {
-  margin: var(--w42-s16) 0;
-  padding: var(--w42-s16);
-  background: var(--w42-surface);
-  border-radius: var(--w42-r-card);
-  border: 1px solid var(--w42-elevated);
-  overflow-x: auto;
-  font-family: var(--w42-font-mono);
-  font-size: var(--w42-f12);
-  line-height: 1.55;
-  color: var(--w42-text-primary);
-}
-
-.w42-code-block {
-  margin: var(--w42-s16) 0;
-}
-
-.w42-code-block-lang {
-  display: inline-block;
-  padding: 2px var(--w42-s8);
-  font-family: var(--w42-font-mono);
-  font-size: var(--w42-f10);
-  font-weight: 600;
-  color: var(--w42-text-tertiary);
-  background: var(--w42-elevated);
-  border-radius: var(--w42-r-input) var(--w42-r-input) 0 0;
-  border: 1px solid var(--w42-elevated);
-  border-bottom: none;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
-  margin-bottom: -1px;
-}
-
-.w42-code-block pre {
-  border-top-left-radius: 0;
-  margin: 0;
-}
-
-pre.w42-code-block code,
-.w42-code-block pre code {
-  font-family: inherit;
-  font-size: inherit;
-  background: transparent;
-  padding: 0;
 }
 
 
@@ -1594,313 +1565,10 @@ pre.w42-code-block code,
   background: color-mix(in srgb, var(--w42-accent) 10%, transparent);
 }
 
-/* ---- 12f. Icon callout variant ----------------------------------- */
-/* Refined callout that pairs a circular icon badge with labelled text.
-   Compose with the §1 colour modifiers (.w42-callout-info / -warn /
-   -success / -danger) — the 2-class selectors below provide the
-   correct tints at higher specificity than the §1 single-class rules.
-   Usage:
-   <div class="w42-callout-icon w42-callout-warn">
-     <span class="w42-callout-icon-ico">!</span>
-     <div>
-       <span class="w42-callout-icon-label">Warning</span>
-       Body text here.
-     </div>
-   </div>                                                             */
-
-.w42-callout-icon {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--w42-s12);
-  align-items: start;
-  margin: var(--w42-s16) 0;
-  padding: var(--w42-s12) var(--w42-s16);
-  border-radius: var(--w42-r-card);
-  border: 1px solid var(--w42-elevated);
-  background: var(--w42-surface);
-  font-size: var(--w42-f13);
-  line-height: 1.55;
-}
-
-/* 2-class colour overrides — higher specificity than §1 single-class */
-.w42-callout-icon.w42-callout-info {
-  border-left: 3px solid var(--w42-cyan);
-  background: color-mix(in srgb, var(--w42-cyan) 8%, var(--w42-surface));
-}
-.w42-callout-icon.w42-callout-warn {
-  border-left: 3px solid var(--w42-amber);
-  background: color-mix(in srgb, var(--w42-amber) 8%, var(--w42-surface));
-}
-.w42-callout-icon.w42-callout-success {
-  border-left: 3px solid var(--w42-green);
-  background: color-mix(in srgb, var(--w42-green) 8%, var(--w42-surface));
-}
-.w42-callout-icon.w42-callout-danger {
-  border-left: 3px solid var(--w42-red);
-  background: color-mix(in srgb, var(--w42-red) 8%, var(--w42-surface));
-}
-
-.w42-callout-icon-ico {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  font-size: var(--w42-f13);
-  font-weight: 800;
-  background: var(--w42-elevated);
-  color: var(--w42-text-secondary);
-  flex-shrink: 0;
-}
-
-.w42-callout-icon.w42-callout-info    .w42-callout-icon-ico {
-  color: var(--w42-cyan);
-  background: color-mix(in srgb, var(--w42-cyan) 16%, var(--w42-surface));
-}
-.w42-callout-icon.w42-callout-warn    .w42-callout-icon-ico {
-  color: var(--w42-amber);
-  background: color-mix(in srgb, var(--w42-amber) 16%, var(--w42-surface));
-}
-.w42-callout-icon.w42-callout-success .w42-callout-icon-ico {
-  color: var(--w42-green);
-  background: color-mix(in srgb, var(--w42-green) 16%, var(--w42-surface));
-}
-.w42-callout-icon.w42-callout-danger  .w42-callout-icon-ico {
-  color: var(--w42-red);
-  background: color-mix(in srgb, var(--w42-red) 16%, var(--w42-surface));
-}
-
-.w42-callout-icon-label {
-  display: block;
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-
-/* ---- 12g. Framed rounded table wrapper --------------------------- */
-/* Gives a table a rounded border and clipped overflow — works with
-   both .w42-table (§3, striped) and .w42-table-rich (below).
-   Usage:
-   <div class="w42-table-wrap">
-     <table class="w42-table-rich">
-       <thead><tr><th>Col A</th><th>Col B</th></tr></thead>
-       <tbody><tr><td>…</td><td>…</td></tr></tbody>
-     </table>
-   </div>                                                             */
-
-.w42-table-wrap {
-  margin: var(--w42-s16) 0;
-  border: 1px solid var(--w42-elevated);
-  border-radius: var(--w42-r-card);
-  overflow: hidden;
-}
-
-/* Rich table — gradient header row; place inside .w42-table-wrap    */
-.w42-table-rich {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--w42-f13);
-  color: var(--w42-text-primary);
-}
-
-.w42-table-rich thead th {
-  text-align: left;
-  padding: var(--w42-s8) var(--w42-s16);
-  font-size: var(--w42-f10);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--w42-text-secondary);
-  background: color-mix(in srgb, var(--w42-accent) 8%, var(--w42-elevated));
-  border-bottom: 1px solid var(--w42-elevated);
-}
-
-.w42-table-rich td {
-  padding: var(--w42-s8) var(--w42-s16);
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--w42-elevated) 60%, transparent);
-}
-
-.w42-table-rich tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.w42-table-rich tbody tr:hover {
-  background: color-mix(in srgb, var(--w42-accent) 4%, transparent);
-}
-
-/* ---- 12h. Gradient metric / stat cards --------------------------- */
-/* Richer metric cards with a subtle top-to-bottom accent gradient and
-   gradient-text value. Pair with .w42-metrics-grid or .w42-grid-3.
-   Usage:
-   <div class="w42-metrics-grid">
-     <div class="w42-metric-card-rich">
-       <span class="w42-metric-val">42</span>
-       <span class="w42-metric-lab">Issues closed</span>
-     </div>
-   </div>                                                             */
-
-.w42-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--w42-s12);
-  margin: var(--w42-s16) 0;
-}
-
-.w42-metric-card-rich {
-  padding: var(--w42-s16) var(--w42-s20);
-  border-radius: var(--w42-r-card);
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--w42-accent) 6%, var(--w42-surface)),
-    var(--w42-surface));
-  border: 1px solid var(--w42-elevated);
-}
-
-.w42-metric-val {
-  display: block;
-  font-size: var(--w42-f32);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  /* Gradient text: accent-tinted towards the bottom */
-  background: linear-gradient(180deg,
-    var(--w42-text-primary),
-    color-mix(in srgb, var(--w42-accent) 60%, var(--w42-text-primary)));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.w42-metric-lab {
-  display: block;
-  margin-top: var(--w42-s8);
-  font-size: var(--w42-f11);
-  color: var(--w42-text-secondary);
-  font-weight: 500;
-}
-
 /* ══════════════════════════════════════════════════════════════════
    End of §12. Subtask .16 appends w42-artifact-embed block here.
    ══════════════════════════════════════════════════════════════════ */
 
-/* ══════════════════════════════════════════════════════════════════
-   §13. w42-artifact embed figure  [feat/spec-as-html.16]
-   ══════════════════════════════════════════════════════════════════
-   Styles for the <w42-artifact> custom element rendered chrome:
-   a figure wrapper with a caption bar labelled as a live same-origin
-   import, the auto-sized iframe, and a fail-loud placeholder when
-   the artifact is unavailable.
-
-   Usage:
-     <w42-artifact id="flow-decision" caption="Authoring pipeline">
-     </w42-artifact>
-
-   The custom element JS (registered in CanvasTemplate.overlayJS)
-   replaces this tag with a .w42-artifact-embed figure at runtime.
-
-   All classes use ONLY --w42-* tokens. §1-§12 are never touched.
-   ══════════════════════════════════════════════════════════════════ */
-
-/* Outer figure container */
-.w42-artifact-embed {
-  display: block;
-  margin: var(--w42-s24) 0;
-  border-radius: var(--w42-r-card);
-  border: 1px solid var(--w42-elevated);
-  overflow: hidden;
-  background: var(--w42-surface);
-}
-
-/* Caption / label bar at the top of the figure */
-.w42-artifact-embed-caption {
-  display: flex;
-  align-items: center;
-  gap: var(--w42-s8);
-  padding: var(--w42-s8) var(--w42-s12);
-  background: color-mix(in srgb, var(--w42-accent) 8%, var(--w42-elevated));
-  border-bottom: 1px solid var(--w42-elevated);
-  font-size: var(--w42-f11);
-  color: var(--w42-text-secondary);
-  line-height: 1.3;
-  font-weight: 500;
-  flex-wrap: wrap;
-}
-
-/* "LIVE IMPORT" badge — makes the same-origin import nature explicit */
-.w42-artifact-embed-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px var(--w42-s4);
-  font-size: var(--w42-f9);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--w42-accent);
-  background: color-mix(in srgb, var(--w42-accent) 14%, var(--w42-surface));
-  border-radius: var(--w42-r-input);
-  flex-shrink: 0;
-}
-
-/* Artifact id in monospace */
-.w42-artifact-embed-id {
-  font-family: var(--w42-font-mono);
-  font-size: var(--w42-f11);
-  color: var(--w42-text-primary);
-  font-weight: 600;
-}
-
-/* Optional author-supplied caption text */
-.w42-artifact-embed-label {
-  flex: 1 1 auto;
-  color: var(--w42-text-secondary);
-  font-size: var(--w42-f11);
-}
-
-/* The iframe — no border/scrollbar; height driven by the auto-height bridge */
-.w42-artifact-embed-frame {
-  display: block;
-  width: 100%;
-  height: 200px; /* initial placeholder; updated by postMessage height bridge */
-  border: none;
-  background: transparent;
-  overflow: hidden;
-}
-
-/* Fail-loud placeholder when artifact is missing or purged */
-.w42-artifact-embed-placeholder {
-  display: flex;
-  align-items: center;
-  gap: var(--w42-s8);
-  padding: var(--w42-s20) var(--w42-s24);
-  font-size: var(--w42-f13);
-  color: var(--w42-amber);
-  background: color-mix(in srgb, var(--w42-amber) 8%, var(--w42-surface));
-  font-weight: 500;
-}
-
-.w42-artifact-embed-placeholder::before {
-  content: "⚠";
-  font-size: var(--w42-f17);
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   15. Surfaces — card · panel · glass · toolbar
-   ══════════════════════════════════════════════════════════════════ */
-.w42-card {
-  background: var(--w42-surface);
-  border: 1px solid var(--w42-elevated);
-  border-radius: var(--w42-r-card, 10px);
-  padding: var(--w42-s16);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--w42-glass-shadow) 25%, transparent);
-}
-.w42-panel {
-  background: var(--w42-backdrop);
-  border: 1px solid var(--w42-elevated);
-  border-radius: var(--w42-r-panel, 12px);
-  padding: var(--w42-s20);
-}
 /* ══════════════════════════════════════════════════════════════════
    End of §16.
    ══════════════════════════════════════════════════════════════════ */

@@ -938,10 +938,26 @@ public enum CanvasTemplate {
       display: block;
       width: 100%;
       margin: 16px 0;
-      border: 1px solid var(--w42-elevated, rgba(120,120,128,0.28));
-      border-radius: var(--w42-r-card, 10px);
-      background: var(--w42-surface, #ffffff);
+      box-sizing: border-box;
+      border-radius: var(--w42-r-panel);
+      background:
+        linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
+        var(--w42-glass-fill);
+      -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+      backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+      box-shadow:
+        0 18px 48px var(--w42-glass-shadow),
+        0 0 0 0.5px var(--w42-glass-rim),
+        inset 0 1px 0 var(--w42-glass-glow);
       overflow: hidden;
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .w42-component-card,
+      .w42-diagram-card {
+        background: var(--w42-surface);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
     }
     /* Generic component cards remain full-width. Diagram cards override only
        their own width: fit-content is the safe pre-measurement fallback, then
@@ -959,14 +975,11 @@ public enum CanvasTemplate {
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      height: 46px;
-      padding: 0 10px 0 14px;
+      height: 44px;
+      padding: 0 var(--w42-s8) 0 var(--w42-s12);
       box-sizing: border-box;
-      background: var(--w42-elevated, rgba(120, 120, 128, 0.07));
-      border-bottom: 1px solid var(--w42-elevated, rgba(120, 120, 128, 0.18));
-      -webkit-backdrop-filter: saturate(180%) blur(8px);
-      backdrop-filter: saturate(180%) blur(8px);
-      font-family: var(--w42-font-family, -apple-system, BlinkMacSystemFont, system-ui, sans-serif);
+      border-bottom: 0.5px solid var(--w42-separator);
+      font-family: var(--w42-font-family);
       user-select: none; -webkit-user-select: none;
     }
     .w42-component-left,
@@ -983,15 +996,15 @@ public enum CanvasTemplate {
       width: 18px;
       height: 18px;
       display: inline-flex;
-      color: var(--w42-text-secondary, #6b6b70);
+      color: var(--w42-label-secondary);
     }
     .w42-component-icon svg,
     .w42-diagram-header .w42-dh-icon svg { width: 100%; height: 100%; display: block; }
     .w42-component-title,
     .w42-diagram-header .w42-dh-title {
-      font-size: 14px;
+      font-size: var(--w42-f13);
       font-weight: 600;
-      color: var(--w42-text-primary, #1a1a1a);
+      color: var(--w42-label-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1003,6 +1016,7 @@ public enum CanvasTemplate {
       gap: 1px;
       flex: 0 0 auto;
     }
+    /* Action Button (bordered, kit): a 30pt capsule on the secondary fill. */
     .w42-component-action-btn,
     .w42-diagram-header .w42-dh-btn {
       all: unset;
@@ -1013,45 +1027,41 @@ public enum CanvasTemplate {
       gap: 5px;
       width: 30px;
       height: 30px;
-      border-radius: 7px;
+      border-radius: var(--w42-r-pill);
       cursor: pointer;
-      /* Higher contrast: a subtle always-on chip + strong icon color, so the
-         buttons clearly read as interactive controls (not faint glyphs). */
-      color: var(--w42-text-primary, #1a1a1a);
-      background: rgba(127, 127, 127, 0.12);
-      box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.10);
-      transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+      color: var(--w42-label-primary);
+      background: var(--w42-fill-secondary);
+      transition: background 0.12s ease, color 0.12s ease;
     }
     .w42-component-action-btn:hover,
-    .w42-diagram-header .w42-dh-btn:hover {
-      background: rgba(127, 127, 127, 0.22);
-      box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.18);
-    }
+    .w42-diagram-header .w42-dh-btn:hover,
     .w42-component-action-btn:active,
     .w42-diagram-header .w42-dh-btn:active {
-      background: rgba(127, 127, 127, 0.30);
+      background: var(--w42-fill-primary);
+    }
+    .w42-component-action-btn:focus-visible,
+    .w42-diagram-header .w42-dh-btn:focus-visible {
+      outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
     }
     .w42-component-action-btn svg,
     .w42-diagram-header .w42-dh-btn svg {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       display: block;
     }
     /* Active state for the mockup's app-theme toggle. */
     .w42-component-action-btn.w42-active {
-      color: var(--w42-accent, #0a84ff);
-      background: color-mix(in srgb, var(--w42-accent, #0a84ff) 14%, transparent);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w42-accent, #0a84ff) 30%, transparent);
+      color: var(--w42-on-accent);
+      background: var(--w42-accent);
     }
     /* Momentary "✓ Copied" confirmation — the button widens to show the label. */
     .w42-component-action-btn.w42-done {
       width: auto;
-      padding: 0 10px;
-      color: var(--w42-green, #34c759);
-      background: color-mix(in srgb, var(--w42-green, #34c759) 15%, transparent);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w42-green, #34c759) 32%, transparent);
+      padding: 0 var(--w42-s12);
+      color: var(--w42-chip-fg-success);
+      background: var(--w42-chip-fill);
     }
-    .w42-done-label { font: 600 12px var(--w42-font-family, -apple-system, system-ui, sans-serif); }
+    .w42-done-label { font: 500 var(--w42-f11) var(--w42-font-family); }
     .w42-component-body,
     .w42-diagram-slot {
       display: block;
@@ -1064,9 +1074,9 @@ public enum CanvasTemplate {
        the error message instead of a blank/broken render. */
     .w42-component-error .w42-component-body {
       padding: 12px 14px;
-      color: var(--w42-red, #d24b4b);
-      font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
-      font-size: 12px;
+      color: var(--w42-chip-fg-failure);
+      font-family: var(--w42-font-mono);
+      font-size: var(--w42-f11);
       line-height: 1.5;
       white-space: pre-wrap;
       word-break: break-word;
@@ -1077,28 +1087,26 @@ public enum CanvasTemplate {
       box-sizing: border-box;
       appearance: none; -webkit-appearance: none;
       cursor: pointer;
-      font: 600 12px var(--w42-font-family, -apple-system, system-ui, sans-serif);
-      color: var(--w42-text-primary, #1a1a1a);
+      font: 500 var(--w42-f11) var(--w42-font-family);
+      color: var(--w42-label-primary);
       /* A visible chevron caret + a chip background so it clearly reads as a choice.
          Height matches the action buttons (30px) so the header controls align;
          line-height matches height so the (appearance:none) select text centers. */
       height: 30px;
       line-height: 30px;
-      background-color: rgba(127, 127, 127, 0.12);
+      background-color: var(--w42-fill-secondary);
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%238a8a8f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 9px center;
-      box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.20);
-      border-radius: 7px;
-      padding: 0 26px 0 11px;
-      transition: background-color 0.12s ease, box-shadow 0.12s ease;
+      border-radius: var(--w42-r-pill);
+      padding: 0 26px 0 14px;
+      transition: background-color 0.12s ease;
     }
     .w42-mockup-picker:hover {
-      background-color: rgba(127, 127, 127, 0.22);
-      box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.30);
+      background-color: var(--w42-fill-primary);
     }
     .w42-mockup-picker:focus-visible {
-      box-shadow: inset 0 0 0 2px var(--w42-accent, #0a84ff);
+      outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
     }
     /* Dropdown options render in the native menu — keep them readable in dark UIs. */
     .w42-mockup-picker option { color: #1a1a1a; }
@@ -1191,13 +1199,13 @@ public enum CanvasTemplate {
     .w42-mockup-loading { position: absolute; inset: 0; z-index: 4; }
     .w42-mockup-status {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      font: 500 13px var(--w42-font-family, -apple-system, system-ui, sans-serif);
-      color: var(--w42-text-secondary, #6b6b70);
-      background: var(--w42-surface, #fff);
-      padding: 8px 14px; border-radius: 8px;
-      border: 1px solid var(--w42-elevated, rgba(120,120,128,0.2));
+      font: 500 var(--w42-f11) var(--w42-font-family);
+      color: var(--w42-label-secondary);
+      background: var(--w42-glass-fill);
+      padding: 8px 14px; border-radius: var(--w42-r-pill);
+      box-shadow: 0 0 0 0.5px var(--w42-glass-rim);
     }
-    .w42-mockup-status-error { color: var(--w42-red, #d24b4b); }
+    .w42-mockup-status-error { color: var(--w42-chip-fg-failure); }
     /* The diagram body is pannable; other component bodies are not. */
     .w42-diagram-slot { cursor: grab; }
     .w42-diagram-slot:active { cursor: grabbing; }
