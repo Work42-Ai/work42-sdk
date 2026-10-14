@@ -600,6 +600,162 @@
     return t;
   };
 
+  /* ── Spec / doc ───────────────────────────────────────────────────── */
+
+  function slug(text) {
+    return String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
+  }
+
+  /* — <w42-hero eyebrow="a, b, c" title="" subtitle="">extra chips and buttons</w42-hero> — */
+  define("w42-hero", {
+    render: function (host) {
+      addClass(host, "w42-hero");
+      var kids = Array.prototype.slice.call(host.childNodes);
+      host.textContent = "";
+      var panel = el("div", "w42-hero-panel");
+      var eyebrow = attr(host, "eyebrow", "");
+      if (eyebrow) {
+        var row = el("div", "w42-hero-eyebrow");
+        eyebrow.split(",").forEach(function (t, i) {
+          t = t.trim();
+          if (t) { row.appendChild(el("span", "w42-chip" + (i === 0 ? " w42-chip-accent" : ""), t)); }
+        });
+        panel.appendChild(row);
+      }
+      panel.appendChild(el("h1", "w42-hero-title", attr(host, "title", "")));
+      var sub = attr(host, "subtitle", "");
+      if (sub) { panel.appendChild(el("p", "w42-hero-subtitle", sub)); }
+      if (kids.length) {
+        var extra = el("div", "w42-hero-extra");
+        kids.forEach(function (k) { extra.appendChild(k); });
+        panel.appendChild(extra);
+      }
+      host.appendChild(panel);
+      host.removeAttribute("title");
+    }
+  });
+
+  /* — <w42-section n="" title="" id="">content</w42-section> — */
+  var sectionSeq = 0;
+  define("w42-section", {
+    render: function (host) {
+      var title = attr(host, "title", "");
+      if (!title) { throw new Error("title is required"); }
+      var n = attr(host, "n", String(++sectionSeq));
+      var id = attr(host, "id", slug(title));
+      var kids = Array.prototype.slice.call(host.childNodes);
+      host.textContent = "";
+      var sec = document.createElement("section");
+      sec.setAttribute("data-spec-section", id);
+      sec.id = id;
+      var head = el("div", "w42-shead");
+      head.appendChild(el("span", "w42-shead-chip", n));
+      head.appendChild(el("h2", "", title));
+      head.appendChild(el("span", "w42-shead-rule"));
+      sec.appendChild(head);
+      kids.forEach(function (k) { sec.appendChild(k); });
+      host.appendChild(sec);
+      host.removeAttribute("id");
+      host.removeAttribute("title");
+      host.setAttribute("data-section-n", n);
+      host.setAttribute("data-section-title", title);
+      host.setAttribute("data-section-id", id);
+      var tocs = document.querySelectorAll("w42-toc");
+      for (var i = 0; i < tocs.length; i++) { if (tocs[i].__w42build) { tocs[i].__w42build(); } }
+    }
+  });
+
+  /* — <w42-toc>: tab-strip links to every <w42-section>, the one in view selected — */
+  define("w42-toc", {
+    render: function (host) {
+      addClass(host, "w42-toc");
+      host.setAttribute("role", "navigation");
+      var io = null;
+      function build() {
+        host.textContent = "";
+        if (io) { io.disconnect(); io = null; }
+        var secs = document.querySelectorAll("w42-section[data-section-id]");
+        var links = {};
+        for (var i = 0; i < secs.length; i++) {
+          var s = secs[i], a = el("a");
+          a.href = "#" + s.getAttribute("data-section-id");
+          a.appendChild(el("span", "w42-toc-num", s.getAttribute("data-section-n")));
+          a.appendChild(document.createTextNode(" " + s.getAttribute("data-section-title")));
+          host.appendChild(a);
+          links[s.getAttribute("data-section-id")] = a;
+        }
+        if (window.IntersectionObserver) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+              if (!en.isIntersecting) { return; }
+              Object.keys(links).forEach(function (k) {
+                links[k].removeAttribute("aria-current");
+                links[k].classList.remove("is-selected");
+              });
+              var a = links[en.target.getAttribute("data-section-id")];
+              if (a) { a.setAttribute("aria-current", "true"); a.classList.add("is-selected"); }
+            });
+          }, { rootMargin: "0px 0px -60% 0px" });
+          for (var j = 0; j < secs.length; j++) { io.observe(secs[j]); }
+        }
+        var first = host.querySelector("a");
+        if (first && !host.querySelector(".is-selected")) { first.setAttribute("aria-current", "true"); first.classList.add("is-selected"); }
+      }
+      host.__w42build = build;
+      build();
+      if (window.MutationObserver) {
+        new MutationObserver(function (muts) {
+          for (var m = 0; m < muts.length; m++) {
+            for (var k = 0; k < muts[m].addedNodes.length; k++) {
+              var n = muts[m].addedNodes[k];
+              if (n.nodeType === 1 && n.localName === "w42-section") { setTimeout(build, 0); return; }
+            }
+          }
+        }).observe(document.body, { childList: true, subtree: true });
+      }
+    }
+  });
+
+  /* — <w42-ac-list><w42-ac id="AC1">WHEN … THE SYSTEM SHALL …</w42-ac></w42-ac-list> — */
+  define("w42-ac-list", {
+    render: function (host) { addClass(host, "w42-ac-list"); host.setAttribute("role", "list"); }
+  });
+  var EARS = /\b(THE SYSTEM SHALL|WHEN|WHILE|IF|THEN|WHERE)\b/;
+  function wrapEars(node) {
+    var kids = Array.prototype.slice.call(node.childNodes);
+    kids.forEach(function (k) {
+      if (k.nodeType === 3) {
+        if (!EARS.test(k.nodeValue)) { return; }
+        var frag = document.createDocumentFragment();
+        k.nodeValue.split(new RegExp(EARS.source, "g")).forEach(function (part, i) {
+          if (i % 2 === 1) { frag.appendChild(el("span", "w42-ears", part)); }
+          else if (part) { frag.appendChild(document.createTextNode(part)); }
+        });
+        node.replaceChild(frag, k);
+      } else if (k.nodeType === 1 && !k.classList.contains("w42-ears")) { wrapEars(k); }
+    });
+  }
+  define("w42-ac", {
+    render: function (host) {
+      addClass(host, "w42-ac");
+      host.setAttribute("role", "listitem");
+      var id = attr(host, "id", "");
+      if (id) { host.setAttribute("data-ac-id", id); }
+      var p = host.parentElement;
+      if (p && !p.classList.contains("w42-ac-list")) {
+        var list = el("div", "w42-ac-list");
+        list.setAttribute("role", "list");
+        p.insertBefore(list, host);
+        var n = host;
+        while (n && n.localName === "w42-ac") { var next = n.nextElementSibling; list.appendChild(n); n = next; }
+      }
+      var body = el("div", "w42-ac-body");
+      while (host.firstChild) { body.appendChild(host.firstChild); }
+      wrapEars(body);
+      host.appendChild(body);
+    }
+  });
+
   function reportUnknown(root) {
     var all = root.querySelectorAll ? root.querySelectorAll("*") : [];
     for (var i = 0; i < all.length; i++) {

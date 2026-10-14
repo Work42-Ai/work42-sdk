@@ -17,14 +17,12 @@
  *   1. Glass           .w42-glass · .w42-glass-lg · .w42-glass-sm · .w42-material-*
  *   2. Element defaults  plain HTML renders as the Liquid Glass families
  *                        (zero specificity: any class or author rule wins)
- *   3. Controls        (filled by WOR-157)
- *   4. Containers      (filled by WOR-158)
- *   5. Overlays        (filled by WOR-159)
- *   6. Spec / doc      (filled by WOR-160)
+ *   3. Controls        .w42-button · .w42-tabs · .w42-toolbar · .w42-chip · fields · progress
+ *   4. Containers      .w42-card · .w42-group · .w42-list · .w42-metric · .w42-callout · code
+ *   5. Overlays        .w42-popover · .w42-menu · .w42-tooltip · .w42-dialog · .w42-sheet · .w42-toast
+ *   6. Spec / doc      .w42-hero · .w42-toc · .w42-shead · .w42-ac-list
  *   7. Layout          .w42-columns · .w42-grid · .w42-stack · .w42-row
- *   8. Back-compat aliases   (each family sub-issue maps its legacy classes)
- *   Legacy             pre-Liquid-Glass rules, kept verbatim until the family
- *                      sub-issue that restyles them moves them into 3 to 8.
+ *   8. Back-compat aliases   legacy class names mapped onto the new look
  */
 
 
@@ -48,6 +46,10 @@
 .w42-glass,
 .w42-glass-lg,
 .w42-glass-sm,
+.w42-toc,
+.w42-ac-list,
+.w42-hero-panel,
+.w42-spec-hero,
 .w42-card,
 .w42-panel,
 .w42-group,
@@ -78,7 +80,8 @@
 .w42-glass,
 .w42-glass-lg { padding: var(--w42-s16); }
 .w42-glass-lg { border-radius: var(--w42-r-glass-lg); padding: var(--w42-s24); }
-.w42-glass-sm {
+.w42-glass-sm,
+.w42-toc {
   border-radius: var(--w42-r-pill);
   box-shadow:
     0 8px 15px color-mix(in srgb, var(--w42-glass-shadow) 16%, transparent),
@@ -107,6 +110,10 @@
   .w42-glass,
   .w42-glass-lg,
   .w42-glass-sm,
+  .w42-toc,
+  .w42-ac-list,
+  .w42-hero-panel,
+  .w42-spec-hero,
   .w42-card,
   .w42-panel,
   .w42-group,
@@ -132,6 +139,10 @@
   .w42-glass,
   .w42-glass-lg,
   .w42-glass-sm,
+  .w42-toc,
+  .w42-ac-list,
+  .w42-hero-panel,
+  .w42-spec-hero,
   .w42-card,
   .w42-panel,
   .w42-group,
@@ -1302,9 +1313,218 @@ dialog.w42-sheet {
 
 
 /* ══════════════════════════════════════════════════════════════════
-   6. Spec / doc   (filled by WOR-160: hero, toc, section, acceptance
-      criteria)
+   6. Spec / doc
+   ══════════════════════════════════════════════════════════════════
+   The spec-document language: a hero over a brand scene, a glass tab-strip
+   table of contents, numbered sections and EARS acceptance criteria.
+   Usage:
+     <w42-hero eyebrow="WOR-151, Approved, main" title="…" subtitle="…"></w42-hero>
+     <w42-toc></w42-toc>
+     <w42-section n="1" title="Context"> … </w42-section>
+     <w42-ac-list><w42-ac id="AC1">WHEN a user approves, THE SYSTEM SHALL start.</w42-ac></w42-ac-list>
    ══════════════════════════════════════════════════════════════════ */
+
+.w42-spec-root,
+.w42-spec-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 var(--w42-s24) var(--w42-s40);
+  font-size: var(--w42-f13);
+  line-height: 1.55;
+}
+
+/* — Hero: the brand scene (cyan, accent, orange) behind a large glass panel — */
+.w42-hero {
+  position: relative;
+  isolation: isolate;
+  margin: 0 0 var(--w42-s24);
+  padding: var(--w42-s24);
+  border-radius: var(--w42-r-glass-lg);
+}
+.w42-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 8% 12%, color-mix(in srgb, var(--w42-cyan) 55%, transparent), transparent 38%),
+    radial-gradient(circle at 48% 30%, color-mix(in srgb, var(--w42-accent) 35%, transparent), transparent 34%),
+    radial-gradient(circle at 40% 95%, color-mix(in srgb, var(--w42-orange) 45%, transparent), transparent 36%);
+  filter: blur(24px);
+  pointer-events: none;
+}
+.w42-hero-panel,
+.w42-spec-hero {
+  margin: 0;
+  padding: var(--w42-s24);
+  border-radius: var(--w42-r-glass-lg);
+}
+.w42-spec-hero { margin: 0 0 var(--w42-s24); }
+.w42-hero-eyebrow,
+.w42-spec-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--w42-s8);
+}
+.w42-spec-meta { margin-top: var(--w42-s16); }
+.w42-spec-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-chip-fg-accent);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-hero-title,
+.w42-spec-hero h1 {
+  margin: var(--w42-s8) 0 var(--w42-s4);
+  font-size: var(--w42-f30);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: var(--w42-label-primary);
+}
+.w42-hero-subtitle,
+.w42-spec-hero-sub {
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--w42-f13);
+  color: var(--w42-label-secondary);
+}
+.w42-hero-extra { display: flex; flex-wrap: wrap; gap: var(--w42-s8); margin-top: var(--w42-s12); }
+
+/* — Table of contents: a Glass Tab Strip of section links — */
+.w42-toc {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: var(--w42-s12) 0 0;
+  padding: 3px;
+}
+.w42-toc a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--w42-s4);
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 var(--w42-s12);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--w42-label-secondary);
+  border-radius: var(--w42-r-pill);
+}
+.w42-toc a:hover { background: var(--w42-fill-quaternary); }
+.w42-toc a[aria-current="true"],
+.w42-toc a.is-selected { color: var(--w42-accent-fg); background: var(--w42-fill-primary); }
+.w42-toc-num { font-variant-numeric: tabular-nums; }
+
+/* — Numbered section: accent number chip, title and a trailing rule — */
+.w42-shead {
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  margin: var(--w42-s24) 0 var(--w42-s12);
+}
+.w42-shead-chip {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--w42-accent-fg);
+  background: color-mix(in srgb, var(--w42-accent) 16%, transparent);
+  border-radius: 50%;
+}
+.w42-shead h2,
+.w42-shead-title {
+  margin: 0;
+  font-size: var(--w42-f13);
+  font-weight: 600;
+  color: var(--w42-label-primary);
+}
+.w42-shead-rule { flex: 1 1 auto; height: 1px; background: var(--w42-separator); }
+.w42-spec-section { margin: var(--w42-s24) 0; }
+.w42-spec-section h2 {
+  margin: 0 0 var(--w42-s12);
+  font-size: var(--w42-f15);
+  font-weight: 600;
+  color: var(--w42-label-primary);
+}
+.w42-spec-section h3 { margin: var(--w42-s16) 0 var(--w42-s8); font-size: var(--w42-f13); font-weight: 600; color: var(--w42-label-primary); }
+w42-section { display: block; }
+
+/* — Acceptance criteria: table-style rows on glass, the id as a mono accent chip — */
+.w42-ac-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4);
+  list-style: none;
+}
+.w42-ac,
+.w42-ac-rich {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--w42-s12);
+  align-items: center;
+  padding: var(--w42-s8);
+  font-size: var(--w42-f11);
+  line-height: 1.5;
+  color: var(--w42-label-primary);
+  border-radius: var(--w42-r-card);
+}
+.w42-ac:nth-child(even),
+.w42-ac-rich:nth-child(even) { background: var(--w42-row-alt); }
+.w42-ac::before {
+  content: attr(data-ac-id);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  box-sizing: border-box;
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  color: var(--w42-accent-fg);
+  background: color-mix(in srgb, var(--w42-accent) 16%, transparent);
+  border-radius: var(--w42-r-pill);
+  white-space: nowrap;
+}
+.w42-ac-id {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  box-sizing: border-box;
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  color: var(--w42-accent-fg);
+  background: color-mix(in srgb, var(--w42-accent) 16%, transparent);
+  border-radius: var(--w42-r-pill);
+}
+.w42-ac-body { color: var(--w42-label-primary); }
+.w42-ears,
+.w42-ac strong {
+  display: inline;
+  font-weight: 600;
+  color: var(--w42-accent-fg);
+}
+w42-ac { display: grid; }
 
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1382,402 +1602,3 @@ dialog.w42-sheet {
 :is(.w42-badge-warn, .w42-pill-warn) { color: var(--w42-chip-fg-warning); }
 :is(.w42-badge-danger, .w42-pill-danger) { color: var(--w42-chip-fg-failure); }
 :is(.w42-badge-info, .w42-pill-info, .w42-badge-accent, .w42-pill-accent, .w42-badge-cyan, .w42-pill-cyan) { color: var(--w42-chip-fg-accent); }
-
-
-
-/* ══════════════════════════════════════════════════════════════════
-   LEGACY — pre-Liquid-Glass rules, kept verbatim until restyled
-   ══════════════════════════════════════════════════════════════════
-   Callout, badge/pill, table, metric card, mermaid, spec section, acceptance
-   criteria, keyboard shortcut, code block, section header, the rich spec
-   visual language, the artifact embed, buttons, surfaces and the segmented
-   control. Each family sub-issue (WOR-157 to WOR-160) moves its rules into
-   sections 3 to 8 above and deletes them from here.
-   ══════════════════════════════════════════════════════════════════ */
-
-/* ─────────────────────────────────────────────
-   6. Spec section
-   ─────────────────────────────────────────────
-   Wraps <section data-spec-section="…"> so the
-   HtmlSpecValidator anchor and the visual block
-   are one concept. The data-spec-section attribute
-   drives machine validation; the class drives style.
-
-   Usage:
-     <div class="w42-spec-section">
-       <section data-spec-section="context">
-         <h2>Context</h2>
-         <p>…</p>
-       </section>
-     </div>
-   ───────────────────────────────────────────── */
-
-.w42-spec-section {
-  margin: var(--w42-s24) 0;
-  padding-bottom: var(--w42-s16);
-  border-bottom: 1px solid var(--w42-elevated);
-}
-
-.w42-spec-section:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
-
-.w42-spec-section section {
-  /* The <section data-spec-section> element itself has no extra visual */
-}
-
-.w42-spec-section h2 {
-  font-size: var(--w42-f17);
-  font-weight: 700;
-  color: var(--w42-text-primary);
-  margin: 0 0 var(--w42-s12) 0;
-  padding-bottom: var(--w42-s8);
-  border-bottom: 2px solid color-mix(in srgb, var(--w42-accent) 30%, transparent);
-}
-
-.w42-spec-section h3 {
-  font-size: var(--w42-f14);
-  font-weight: 600;
-  color: var(--w42-text-primary);
-  margin: var(--w42-s16) 0 var(--w42-s8) 0;
-}
-
-
-/* ─────────────────────────────────────────────
-   7. Acceptance-criteria list
-   ─────────────────────────────────────────────
-   .w42-ac-list — the <ol> container
-   .w42-ac      — each <li data-ac-id="AC…">
-
-   The data-ac-id attribute is the machine-readable
-   anchor that HtmlSpecValidator extracts; the class
-   drives visual formatting. Always use both.
-
-   Usage:
-     <ol class="w42-ac-list">
-       <li class="w42-ac" data-ac-id="AC1">
-         <strong>WHEN</strong> the agent runs …,
-         <strong>THE SYSTEM SHALL</strong> …
-       </li>
-     </ol>
-   ───────────────────────────────────────────── */
-
-.w42-ac-list {
-  list-style: none;
-  padding: 0;
-  margin: var(--w42-s12) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--w42-s8);
-}
-
-.w42-ac {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--w42-s8) var(--w42-s12);
-  padding: var(--w42-s12) var(--w42-s16);
-  background: var(--w42-surface);
-  border-radius: var(--w42-r-card);
-  border: 1px solid var(--w42-elevated);
-  font-size: var(--w42-f13);
-  line-height: 1.55;
-  color: var(--w42-text-primary);
-  position: relative;
-}
-
-/* AC id badge injected before the item text */
-.w42-ac::before {
-  content: attr(data-ac-id);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 38px;
-  padding: 2px var(--w42-s8);
-  background: color-mix(in srgb, var(--w42-accent) 14%, var(--w42-surface));
-  color: var(--w42-accent);
-  border-radius: var(--w42-r-button);
-  font-size: var(--w42-f10);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  align-self: start;
-  margin-top: 1px;
-}
-
-/* EARS keywords */
-.w42-ac strong {
-  color: var(--w42-text-primary);
-  font-weight: 700;
-}
-
-
-/* ══════════════════════════════════════════════════════════════════
-   §12. Rich spec visual language  [feat/spec-as-html.18]
-   ══════════════════════════════════════════════════════════════════
-   ADDITIVE classes — §1-§11 are NEVER renamed or removed. These
-   implement the approved rich-spec-proposal look: spec hero header,
-   TOC pill row, numbered section headers with index chip, richer AC
-   cards with explicit AC-id chip and EARS keyword tags, icon-style
-   callouts, framed rounded table wrapper, gradient metric cards, and
-   extra badge/pill colour variants.
-
-   All classes are w42-* prefixed and use ONLY --w42-* tokens so
-   light/dark mode and the system accent come for free.
-
-   Subtask .16 appends the w42-artifact-embed block AFTER this
-   section — keep this block self-contained so the merge is clean.
-   ══════════════════════════════════════════════════════════════════ */
-
-/* ---- 12a. Spec page root ----------------------------------------- */
-/* Optional max-width wrapper for a spec document page.
-   Usage: <div class="w42-spec-root">…sections…</div>                */
-
-.w42-spec-root {
-  max-width: 860px;
-  margin: 0 auto;
-  /* Horizontal padding so spec content never jams against the viewport edges
-     on narrow viewports or when the widget is small. Bottom padding ensures
-     the last section has breathing room above the scroll boundary. */
-  padding: 0 var(--w42-s24) var(--w42-s40);
-  font-size: var(--w42-f14);
-  line-height: 1.62;
-}
-
-/* ---- 12b. Spec hero header --------------------------------------- */
-/* Usage:
-   <div class="w42-spec-hero">
-     <span class="w42-spec-eyebrow">Task Spec · feat/slug</span>
-     <h1>Title</h1>
-     <p class="w42-spec-hero-sub">One-line subtitle.</p>
-     <div class="w42-spec-meta">
-       <span class="w42-badge w42-badge-accent">Feature</span>
-       <span class="w42-badge">Work42UI</span>
-     </div>
-   </div>                                                             */
-
-.w42-spec-hero {
-  position: relative;
-  margin: 0 0 var(--w42-s24);
-  padding: var(--w42-s24) var(--w42-s24) var(--w42-s20);
-  border-radius: var(--w42-r-card);
-  border: 1px solid color-mix(in srgb, var(--w42-accent) 22%, var(--w42-elevated));
-  background:
-    radial-gradient(120% 140% at 0% 0%,
-      color-mix(in srgb, var(--w42-accent) 16%, transparent) 0%,
-      transparent 55%),
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--w42-accent) 7%, var(--w42-surface)) 0%,
-      var(--w42-surface) 100%);
-  overflow: hidden;
-}
-
-.w42-spec-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  background: linear-gradient(180deg,
-    var(--w42-accent),
-    color-mix(in srgb, var(--w42-accent) 20%, transparent));
-}
-
-.w42-spec-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--w42-s8);
-  font-size: var(--w42-f10);
-  font-weight: 700;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  color: var(--w42-accent);
-  padding: 3px var(--w42-s8);
-  border-radius: var(--w42-r-pill);
-  background: color-mix(in srgb, var(--w42-accent) 14%, var(--w42-surface));
-}
-
-.w42-spec-hero h1 {
-  margin: var(--w42-s12) 0 var(--w42-s8);
-  font-size: var(--w42-f30);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.12;
-  color: var(--w42-text-primary);
-}
-
-.w42-spec-hero-sub {
-  margin: 0;
-  font-size: var(--w42-f15);
-  color: var(--w42-text-secondary);
-  max-width: 62ch;
-}
-
-.w42-spec-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--w42-s8);
-  margin-top: var(--w42-s16);
-}
-
-/* ---- 12c. TOC / section-index pill row --------------------------- */
-/* A horizontal scrollable row of numbered pill links, one per section.
-   Usage:
-   <nav class="w42-toc">
-     <a href="#context"><span class="w42-toc-num">01</span> Context</a>
-     <a href="#goals"><span class="w42-toc-num">02</span> Goals</a>
-   </nav>                                                             */
-
-.w42-toc {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--w42-s8);
-  margin: 0 0 var(--w42-s24);
-}
-
-.w42-toc a {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--w42-s8);
-  padding: var(--w42-s8) var(--w42-s12);
-  text-decoration: none;
-  font-size: var(--w42-f12);
-  font-weight: 600;
-  color: var(--w42-text-secondary);
-  background: var(--w42-surface);
-  border: 1px solid var(--w42-elevated);
-  border-radius: var(--w42-r-pill);
-  transition: color 0.12s ease, border-color 0.12s ease;
-}
-
-.w42-toc a:hover {
-  color: var(--w42-accent);
-  border-color: color-mix(in srgb, var(--w42-accent) 40%, var(--w42-elevated));
-  text-decoration: none;
-}
-
-.w42-toc-num {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--w42-f10);
-  font-weight: 800;
-  color: var(--w42-accent);
-  opacity: 0.8;
-}
-
-/* ---- 12d. Numbered section header -------------------------------- */
-/* A flex row: numbered chip + <h2> title + trailing gradient rule.
-   Usage:
-   <div class="w42-shead">
-     <span class="w42-shead-chip">01</span>
-     <h2>Context</h2>
-     <span class="w42-shead-rule"></span>
-   </div>                                                             */
-
-.w42-shead {
-  display: flex;
-  align-items: center;
-  gap: var(--w42-s12);
-  margin: 0 0 var(--w42-s16);
-}
-
-.w42-shead-chip {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--w42-r-button);
-  font-size: var(--w42-f13);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--w42-accent);
-  background: color-mix(in srgb, var(--w42-accent) 16%, var(--w42-surface));
-  border: 1px solid color-mix(in srgb, var(--w42-accent) 30%, transparent);
-}
-
-.w42-shead h2 {
-  margin: 0;
-  font-size: var(--w42-f22);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--w42-text-primary);
-}
-
-.w42-shead-rule {
-  flex: 1 1 auto;
-  height: 1px;
-  background: linear-gradient(90deg, var(--w42-elevated), transparent);
-}
-
-/* ---- 12e. Rich AC cards with explicit id chip -------------------- */
-/* Alternative to §7's .w42-ac (which uses ::before for the id badge).
-   This variant uses EXPLICIT child elements so the id chip and the
-   EARS keyword spans can be authored in markup for richer styling.
-   .w42-ac-list from §7 is reused as the list container.
-   Usage:
-   <ol class="w42-ac-list">
-     <li class="w42-ac-rich" data-ac-id="AC1">
-       <span class="w42-ac-id">AC1</span>
-       <div class="w42-ac-body">
-         <span class="w42-ears">When</span> a user submits …,
-         <span class="w42-ears">the system shall</span> display …
-       </div>
-     </li>
-   </ol>                                                             */
-
-.w42-ac-rich {
-  display: grid;
-  grid-template-columns: 46px 1fr;
-  gap: var(--w42-s16);
-  padding: var(--w42-s16);
-  border-radius: var(--w42-r-card);
-  background: var(--w42-surface);
-  border: 1px solid var(--w42-elevated);
-  border-left: 3px solid
-    color-mix(in srgb, var(--w42-accent) 55%, var(--w42-elevated));
-  transition: border-left-color 0.12s ease, transform 0.12s ease;
-}
-
-.w42-ac-rich:hover {
-  border-left-color: var(--w42-accent);
-  transform: translateX(2px);
-}
-
-.w42-ac-id {
-  align-self: start;
-  display: grid;
-  place-items: center;
-  font-size: var(--w42-f11);
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  color: var(--w42-accent);
-  padding: var(--w42-s4) 0;
-  border-radius: var(--w42-r-button);
-  background: color-mix(in srgb, var(--w42-accent) 12%, var(--w42-surface));
-}
-
-.w42-ac-body {
-  font-size: var(--w42-f13);
-  line-height: 1.6;
-  color: var(--w42-text-primary);
-}
-
-/* EARS keyword tag — use inside .w42-ac-body or any .w42-ac cell    */
-.w42-ears {
-  display: inline;
-  font-weight: 800;
-  font-size: var(--w42-f10);
-  letter-spacing: 0.06em;
-  color: var(--w42-accent);
-  text-transform: uppercase;
-  padding: 1px var(--w42-s4);
-  border-radius: var(--w42-r-input);
-  background: color-mix(in srgb, var(--w42-accent) 10%, transparent);
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   End of §12. Subtask .16 appends w42-artifact-embed block here.
-   ══════════════════════════════════════════════════════════════════ */
-
-/* ══════════════════════════════════════════════════════════════════
-   End of §16.
-   ══════════════════════════════════════════════════════════════════ */
