@@ -358,6 +358,248 @@
     }
   });
 
+  /* ── Overlays ─────────────────────────────────────────────────────── */
+
+  function target(tag, host) {
+    var id = host.getAttribute("for");
+    var node = id ? document.getElementById(id) : null;
+    if (!node) { throw new Error("no element #" + (id || "(missing for attribute)")); }
+    return node;
+  }
+
+  var openOverlay = null; // the one popover or menu currently open
+
+  function place(host, trigger, edge) {
+    var t = trigger.getBoundingClientRect();
+    host.style.left = "0px"; host.style.top = "0px";
+    var h = host.getBoundingClientRect();
+    var gap = 10, x, y;
+    if (edge === "bottom") { x = t.left + t.width / 2 - h.width / 2; y = t.top - h.height - gap; }
+    else if (edge === "leading") { x = t.right + gap; y = t.top + t.height / 2 - h.height / 2; }
+    else if (edge === "trailing") { x = t.left - h.width - gap; y = t.top + t.height / 2 - h.height / 2; }
+    else { x = t.left + t.width / 2 - h.width / 2; y = t.bottom + gap; }
+    var vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    host.style.left = Math.max(8, Math.min(x, vw - h.width - 8)) + "px";
+    host.style.top = Math.max(8, Math.min(y, vh - h.height - 8)) + "px";
+  }
+
+  function closeOverlay(host, restore) {
+    if (!host.hasAttribute("data-open")) { return; }
+    host.removeAttribute("data-open");
+    try { if (host.hidePopover && host.matches(":popover-open")) { host.hidePopover(); } } catch (e) {}
+    if (openOverlay === host) { openOverlay = null; }
+    if (restore && host.__w42trigger && host.__w42trigger.focus) { host.__w42trigger.focus(); }
+  }
+
+  function openPanel(host, trigger, edge, focusSel) {
+    if (openOverlay && openOverlay !== host) { closeOverlay(openOverlay, false); }
+    host.setAttribute("data-open", "");
+    openOverlay = host;
+    if (host.showPopover) { try { host.showPopover(); } catch (e) {} }
+    place(host, trigger, edge);
+    var first = host.querySelector(focusSel);
+    if (first) { first.focus(); } else { host.setAttribute("tabindex", "-1"); host.focus(); }
+  }
+
+  function wireOverlay(tag, host, edge, focusSel) {
+    var trigger = target(tag, host);
+    host.__w42trigger = trigger;
+    if (host.showPopover) { host.setAttribute("popover", "auto"); }
+    trigger.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (host.hasAttribute("data-open")) { closeOverlay(host, true); }
+      else { openPanel(host, trigger, edge, focusSel); }
+    });
+    // Fallback and belt-and-braces for the Popover API's own light dismiss.
+    document.addEventListener("click", function (e) {
+      if (host.hasAttribute("data-open") && !host.contains(e.target) && !trigger.contains(e.target)) {
+        closeOverlay(host, false);
+      }
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && host.hasAttribute("data-open")) { closeOverlay(host, true); }
+    });
+    host.addEventListener("toggle", function (e) {
+      if (e.newState === "closed" && host.hasAttribute("data-open")) { host.removeAttribute("data-open"); }
+    });
+    window.addEventListener("resize", function () { if (host.hasAttribute("data-open")) { place(host, trigger, edge); } });
+  }
+
+  /* — <w42-popover for="" edge="top|bottom|leading|trailing"> — */
+  define("w42-popover", {
+    render: function (host) {
+      addClass(host, "w42-popover");
+      var edge = attr(host, "edge", "top");
+      if (["top", "bottom", "leading", "trailing"].indexOf(edge) < 0) { throw new Error("edge must be top, bottom, leading or trailing"); }
+      host.setAttribute("data-edge", edge);
+      host.setAttribute("role", "dialog");
+      wireOverlay("w42-popover", host, edge, "button, [role=button], input, select, textarea, a[href]");
+    }
+  });
+
+  /* — <w42-menu for=""><w42-menu-item value="" shortcut="" disabled>…</w42-menu-item><hr></w42-menu> — */
+  function menuItems(host) {
+    return Array.prototype.filter.call(host.querySelectorAll("w42-menu-item"), function (i) {
+      return i.getAttribute("aria-disabled") !== "true";
+    });
+  }
+  define("w42-menu", {
+    render: function (host) {
+      addClass(host, "w42-menu");
+      host.setAttribute("role", "menu");
+      wireOverlay("w42-menu", host, "top", "w42-menu-item:not([aria-disabled=true])");
+      host.addEventListener("keydown", function (e) {
+        var items = menuItems(host), i = items.indexOf(document.activeElement);
+        if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+        else if (e.key === "Enter" && i >= 0) { e.preventDefault(); items[i].click(); }
+      });
+      host.addEventListener("click", function (e) {
+        var item = e.target.closest ? e.target.closest("w42-menu-item") : null;
+        if (!item || item.getAttribute("aria-disabled") === "true") { return; }
+        host.dispatchEvent(new CustomEvent("w42-select", {
+          bubbles: true, detail: { value: item.getAttribute("value") || item.textContent.trim() }
+        }));
+        closeOverlay(host, true);
+      });
+    }
+  });
+  define("w42-menu-item", {
+    render: function (host) {
+      addClass(host, "w42-menu-item");
+      host.setAttribute("role", "menuitem");
+      host.setAttribute("tabindex", "-1");
+      if (flag(host, "disabled")) { host.setAttribute("aria-disabled", "true"); }
+      var sc = attr(host, "shortcut", "");
+      if (sc) { host.appendChild(el("span", "w42-menu-item-shortcut", sc)); }
+    }
+  });
+  define("w42-menu-label", { render: function (host) { addClass(host, "w42-menu-label"); } });
+
+  /* — [data-tooltip]: one shared node, shown after 500 ms of hover or focus — */
+  (function () {
+    var tip = null, timer = null;
+    function node() {
+      if (!tip) {
+        tip = el("div", "w42-tooltip");
+        tip.setAttribute("role", "tooltip");
+        document.body.appendChild(tip);
+      }
+      return tip;
+    }
+    function hide() {
+      clearTimeout(timer);
+      if (tip) { tip.removeAttribute("data-open"); }
+    }
+    function show(t) {
+      var n = node();
+      n.textContent = t.getAttribute("data-tooltip");
+      n.setAttribute("data-open", "");
+      var r = t.getBoundingClientRect(), b = n.getBoundingClientRect();
+      var vw = document.documentElement.clientWidth;
+      n.style.left = Math.max(4, Math.min(r.left + r.width / 2 - b.width / 2, vw - b.width - 4)) + "px";
+      n.style.top = (r.bottom + 6) + "px";
+    }
+    function arm(e) {
+      var t = e.target.closest ? e.target.closest("[data-tooltip]") : null;
+      if (!t) { return; }
+      clearTimeout(timer);
+      timer = setTimeout(function () { show(t); }, 500);
+    }
+    function disarm(e) {
+      var t = e.target.closest ? e.target.closest("[data-tooltip]") : null;
+      if (t) { hide(); }
+    }
+    function init() {
+      document.addEventListener("mouseover", arm);
+      document.addEventListener("focusin", arm);
+      document.addEventListener("mouseout", disarm);
+      document.addEventListener("focusout", disarm);
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hide(); } });
+    }
+    if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", init); } else { init(); }
+  })();
+
+  /* — <w42-dialog for="" title="" layout="side|stacked"> and <w42-sheet for=""> — */
+  function modal(tag, host, cls) {
+    var trigger = target(tag, host);
+    var kids = Array.prototype.slice.call(host.childNodes);
+    host.textContent = "";
+    var d = document.createElement("dialog");
+    d.className = cls;
+    var title = attr(host, "title", "");
+    if (title) { d.appendChild(el("h2", "w42-dialog-title", title)); }
+    var body = el("div", "w42-dialog-body");
+    var actions = el("div", "w42-dialog-actions");
+    kids.forEach(function (k) {
+      var isBtn = k.nodeType === 1 && (k.localName === "w42-button" || k.localName === "button");
+      (isBtn ? actions : body).appendChild(k);
+    });
+    if (body.childNodes.length) { d.appendChild(body); }
+    if (actions.childNodes.length) { d.appendChild(actions); }
+    if (attr(host, "layout", "") === "stacked") { d.classList.add("w42-dialog-stacked"); }
+    host.appendChild(d);
+    host.removeAttribute("title");
+    trigger.addEventListener("click", function () {
+      if (d.open) { return; }
+      if (d.showModal) { d.showModal(); } else { d.setAttribute("open", ""); }
+    });
+    d.addEventListener("click", function (e) {
+      var c = e.target.closest ? e.target.closest("[data-close]") : null;
+      if (c && d.contains(c)) { if (d.close) { d.close(); } else { d.removeAttribute("open"); } }
+    });
+    return d;
+  }
+  define("w42-dialog", { render: function (host) { modal("w42-dialog", host, "w42-dialog"); } });
+  define("w42-sheet", { render: function (host) { modal("w42-sheet", host, "w42-sheet"); } });
+
+  /* — <w42-toast tone="" title=""> and window.w42.toast({title, message, tone}) — */
+  var TOAST_GLYPH = { info: "i", success: "✓", warning: "!", failure: "×" };
+  function toastRegion() {
+    var r = document.querySelector(".w42-toast-region");
+    if (!r) { r = el("div", "w42-toast-region"); r.setAttribute("aria-live", "polite"); document.body.appendChild(r); }
+    return r;
+  }
+  define("w42-toast", {
+    render: function (host) {
+      var tone = attr(host, "tone", "info");
+      if (!TOAST_GLYPH[tone]) { throw new Error("tone must be info, success, warning or failure (got \"" + tone + "\")"); }
+      addClass(host, "w42-toast w42-toast-" + tone);
+      var kids = Array.prototype.slice.call(host.childNodes);
+      host.textContent = "";
+      var glyph = el("span", "w42-toast-glyph", TOAST_GLYPH[tone]);
+      glyph.setAttribute("aria-hidden", "true");
+      var text = el("div");
+      var title = attr(host, "title", "");
+      if (title) { text.appendChild(el("span", "w42-toast-title", title)); }
+      kids.forEach(function (k) { text.appendChild(k); });
+      var close = el("button", "w42-toast-close", "✕");
+      close.type = "button";
+      close.setAttribute("aria-label", "Dismiss");
+      host.appendChild(glyph); host.appendChild(text); host.appendChild(close);
+      host.removeAttribute("title");
+      host.setAttribute("role", "status");
+      toastRegion().appendChild(host);
+      var timer = null;
+      function dismiss() { clearTimeout(timer); if (host.parentNode) { host.parentNode.removeChild(host); } }
+      function arm() { clearTimeout(timer); timer = setTimeout(dismiss, 5000); }
+      close.addEventListener("click", dismiss);
+      host.addEventListener("mouseenter", function () { clearTimeout(timer); });
+      host.addEventListener("mouseleave", arm);
+      arm();
+    }
+  });
+  window.w42 = window.w42 || {};
+  window.w42.toast = function (opts) {
+    opts = opts || {};
+    var t = document.createElement("w42-toast");
+    t.setAttribute("tone", opts.tone || "info");
+    if (opts.title) { t.setAttribute("title", opts.title); }
+    if (opts.message) { t.textContent = opts.message; }
+    document.body.appendChild(t);
+    return t;
+  };
+
   function reportUnknown(root) {
     var all = root.querySelectorAll ? root.querySelectorAll("*") : [];
     for (var i = 0; i < all.length; i++) {
