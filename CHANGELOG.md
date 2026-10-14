@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.4.0
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.3.1 remain binary-compatible. Every change below is
+  additive, except that `CanvasTemplate.componentsJS` is deprecated and now empty (see the last item).
+- **The Web Kit, rebuilt on Liquid Glass.** Artifacts and markdown surfaces share one stylesheet and one tag
+  runtime. New `<w42-*>` tags cover controls (button, tabs, toolbar, chip, field, progress, spinner, disclosure,
+  empty state), containers (card, group, list, metric, callout), overlays (popover, menu, dialog, sheet, toast,
+  tooltip), spec and document pages (hero, table of contents, numbered section, acceptance criteria) and layout
+  (`w42-stack`, `w42-cluster`), with automatic vertical rhythm. An invalid attribute value logs
+  `w42 component error [<tag>]` and falls back to the tag's default instead of failing. `w42-gallery.html`, bundled
+  as a resource, renders every family.
+- **Plain HTML renders on the kit.** Unclassed buttons, inputs, tables, code, quotes and the rest take the kit's
+  look through zero-specificity element defaults, so agent markup needs no styling of its own. Type now mirrors the
+  native chat text: primary-colour paragraphs, a 16 px body at about 1.55 line height, the chat heading scale and
+  system font smoothing.
+- **Tokens.** `CanvasTheme.css()` emits 34 new colour tokens (labels, fills, table, field, glass, materials, chip
+  and the 42 capsule tint), fixed metrics, and a shared motion set (`--w42-spring`, `--w42-ease`,
+  `--w42-dur-fast|base|slow`, collapsed under `prefers-reduced-motion`). Translucent colours are written as
+  `#rrggbbaa`, and `currentColorTokens()` carries every colour token into a live theme push.
+- **One tag runtime.** `w42-components.js` now registers every tag, including `w42-code`, `w42-table`,
+  `w42-mockup`, `w42-flutter-mockup` and the new `w42-diagram`, replacing the inline script the shell used to carry.
+  `window.__w42.theme.apply` and `window.__w42FlutterMockup` behave as before. New `ArtifactShellAssets`
+  accessors: `componentJSData()`, `componentJSAssetPath` and `galleryPath()`, plus
+  `CanvasTemplate.componentLibraryJS()`.
+- **A native comment capsule.** New `Work42CommentCapsule` (SwiftUI) is the 42 brand mark on tinted Liquid Glass,
+  with a label that opens on hover and stays open, a spring pop-in and a press squish. It replaces the accent
+  `plus.bubble.fill` button for highlight-to-comment, and `View.work42CentredOnSelection(_:gap:)` centres it above
+  a selection. Matching `<w42-capsule label size>` tag for web content. The brand mark ships as the bundled
+  resource `work42-mark42.png`.
+- **Deprecated: `CanvasTemplate.componentsJS`.** The tag runtime moved into `w42-components.js`, so this
+  constant is now an empty string kept only so existing references still link. Use `componentLibraryJS()`.
+
 ## 2.3.1
 
 - Retain ABI generation `12`; no API changes.

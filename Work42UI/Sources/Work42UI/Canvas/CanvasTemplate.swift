@@ -452,6 +452,13 @@ public enum CanvasTemplate {
     """
     }
 
+    /// The shell's former inline component runtime. The tag runtime, including the
+    /// code, table, mockup and diagram cards, now lives in `w42-components.js`
+    /// (see `componentLibraryJS()`), so this is empty. Kept so SDK 2.3.x call sites
+    /// still link; do not inject it.
+    @available(*, deprecated, message: "The tag runtime moved into w42-components.js; use componentLibraryJS().")
+    public nonisolated static let componentsJS = ""
+
     /// CSS for diagrams that are intercepted into a card. Every diagram is
     /// wrapped in a centered, natural-width `w42-diagram-card` (a native-styled
     /// HTML header with the title + zoom/reset/expand controls, plus a
