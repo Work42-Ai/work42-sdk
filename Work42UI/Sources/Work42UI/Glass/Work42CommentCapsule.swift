@@ -40,12 +40,14 @@ public struct Work42CommentCapsule: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
-    /// The brand tile's pale blue (#C3EEFF, sampled from the 42 mark's tile),
-    /// laid over Liquid Glass so the capsule reads as tinted glass, not a flat
-    /// fill. 33% in light (stronger read too blue on light surfaces) and 60% in dark.
+    /// Tint laid over Liquid Glass so the capsule reads as tinted glass, not a
+    /// flat fill. Light: the brand tile's pale blue (#C3EEFF) at 33%. Dark: the
+    /// palest blue (#F0FBFF) at 75%, so black text keeps strong contrast.
     private var glassTint: Color {
-        Color(red: 195 / 255, green: 238 / 255, blue: 255 / 255)
-            .opacity(colorScheme == .dark ? 0.60 : 0.33)
+        if colorScheme == .dark {
+            return Color(red: 240 / 255, green: 251 / 255, blue: 255 / 255).opacity(0.75)
+        }
+        return Color(red: 195 / 255, green: 238 / 255, blue: 255 / 255).opacity(0.33)
     }
 
     /// - Parameters:
@@ -77,7 +79,7 @@ public struct Work42CommentCapsule: View {
                 if revealed, let label {
                     Text(label)
                         .font(.system(size: size == .regular ? DT.f11 : DT.f9, weight: .medium))
-                        .foregroundStyle(DT.textPrimary)
+                        .foregroundStyle(Color.black)
                         .lineLimit(1)
                         .fixedSize()
                         .transition(.opacity)

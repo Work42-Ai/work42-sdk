@@ -716,7 +716,7 @@
   font-size: var(--w42-f11);
   font-weight: 550;
   line-height: 1;
-  color: var(--w42-label-primary);
+  color: var(--w42-capsule-fg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--w42-glass-glow) 160%, transparent),
                     color-mix(in srgb, var(--w42-glass-glow) 30%, transparent)),

@@ -105,8 +105,10 @@ public enum CanvasTheme {
         ColorToken(name: "field-bg",              light: "#ffffff",   dark: "#1e1e1e"),
         ColorToken(name: "field-ring",            light: "#00000014", dark: "#ffffff0a"),
         ColorToken(name: "overlay",               light: "#ababab99", dark: "#1717179e"),
-        // Brand tile tint for the 42 capsule (#C3EEFF): 33% in light, 60% in dark.
-        ColorToken(name: "capsule-tint",          light: "#c3eeff54", dark: "#c3eeff99"),
+        // 42 capsule: light = brand-tile blue #C3EEFF at 33%, dark = palest blue #F0FBFF
+        // at 75%; the label is black in both.
+        ColorToken(name: "capsule-tint",          light: "#c3eeff54", dark: "#f0fbffbf"),
+        ColorToken(name: "capsule-fg",            light: "#000000",   dark: "#000000"),
         // Liquid Glass (kit Liquid Glass - Medium / Large)
         ColorToken(name: "glass-fill",   light: "#ffffffb3", dark: "#1a1a1ab8"),
         ColorToken(name: "glass-tint",   light: "#bfbfbf1a", dark: "#00000000"),
