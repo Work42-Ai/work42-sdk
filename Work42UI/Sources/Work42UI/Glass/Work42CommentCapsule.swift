@@ -42,10 +42,10 @@ public struct Work42CommentCapsule: View {
 
     /// The brand tile's pale blue (#C3EEFF, sampled from the 42 mark's tile),
     /// laid over Liquid Glass so the capsule reads as tinted glass, not a flat
-    /// fill. Strong in light mode; lower in dark so the glass still shows.
+    /// fill. 33% in light (stronger read too blue on light surfaces) and 60% in dark.
     private var glassTint: Color {
         Color(red: 195 / 255, green: 238 / 255, blue: 255 / 255)
-            .opacity(colorScheme == .dark ? 0.42 : 0.68)
+            .opacity(colorScheme == .dark ? 0.60 : 0.33)
     }
 
     /// - Parameters:
