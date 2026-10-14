@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.1
+
+- Retain ABI generation `12`; no API changes.
+- **The web view on screen is always the live view the host hands to `CachedWebSectionView`.** A host that rebuilt a
+  cached view for the same tab used to leave the old web view showing while the new one, which the host's Refresh,
+  Stop and address bar drive, never got a window; a view without a window holds loads back, so a page could appear
+  never to load. The view is now identified by the live view it shows.
+- Torn-down view actions, loads held for want of a window and their replay are logged at `notice` level (subsystem
+  `com.work42.browser`, host names only) so a recurrence can be read from the system log.
+
 ## 2.4.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.3.1 remain binary-compatible. Every change below is
