@@ -227,13 +227,16 @@ return shell.inject(css, into: fragment)</code></pre>
   </w42-ac-list>
 </w42-section>
 
-<w42-section n="23" title="Layout">
+<w42-section n="23" title="Layout and spacing">
+  <w42-cluster align="between"><w42-chip>cluster</w42-chip><w42-button>gap s8, aligned between</w42-button></w42-cluster>
+  <w42-stack gap="s16">
+    <div class="w42-glass">w42-stack gap s16, one</div>
+    <div class="w42-glass">w42-stack gap s16, two</div>
+  </w42-stack>
+  <p>Adjacent buttons group themselves:</p>
+  <div><w42-button>One</w42-button><w42-button>Two</w42-button><w42-button>Three</w42-button></div>
   <div class="w42-columns" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     <div class="w42-glass">Column one</div>
     <div class="w42-glass">Column two</div>
-  </div>
-  <div class="w42-stack" style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
-    <div class="w42-glass">Stacked one</div>
-    <div class="w42-glass">Stacked two</div>
   </div>
 </w42-section>

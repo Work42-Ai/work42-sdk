@@ -606,7 +606,9 @@
 
 /* — Tabs: segmented glass capsule (kit Glass Tab Strip, composed) — */
 :is(.w42-tabs, .w42-segmented) {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
+  margin: 0 0 var(--w42-s12);
   align-items: center;
   gap: 2px;
   padding: 3px;
@@ -666,7 +668,9 @@
 
 /* — Toolbar: glass capsule holding buttons, tabs and a separator — */
 .w42-toolbar {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
+  margin: 0 0 var(--w42-s12);
   align-items: center;
   gap: var(--w42-s4);
   padding: 3px;
@@ -782,6 +786,7 @@
 /* — Progress: linear bar and circular ring — */
 .w42-progress {
   display: block;
+  margin: 0 0 var(--w42-s12);
   box-sizing: border-box;
   width: 100%;
   height: 6px;
@@ -801,7 +806,7 @@
 }
 
 /* — Field: label, control, hint — */
-.w42-field { display: flex; flex-direction: column; gap: var(--w42-s4); }
+.w42-field { display: flex; flex-direction: column; gap: var(--w42-s4); margin: 0 0 var(--w42-s12); }
 .w42-field-label { font-size: var(--w42-f11); font-weight: 600; color: var(--w42-label-primary); }
 .w42-field-hint  { font-size: var(--w42-f11); color: var(--w42-label-tertiary); }
 
@@ -1399,13 +1404,14 @@ dialog.w42-sheet {
 
 /* — Table of contents: a Glass Tab Strip of section links — */
 .w42-toc {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
   max-width: 100%;
   box-sizing: border-box;
-  margin: var(--w42-s12) 0 0;
+  margin: var(--w42-s12) 0 var(--w42-s12);
   padding: 3px;
 }
 .w42-toc a {
@@ -1570,6 +1576,39 @@ w42-ac { display: grid; }
   align-items: center;
   gap: var(--w42-s12);
 }
+
+/* — Spacing —
+   Vertical rhythm: every block component carries one bottom margin (s12) and a
+   section header carries the s24 break, so stacked blocks space themselves. The
+   runtime wraps adjacent inline controls (buttons, chips) in .w42-cluster, and
+   <w42-stack> / <w42-cluster> set an explicit token gap. Children of a layout
+   container are spaced by its gap alone, so their own margin is dropped. */
+.w42-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--w42-s8);
+  margin: 0 0 var(--w42-s12);
+}
+.w42-columns > *,
+.w42-grid > *,
+.w42-stack > *,
+.w42-row > *,
+.w42-cluster > *,
+.w42-toolbar > *,
+.w42-hero-extra > *,
+.w42-hero-eyebrow > *,
+.w42-dialog-actions > *,
+.w42-popover-actions > * { margin: 0; }
+.w42-cluster-start   { justify-content: flex-start; }
+.w42-cluster-center  { justify-content: center; }
+.w42-cluster-end     { justify-content: flex-end; }
+.w42-cluster-between { justify-content: space-between; }
+w42-stack, w42-cluster { display: flex; }
+/* The last block in a container does not add a trailing gap. */
+w42-section > section > :last-child,
+.w42-hero-panel > :last-child,
+.w42-popover > :last-child { margin-bottom: 0; }
 
 
 /* ══════════════════════════════════════════════════════════════════

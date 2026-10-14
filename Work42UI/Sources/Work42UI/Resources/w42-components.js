@@ -756,6 +756,77 @@
     }
   });
 
+  /* ── Spacing ─────────────────────────────────────────────────────── */
+
+  var GAPS = /^s(4|8|12|16|20|24|32|40)$/;
+  function gapOf(host, fallback) {
+    var g = attr(host, "gap", "");
+    if (!g) { return fallback; }
+    if (!GAPS.test(g)) { throw new Error("gap must be one of s4, s8, s12, s16, s20, s24, s32, s40 (got \"" + g + "\")"); }
+    return "var(--w42-" + g + ")";
+  }
+
+  /* — <w42-stack gap="s12"> vertical flow; <w42-cluster gap="s8" align="start|center|end|between"> wrapping row — */
+  define("w42-stack", {
+    render: function (host) {
+      addClass(host, "w42-stack");
+      var g = gapOf(host, "");
+      if (g) { host.style.gap = g; }
+    }
+  });
+  define("w42-cluster", {
+    render: function (host) {
+      addClass(host, "w42-cluster");
+      var g = gapOf(host, "");
+      if (g) { host.style.gap = g; }
+      var a = attr(host, "align", "");
+      if (a) {
+        if (["start", "center", "end", "between"].indexOf(a) < 0) { throw new Error("align must be start, center, end or between"); }
+        addClass(host, "w42-cluster-" + a);
+      }
+    }
+  });
+
+  // Adjacent inline controls (buttons, chips, spinners) in a block container are
+  // wrapped in a .w42-cluster so they get a token gap without the author asking.
+  var INLINE_KIT = { "w42-button": 1, "w42-chip": 1, "w42-spinner": 1, "w42-loading": 1, "button": 1 };
+  var CLUSTER_PARENTS = { "div": 1, "section": 1, "main": 1, "article": 1, "form": 1, "fieldset": 1,
+                          "w42-card": 1, "w42-group": 1, "w42-popover": 1 };
+  function isInlineKit(n) {
+    return n.nodeType === 1 && INLINE_KIT[n.localName] === 1 && !n.classList.contains("w42-tab");
+  }
+  function clusterRuns(root) {
+    var parents = root.querySelectorAll ? root.querySelectorAll("*") : [];
+    var list = [root].concat(Array.prototype.slice.call(parents));
+    list.forEach(function (p) {
+      if (p.nodeType !== 1 || CLUSTER_PARENTS[p.localName] !== 1) { return; }
+      if (/\bw42-(cluster|row|stack|columns|grid|toolbar|tabs|segmented|dialog|popover-actions|hero-extra|hero-eyebrow|component|diagram|mockup|loader|toast|menu)/.test(p.className || "")) { return; }
+      var disp = window.getComputedStyle ? window.getComputedStyle(p).display : "";
+      if (disp.indexOf("flex") >= 0 || disp.indexOf("grid") >= 0) { return; }
+      var run = [];
+      function flush(before) {
+        if (run.length >= 2) {
+          var c = el("div", "w42-cluster");
+          c.setAttribute("data-w42-auto", "");
+          p.insertBefore(c, run[0]);
+          run.forEach(function (n) { c.appendChild(n); });
+        }
+        run = [];
+      }
+      Array.prototype.slice.call(p.childNodes).forEach(function (n) {
+        if (n.nodeType === 3 && !n.nodeValue.trim()) { return; }
+        if (n.nodeType === 8) { return; }
+        if (isInlineKit(n)) { run.push(n); } else { flush(); }
+      });
+      flush();
+    });
+  }
+  var layoutTimer = null;
+  function layout() {
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(function () { try { clusterRuns(document.body); } catch (e) { fail("layout", e); } }, 0);
+  }
+
   function reportUnknown(root) {
     var all = root.querySelectorAll ? root.querySelectorAll("*") : [];
     for (var i = 0; i < all.length; i++) {
@@ -769,6 +840,7 @@
 
   function watch() {
     reportUnknown(document);
+    layout();
     if (!window.MutationObserver) { return; }
     new MutationObserver(function (muts) {
       muts.forEach(function (m) {
@@ -783,6 +855,7 @@
           }
           reportUnknown(n);
         }
+        layout();
       });
     }).observe(document.documentElement, { childList: true, subtree: true });
   }
