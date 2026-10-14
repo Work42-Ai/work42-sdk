@@ -86,6 +86,9 @@ let package = Package(
                 // w42-components.js — the <w42-*> tag runtime (custom elements
                 // that expand to the .w42-* classes); served from `_w42/w42-components.js`.
                 .copy("Resources/w42-components.js"),
+                // w42-gallery.html — the Web Kit gallery fragment, one section per
+                // family; printed by `work42 artifact gallery-path`.
+                .copy("Resources/w42-gallery.html"),
                 // picker-core.js — transport-agnostic element-picker DOM
                 // logic loaded into the WKWebView tiles.
                 .copy("Resources/picker-core.js"),

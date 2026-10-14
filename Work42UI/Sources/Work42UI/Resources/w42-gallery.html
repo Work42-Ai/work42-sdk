@@ -1,0 +1,239 @@
+<!-- w42-gallery.html — the Web Kit gallery.
+     One <w42-section> per catalog family, in the order of the Figma "Web Kit"
+     page (Foundations, Controls, Containers, Overlays, Spec/doc, Layout). Built
+     only from <w42-*> tags and plain HTML, so it has zero lint errors.
+     View it:  work42 artifact set web-kit-gallery "$(work42 artifact gallery-path)" -->
+<w42-hero eyebrow="Web Kit, Liquid Glass, Gallery" title="Liquid Glass Web Kit"
+          subtitle="Every family and variant, in the order of the Figma Web Kit page.">
+  <w42-button variant="prominent">Prominent</w42-button>
+  <w42-button>Default</w42-button>
+</w42-hero>
+<w42-toc></w42-toc>
+
+<w42-section n="1" title="Glass">
+  <p>The Liquid Glass material: regular, large and small (capsule).</p>
+  <div class="w42-columns" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <div class="w42-glass">Regular glass (12 radius)</div>
+    <div class="w42-glass-lg">Large glass (34 radius)</div>
+    <div class="w42-glass-sm" style="padding:12px 20px;text-align:center">Small glass capsule</div>
+  </div>
+</w42-section>
+
+<w42-section n="2" title="Materials">
+  <p>Flat translucent bands for sidebars and hero areas.</p>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+    <div class="w42-material-ultra-thin" style="padding:16px">Ultra thin</div>
+    <div class="w42-material-thin" style="padding:16px">Thin</div>
+    <div class="w42-material-medium" style="padding:16px">Medium</div>
+    <div class="w42-material-thick" style="padding:16px">Thick</div>
+    <div class="w42-material-ultra-thick" style="padding:16px">Ultra thick</div>
+  </div>
+</w42-section>
+
+<w42-section n="3" title="Type and colour">
+  <h1>Large title (h1)</h1>
+  <h2>Title (h2)</h2>
+  <h3>Headline (h3)</h3>
+  <h4>Subheadline (h4)</h4>
+  <p>Body text with a <a href="#type">link</a>, <code>inline code</code>, <kbd>⌘K</kbd> and <strong>strong</strong> text.</p>
+  <ul><li>Bulleted item</li><li>Another item</li></ul>
+  <blockquote>A blockquote reads as secondary text with a quiet rule.</blockquote>
+  <hr>
+  <w42-chip tone="accent">accent</w42-chip>
+  <w42-chip tone="success">success</w42-chip>
+  <w42-chip tone="warning">warning</w42-chip>
+  <w42-chip tone="failure">failure</w42-chip>
+</w42-section>
+
+<w42-section n="4" title="Button">
+  <div class="w42-row" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+    <w42-button>Default</w42-button>
+    <w42-button variant="prominent">Prominent</w42-button>
+    <w42-button variant="glass">Glass</w42-button>
+    <w42-button variant="plain">Plain</w42-button>
+    <w42-button variant="destructive">Destructive</w42-button>
+    <w42-button icon="＋">With icon</w42-button>
+    <w42-button icon="＋" icon-only></w42-button>
+    <w42-button disabled>Disabled</w42-button>
+    <button>Plain HTML button</button>
+  </div>
+</w42-section>
+
+<w42-section n="5" title="Tabs and toolbar">
+  <w42-tabs>
+    <w42-tab label="Overview" selected></w42-tab>
+    <w42-tab label="Files" badge="3"></w42-tab>
+    <w42-tab label="History"></w42-tab>
+    <w42-tab label="Disabled" disabled></w42-tab>
+  </w42-tabs>
+  <p></p>
+  <w42-toolbar>
+    <w42-button icon-only icon="＋"></w42-button>
+    <w42-button icon-only icon="⟲"></w42-button>
+    <w42-sep></w42-sep>
+    <w42-button>Share</w42-button>
+  </w42-toolbar>
+</w42-section>
+
+<w42-section n="6" title="Chip">
+  <w42-chip>Neutral</w42-chip>
+  <w42-chip tone="accent" icon="●">Accent</w42-chip>
+  <w42-chip tone="success" icon="✓">Passing</w42-chip>
+  <w42-chip tone="warning">Review</w42-chip>
+  <w42-chip tone="failure" icon="×">Failed</w42-chip>
+</w42-section>
+
+<w42-section n="7" title="Section header, empty state and loading">
+  <w42-section-header title="Results" sub="Last run 5 min ago"><w42-button>Export</w42-button></w42-section-header>
+  <w42-empty title="No results" icon="◌">Try another filter.<w42-button>Reset filters</w42-button></w42-empty>
+  <w42-loading label="Building the kit…"></w42-loading>
+  <w42-spinner></w42-spinner>
+</w42-section>
+
+<w42-section n="8" title="Fields">
+  <w42-field label="Name" hint="Shown in the title bar and the sessions list."><input placeholder="Session name"></w42-field>
+  <w42-field label="Search"><input type="search" placeholder="Search"></w42-field>
+  <w42-field label="Notes"><textarea rows="3">Multi-line text</textarea></w42-field>
+  <w42-field label="Pop-up"><select><option>First</option><option>Second</option></select></w42-field>
+</w42-section>
+
+<w42-section n="9" title="Toggles, slider and stepper">
+  <div class="w42-stack" style="display:flex;flex-direction:column;gap:12px">
+    <label><input type="checkbox" checked> Checkbox</label>
+    <label><input type="radio" name="r" checked> Radio</label>
+    <label><input type="checkbox" role="switch" checked> Switch</label>
+    <input type="range" min="0" max="100" value="40">
+    <input type="number" value="3">
+  </div>
+</w42-section>
+
+<w42-section n="10" title="Progress and disclosure">
+  <w42-progress value="62"></w42-progress>
+  <p></p>
+  <w42-progress circular value="45"></w42-progress>
+  <w42-progress></w42-progress>
+  <progress max="100" value="30"></progress>
+  <w42-disclosure title="Details" open>Disclosure content stays hidden until opened.</w42-disclosure>
+  <details><summary>Plain details</summary>Plain HTML disclosure.</details>
+</w42-section>
+
+<w42-section n="11" title="Card and group">
+  <div class="w42-columns" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <w42-card title="Build">A glass card with a section header.</w42-card>
+    <w42-group title="Options"><label><input type="checkbox" checked> Enable lint</label></w42-group>
+  </div>
+  <fieldset><legend>Plain fieldset</legend>A group box from plain HTML.</fieldset>
+</w42-section>
+
+<w42-section n="12" title="Table">
+  <table>
+    <thead><tr><th>Component</th><th>Status</th><th>Variants</th><th>Owner</th></tr></thead>
+    <tbody>
+      <tr><td>Callout</td><td>Shipped</td><td class="w42-table-num">5</td><td>Yan</td></tr>
+      <tr><td>Dialog</td><td>Draft</td><td class="w42-table-num">3</td><td>Claude</td></tr>
+      <tr><td>Table</td><td>Review</td><td class="w42-table-num">2</td><td>Yan</td></tr>
+      <tr class="is-selected"><td>Code block</td><td>Selected</td><td class="w42-table-num">1</td><td>Claude</td></tr>
+    </tbody>
+  </table>
+</w42-section>
+
+<w42-section n="13" title="List">
+  <w42-list>
+    <w42-row title="Sources" detail="3 items" icon="▤">
+      <w42-row title="App.swift" detail="Swift" icon="▤"></w42-row>
+      <w42-row title="Theme.swift" detail="Swift" icon="▤" selected></w42-row>
+    </w42-row>
+    <w42-row title="Resources" detail="2 items" icon="▤">
+      <w42-row title="gallery.html" detail="HTML" icon="▤"></w42-row>
+    </w42-row>
+  </w42-list>
+</w42-section>
+
+<w42-section n="14" title="Metric">
+  <div class="w42-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    <w42-metric label="Components" value="128"></w42-metric>
+    <w42-metric label="Families" value="42" delta="▲ 12%" tone="up"></w42-metric>
+    <w42-metric label="Lint errors" value="7" delta="▼ 3" tone="down"></w42-metric>
+  </div>
+</w42-section>
+
+<w42-section n="15" title="Callout">
+  <w42-callout tone="info" title="Heads up">Every container is a glass surface; the tone lives in the glyph.</w42-callout>
+  <w42-callout tone="success" title="QA passed">All 20 acceptance criteria have evidence.</w42-callout>
+  <w42-callout tone="warning" title="Check the badge">The native tab strip renders its badge as a dot.</w42-callout>
+  <w42-callout tone="failure" title="Build failed">A colour literal was found in the stylesheet.</w42-callout>
+</w42-section>
+
+<w42-section n="16" title="Code, quote and divider">
+  <pre><code class="language-swift">let css = CanvasTheme.css()
+return shell.inject(css, into: fragment)</code></pre>
+  <p>Inline <code>code</code> and a shortcut <kbd>⌘</kbd> <kbd>K</kbd>.</p>
+  <blockquote>Quoted text sits behind a quiet rule.</blockquote>
+  <hr>
+</w42-section>
+
+<w42-section n="17" title="Popover">
+  <w42-button id="gal-share">Share</w42-button>
+  <w42-popover for="gal-share" edge="top">
+    <strong>Share session</strong>
+    <p>Anyone with the link can view.</p>
+    <w42-button variant="prominent">Done</w42-button>
+  </w42-popover>
+</w42-section>
+
+<w42-section n="18" title="Menu and tooltip">
+  <w42-button id="gal-more">Device</w42-button>
+  <w42-menu for="gal-more">
+    <w42-menu-label>Device</w42-menu-label>
+    <w42-menu-item value="simulator" shortcut="⌘A">Simulator</w42-menu-item>
+    <w42-menu-item value="pixel">Pixel 7</w42-menu-item>
+    <w42-menu-item value="ipad" disabled>iPad 11</w42-menu-item>
+    <hr>
+    <w42-menu-item value="more">More devices</w42-menu-item>
+  </w42-menu>
+  <button data-tooltip="Run the build">Hover me</button>
+</w42-section>
+
+<w42-section n="19" title="Dialog and sheet">
+  <w42-button id="gal-dialog">Delete…</w42-button>
+  <w42-dialog for="gal-dialog" title="Delete the artifact?">
+    This cannot be undone.
+    <w42-button data-close>Cancel</w42-button>
+    <w42-button variant="prominent" data-close>Delete</w42-button>
+  </w42-dialog>
+  <w42-button id="gal-sheet">Rename…</w42-button>
+  <w42-sheet for="gal-sheet" title="Rename session">
+    <w42-field label="Name" hint="Shown in the title bar."><input value="Liquid Glass Web Kit"></w42-field>
+    <w42-button data-close>Cancel</w42-button>
+    <w42-button variant="prominent" data-close>Rename</w42-button>
+  </w42-sheet>
+</w42-section>
+
+<w42-section n="20" title="Toast">
+  <p>A toast appears top right and dismisses itself after five seconds.</p>
+  <w42-toast tone="info" title="Plan approved">Starting WOR-152 now</w42-toast>
+</w42-section>
+
+<w42-section n="21" title="Spec, hero and table of contents">
+  <p>The hero and the table of contents at the top of this page are the spec/doc families.</p>
+</w42-section>
+
+<w42-section n="22" title="Acceptance criteria">
+  <w42-ac-list>
+    <w42-ac id="AC1">WHEN a user approves the plan, THE SYSTEM SHALL start the first sub-issue.</w42-ac>
+    <w42-ac id="AC2">WHILE a build is running, THE SYSTEM SHALL show the loading indicator.</w42-ac>
+    <w42-ac id="AC3">IF the lint finds a colour literal, THEN THE SYSTEM SHALL report an error.</w42-ac>
+    <w42-ac id="AC4">THE SYSTEM SHALL keep every legacy class working.</w42-ac>
+  </w42-ac-list>
+</w42-section>
+
+<w42-section n="23" title="Layout">
+  <div class="w42-columns" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="w42-glass">Column one</div>
+    <div class="w42-glass">Column two</div>
+  </div>
+  <div class="w42-stack" style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+    <div class="w42-glass">Stacked one</div>
+    <div class="w42-glass">Stacked two</div>
+  </div>
+</w42-section>
