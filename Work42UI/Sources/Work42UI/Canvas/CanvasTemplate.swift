@@ -1976,7 +1976,8 @@ public enum CanvasTemplate {
     /// The component stylesheet (`w42-components.css`) is included via a
     /// `<link>` tag so agent content can freely use `.w42-*` component
     /// classes. The `ArtifactServer` serves the asset at
-    /// `_w42/w42-components.css` relative to every artifact root.
+    /// `_w42/w42-components.css` relative to every artifact root. The
+    /// `<w42-*>` tag runtime loads the same way from `_w42/w42-components.js`.
     ///
     /// - Parameters:
     ///   - content: the agent's HTML fragment (rendered as markup as-is).
@@ -2022,6 +2023,7 @@ public enum CanvasTemplate {
         <script>
         \(componentsJS)
         </script>
+        <script src="_w42/w42-components.js"></script>
         <script>
         \(highlightJS())
         </script>
