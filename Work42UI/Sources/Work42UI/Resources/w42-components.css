@@ -191,7 +191,6 @@
   border-radius: var(--w42-r-input);
   padding: 0 var(--w42-s4);
 }
-::selection { background: color-mix(in srgb, var(--w42-label-primary) 14%, transparent); }
 :where(img, video) { max-width: 100%; height: auto; border-radius: var(--w42-r-button); }
 
 /* — Button: Action Button, bordered treatment (36 capsule) — */
@@ -778,30 +777,10 @@
 .w42-capsule-lg { height: 40px; min-width: 56px; padding: 0 var(--w42-s16); }
 .w42-capsule-lg .w42-capsule-mark { width: 37px; height: 19px; }
 
-/* The runtime paints a rounded, gliding highlight (see "Soft selection" below)
-   and adds .w42-soft-selection; native selection is then hidden, except inside
-   form fields, which keep it. */
-html.w42-soft-selection ::selection { background: transparent; }
-html.w42-soft-selection :is(input, textarea)::selection {
-  background: color-mix(in srgb, var(--w42-label-primary) 14%, transparent);
-}
 @media (prefers-reduced-motion: reduce) {
   html:root { --w42-dur-fast: 1ms; --w42-dur-base: 1ms; --w42-dur-slow: 1ms; }
 }
 
-/* — Soft selection: rounded, merged, gliding highlight painted by the runtime — */
-#w42-sel { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
-#w42-sel i {
-  position: fixed;
-  border-radius: var(--w42-r-input);
-  background: color-mix(in srgb, var(--w42-label-primary) 13%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w42-label-primary) 7%, transparent);
-  opacity: 0;
-  transition: left var(--w42-dur-fast) var(--w42-ease), top var(--w42-dur-fast) var(--w42-ease),
-              width var(--w42-dur-fast) var(--w42-ease), height var(--w42-dur-fast) var(--w42-ease),
-              opacity var(--w42-dur-fast) var(--w42-ease);
-}
-#w42-sel i.on { opacity: 1; }
 
 /* — Tab set: the glass strip with the selected tab's panel below — */
 .w42-tabset { display: block; margin: 0 0 var(--w42-s12); }
@@ -1748,6 +1727,7 @@ w42-ac { display: grid; }
 .w42-cluster-end     { justify-content: flex-end; }
 .w42-cluster-between { justify-content: space-between; }
 w42-stack, w42-cluster { display: flex; }
+w42-diagram { display: block; }
 /* The last block in a container does not add a trailing gap. */
 w42-section > section > :last-child,
 .w42-hero-panel > :last-child,

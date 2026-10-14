@@ -24,14 +24,18 @@ public struct Work42CommentCapsule: View {
         var height: CGFloat { self == .regular ? 30 : 18 }
         var markHeight: CGFloat { self == .regular ? 14 : 9 }
         var hPadding: CGFloat { self == .regular ? 11 : 5 }
-        var fontSize: CGFloat { self == .regular ? 12 : 10 }
+        var fontSize: CGFloat { self == .regular ? DT.f11 : DT.f9 }
     }
 
     private let label: String?
     private let size: Size
     private let action: () -> Void
 
-    @State private var hovering = false
+    /// Set by the first hover and never cleared: the label stays open once
+    /// revealed. (Resizing on every hover in/out moved the edge under the
+    /// pointer and made the capsule flicker.) The view is rebuilt when the
+    /// selection clears, which resets it.
+    @State private var revealed = false
     @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -51,7 +55,7 @@ public struct Work42CommentCapsule: View {
 
     public var body: some View {
         Button(action: action) {
-            HStack(spacing: hovering && label != nil ? 7 : 0) {
+            HStack(spacing: revealed && label != nil ? 7 : 0) {
                 if let image = work42Mark42Image {
                     Image(nsImage: image)
                         .resizable()
@@ -61,13 +65,13 @@ public struct Work42CommentCapsule: View {
                 } else {
                     Text("42").font(.system(size: size.fontSize, weight: .bold, design: .rounded))
                 }
-                if hovering, let label {
+                if revealed, let label {
                     Text(label)
-                        .font(.system(size: size.fontSize, weight: .medium))
-                        .foregroundStyle(.primary)
+                        .font(.system(size: size == .regular ? DT.f11 : DT.f9, weight: .medium))
+                        .foregroundStyle(DT.textPrimary)
                         .lineLimit(1)
                         .fixedSize()
-                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
+                        .transition(.opacity)
                 }
             }
             .padding(.horizontal, size.hPadding)
@@ -76,10 +80,10 @@ public struct Work42CommentCapsule: View {
             .contentShape(Capsule())
         }
         .buttonStyle(Work42CapsulePressStyle(reduceMotion: reduceMotion))
-        .scaleEffect(appeared ? (hovering ? 1.06 : 1) : 0.2, anchor: .bottomLeading)
+        .scaleEffect(appeared ? 1 : 0.2, anchor: .bottom)
         .opacity(appeared ? 1 : 0)
-        .animation(spring, value: hovering)
-        .onHover { hovering = $0 }
+        .animation(spring, value: revealed)
+        .onHover { if $0 { revealed = true } }
         .onAppear { withAnimation(spring) { appeared = true } }
         // Removal: swell, then fade (the caller wraps the `if` in an animation).
         .transition(.asymmetric(
@@ -98,5 +102,22 @@ private struct Work42CapsulePressStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.92 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+public extension View {
+    /// Places a view centred on a text selection, just above it (or just below
+    /// when the selection is too close to the top edge). Positions with layout
+    /// alignment guides rather than `.offset`, so a popover attached to the view
+    /// anchors to where it is drawn.
+    ///
+    /// - Parameter selectionRect: the selection's rect in the container's space.
+    func work42CentredOnSelection(_ selectionRect: CGRect) -> some View {
+        let above = selectionRect.minY > 48
+        return self
+            .alignmentGuide(.leading) { $0[HorizontalAlignment.center] }
+            .alignmentGuide(.top) { above ? $0[.bottom] + 6 : -(selectionRect.height + 6) }
+            .padding(.leading, max(selectionRect.midX, 0))
+            .padding(.top, max(selectionRect.minY, 0))
     }
 }

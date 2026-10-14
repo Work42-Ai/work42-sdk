@@ -92,9 +92,6 @@ enum MarkdownDocumentTemplate {
         \(CanvasTemplate.mermaidJS(src: MarkdownImageRewriter.mermaidScriptURL))
         </script>
         <script>
-        \(CanvasTemplate.componentsJS)
-        </script>
-        <script>
         \(componentRuntime)
         </script>
         <script>
