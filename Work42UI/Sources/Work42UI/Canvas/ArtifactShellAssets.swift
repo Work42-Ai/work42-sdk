@@ -7,6 +7,7 @@
 //
 //   _w42/mermaid.min.js   — the bundled mermaid v11 UMD library
 //   _w42/w42-components.css — the tokenized component library CSS
+//   _w42/w42-components.js  — the <w42-*> tag runtime
 //
 // `CanvasTemplate.mermaidLibrary()` already exposes the mermaid bytes.
 // This file adds the analogous accessor for the component CSS so the
@@ -44,5 +45,26 @@ public enum ArtifactShellAssets {
             forResource: "w42-components", withExtension: "css"
         ) else { return nil }
         return try? Data(contentsOf: url)
+    }
+
+    /// Relative URL path the artifact shell serves the `<w42-*>` tag runtime from.
+    public nonisolated static let componentJSAssetPath = "_w42/w42-components.js"
+
+    /// Reads the bundled tag runtime (`w42-components.js`). Same lifecycle and
+    /// isolation as ``componentCSSData()``.
+    @MainActor
+    public static func componentJSData() -> Data? {
+        guard let url = Bundle.module.url(
+            forResource: "w42-components", withExtension: "js"
+        ) else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    /// Absolute path of the bundled Web Kit gallery fragment (`w42-gallery.html`),
+    /// or `nil` if it is missing from the build. Printed by
+    /// `work42 artifact gallery-path`.
+    @MainActor
+    public static func galleryPath() -> String? {
+        Bundle.module.url(forResource: "w42-gallery", withExtension: "html")?.path
     }
 }

@@ -16,7 +16,7 @@ import WebKit
 /// Weak-proxy message handler for the Flutter-mockup seam. Same retain-cycle
 /// avoidance pattern as `DiagramMessageProxy`. Callbacks arrive on the main thread.
 final class FlutterMockupProxy: NSObject, WKScriptMessageHandler {
-    /// Must match the JS `FM_HANDLER` in `CanvasTemplate.componentsJS`.
+    /// Must match the JS `FM_HANDLER` in `w42-components.js` (the shell-cards block).
     static let name = "w42FlutterMockup"
 
     /// Fires with the raw message body (`{type, id, app?, device?}`). Nil = dropped.

@@ -83,9 +83,18 @@ let package = Package(
                 // w42-components.css — tokenized component library styled
                 // via --w42-* custom props (light/dark + accent for free).
                 .copy("Resources/w42-components.css"),
+                // w42-components.js — the <w42-*> tag runtime (custom elements
+                // that expand to the .w42-* classes); served from `_w42/w42-components.js`.
+                .copy("Resources/w42-components.js"),
+                // w42-gallery.html — the Web Kit gallery fragment, one section per
+                // family; printed by `work42 artifact gallery-path`.
+                .copy("Resources/w42-gallery.html"),
                 // picker-core.js — transport-agnostic element-picker DOM
                 // logic loaded into the WKWebView tiles.
                 .copy("Resources/picker-core.js"),
+                // work42-mark42.png — the brand 42 mark with its tile removed, drawn
+                // by Work42CommentCapsule (the native comment bubble).
+                .copy("Resources/work42-mark42.png"),
             ],
             swiftSettings: concurrencySettings,
             // WebKit powers the reusable WebSectionView: a WKWebView that

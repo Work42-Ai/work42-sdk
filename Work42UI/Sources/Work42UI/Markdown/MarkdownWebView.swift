@@ -663,21 +663,39 @@ struct MarkdownWebView: NSViewRepresentable {
 
           var addBtn = document.createElement('button');
           addBtn.id = 'w42-add';
-          addBtn.textContent = '+';
+          addBtn.className = 'w42-capsule';
+          addBtn.innerHTML = '<span class="w42-capsule-mark"></span><span class="w42-capsule-label">Comment</span>';
           addBtn.title = 'Comment (⌘K)';
+          addBtn.setAttribute('aria-label', 'Comment');
           document.body.appendChild(addBtn);
           var pending = null;
 
-          function hideAdd(){ addBtn.style.display = 'none'; pending = null; post({ type:'select-clear' }); }
+          var addShown = false, addTimer = null;
+          function hideAdd(){
+            pending = null;
+            if(addShown){
+              addShown = false;
+              addBtn.classList.remove('w42-pop'); addBtn.classList.add('w42-out');
+              clearTimeout(addTimer);
+              addTimer = setTimeout(function(){ addBtn.style.display = 'none'; addBtn.classList.remove('w42-out'); }, 260);
+            }
+            post({ type:'select-clear' });
+          }
           function refreshAdd(){
             var info = selectionInfo();
             if(!info){ hideAdd(); return; }
             pending = info;
             // Gutter-style: pin to the left margin, vertically at the selection
             // start — mirrors the file editor's "+" at the start of the line.
-            addBtn.style.top = Math.max(4, info.rect.y) + 'px';
-            addBtn.style.left = '4px';
-            addBtn.style.display = 'inline-flex';
+            addBtn.style.top = Math.max(4, info.rect.y - 8) + 'px';
+            addBtn.style.left = '8px';
+            if(!addShown){
+              addShown = true;
+              clearTimeout(addTimer);
+              addBtn.classList.remove('w42-out');
+              addBtn.style.display = 'inline-flex';
+              addBtn.classList.remove('w42-pop'); void addBtn.offsetWidth; addBtn.classList.add('w42-pop');
+            }
             // Publish the live selection so push-to-talk can dictate a comment
             // on it without opening the dialog.
             post({ type:'select', startLine:info.startLine, endLine:info.endLine, excerpt:info.excerpt });
