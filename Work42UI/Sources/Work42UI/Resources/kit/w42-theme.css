@@ -35,6 +35,7 @@
   --color-label-tertiary: var(--w42-text-tertiary);
   --color-accent: var(--w42-accent);
   --color-accent-ink: var(--w42-chip-fg-accent);
+  --color-on-accent: var(--w42-on-accent);
   --color-success: var(--w42-green);
   --color-success-ink: var(--w42-chip-fg-success);
   --color-danger: var(--w42-red);
