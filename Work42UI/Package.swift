@@ -89,6 +89,13 @@ let package = Package(
                 // w42-gallery.html — the Web Kit gallery fragment, one section per
                 // family; printed by `work42 artifact gallery-path`.
                 .copy("Resources/w42-gallery.html"),
+                // kit/ — the Preline + Work42 design kit: vendored Preline 4.2, the
+                // Work42 theme (w42-theme.css) and wk-* recipes (w42-recipes.css),
+                // the compile entry (w42-kit.css), the precompiled w42-kit-full.css
+                // (markdown documents + compile-failure fallback), and the frozen
+                // legacy/ copies of the old Web Kit. Served from `_w42/kit/…`.
+                // Rebuild the precompiled CSS with scripts/build-kit.sh.
+                .copy("Resources/kit"),
                 // picker-core.js — transport-agnostic element-picker DOM
                 // logic loaded into the WKWebView tiles.
                 .copy("Resources/picker-core.js"),

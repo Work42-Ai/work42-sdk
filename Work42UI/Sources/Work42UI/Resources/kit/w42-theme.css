@@ -1,0 +1,265 @@
+/* ============================================================
+   Work42 kit theme.
+
+   Every colour, size and radius here points at the --w42-* tokens
+   the app injects (CanvasTheme.tokensCSS): live system accent,
+   light on :root, dark on .dark. No hex values, only white and black
+   inside color-mix().
+
+   Import order (see w42-kit.css): Preline's theme first, THEN this
+   file, so these :root/.dark overrides win the cascade.
+   ============================================================ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Tailwind theme → injected tokens ---- */
+@theme inline {
+  --font-sans: var(--w42-font-family);
+  --font-mono: var(--w42-font-mono);
+
+  /* Type scale = DesignTokens f9…f32 */
+  --text-2xs: var(--w42-f9);    --text-2xs--line-height: 1.3;
+  --text-xs: var(--w42-f10);    --text-xs--line-height: 1.35;
+  --text-sm: var(--w42-f11);    --text-sm--line-height: 1.4;
+  --text-md: var(--w42-f12);    --text-md--line-height: 1.4;
+  --text-base: var(--w42-f13);  --text-base--line-height: 1.45;
+  --text-lg: var(--w42-f15);    --text-lg--line-height: 1.35;
+  --text-xl: var(--w42-f17);    --text-xl--line-height: 1.3;
+  --text-2xl: var(--w42-f22);   --text-2xl--line-height: 1.2;
+  --text-3xl: var(--w42-f30);   --text-3xl--line-height: 1.15;
+  --text-4xl: var(--w42-f32);   --text-4xl--line-height: 1.1;
+
+  /* Semantic colours (what agents write: text-label, bg-accent, text-success …) */
+  --color-label: var(--w42-text-primary);
+  --color-label-secondary: var(--w42-text-secondary);
+  --color-label-tertiary: var(--w42-text-tertiary);
+  --color-accent: var(--w42-accent);
+  --color-accent-ink: var(--w42-chip-fg-accent);
+  --color-success: var(--w42-green);
+  --color-success-ink: var(--w42-chip-fg-success);
+  --color-danger: var(--w42-red);
+  --color-danger-ink: var(--w42-chip-fg-failure);
+  --color-warning: var(--w42-orange);
+  --color-warning-ink: var(--w42-chip-fg-warning);
+  --color-caution: var(--w42-amber);
+  --color-info: var(--w42-cyan);
+  --color-backdrop: var(--w42-backdrop);
+  --color-elevated: var(--w42-elevated);
+  --color-separator: var(--w42-separator);
+  --color-chip: var(--w42-chip-fill);
+  --color-field: var(--w42-field-bg);
+  --color-selected: var(--w42-row-selected);
+
+  /* Radii */
+  --radius-window: var(--w42-r-window);
+  --radius-panel: var(--w42-r-panel);
+  --radius-card: var(--w42-r-card);
+  --radius-input: var(--w42-r-input);
+  --radius-control: var(--w42-r-button);
+}
+
+@theme {
+  --shadow-card: 0 0 0 0.5px rgb(0 0 0 / .03), 0 1px 2px rgb(0 0 0 / .04), 0 3px 8px -3px rgb(0 0 0 / .06);
+  --shadow-lift: 0 0 0 0.5px rgb(0 0 0 / .04), 0 2px 4px rgb(0 0 0 / .05), 0 8px 20px -4px rgb(0 0 0 / .12);
+  --shadow-pop: 0 0 0 0.5px rgb(0 0 0 / .10), 0 6px 16px rgb(0 0 0 / .10), 0 20px 48px -12px rgb(0 0 0 / .22);
+  --shadow-window: 0 0 0 0.5px rgb(0 0 0 / .12), 0 10px 30px rgb(0 0 0 / .08), 0 30px 80px -20px rgb(0 0 0 / .22);
+}
+
+/* ---- Preline semantic variables → injected tokens ---- */
+:root, .dark {
+  /* Accent ramp derived from the live system accent */
+  --primary-50:  color-mix(in srgb, var(--w42-accent) 8%,  var(--w42-surface));
+  --primary-100: color-mix(in srgb, var(--w42-accent) 15%, var(--w42-surface));
+  --primary-200: color-mix(in srgb, var(--w42-accent) 30%, var(--w42-surface));
+  --primary-300: color-mix(in srgb, var(--w42-accent) 50%, var(--w42-surface));
+  --primary-400: color-mix(in srgb, var(--w42-accent) 75%, var(--w42-surface));
+  --primary-500: color-mix(in srgb, var(--w42-accent) 90%, var(--w42-surface));
+  --primary-600: var(--w42-accent);
+  --primary-700: color-mix(in srgb, var(--w42-accent) 85%, black);
+  --primary-800: color-mix(in srgb, var(--w42-accent) 70%, black);
+  --primary-900: color-mix(in srgb, var(--w42-accent) 55%, black);
+  --primary-950: color-mix(in srgb, var(--w42-accent) 40%, black);
+  --primary: var(--w42-accent);
+  --primary-line: transparent;
+  --primary-foreground: var(--w42-on-accent);
+  --primary-hover: color-mix(in srgb, var(--w42-accent) 92%, black);
+  --primary-focus: color-mix(in srgb, var(--w42-accent) 85%, black);
+  --primary-active: color-mix(in srgb, var(--w42-accent) 85%, black);
+  --primary-checked: var(--w42-accent);
+
+  --background: var(--w42-backdrop);
+  --background-1: var(--w42-backdrop);
+  --background-2: color-mix(in srgb, var(--w42-backdrop) 94%, var(--w42-text-primary));
+  --background-plain: var(--w42-surface);
+  --foreground: var(--w42-text-primary);
+  --foreground-inverse: var(--w42-surface);
+  --inverse: var(--w42-text-primary);
+
+  --border: var(--w42-separator);
+  --border-line-inverse: var(--w42-separator);
+  --border-line-1: var(--w42-fill-tertiary);
+  --border-line-2: var(--w42-separator);
+  --border-line-3: var(--w42-glass-rim);
+  --border-line-4: color-mix(in srgb, var(--w42-text-primary) 20%, transparent);
+  --border-line-5: color-mix(in srgb, var(--w42-text-primary) 35%, transparent);
+  --border-line-6: color-mix(in srgb, var(--w42-text-primary) 50%, transparent);
+  --border-line-7: color-mix(in srgb, var(--w42-text-primary) 65%, transparent);
+  --border-line-8: color-mix(in srgb, var(--w42-text-primary) 80%, transparent);
+
+  --secondary: var(--w42-text-primary);
+  --secondary-line: transparent;
+  --secondary-foreground: var(--w42-surface);
+  --secondary-hover: color-mix(in srgb, var(--w42-text-primary) 85%, var(--w42-surface));
+  --secondary-focus: color-mix(in srgb, var(--w42-text-primary) 85%, var(--w42-surface));
+  --secondary-active: color-mix(in srgb, var(--w42-text-primary) 85%, var(--w42-surface));
+
+  --layer: var(--w42-surface);
+  --layer-line: var(--w42-separator);
+  --layer-foreground: var(--w42-text-primary);
+  --layer-hover: var(--w42-fill-quaternary);
+  --layer-focus: var(--w42-fill-quaternary);
+  --layer-active: var(--w42-fill-tertiary);
+
+  --surface: var(--w42-chip-fill);
+  --surface-1: var(--w42-fill-secondary);
+  --surface-2: var(--w42-fill-primary);
+  --surface-3: color-mix(in srgb, var(--w42-text-primary) 18%, transparent);
+  --surface-4: color-mix(in srgb, var(--w42-text-primary) 32%, transparent);
+  --surface-5: color-mix(in srgb, var(--w42-text-primary) 50%, transparent);
+  --surface-line: transparent;
+  --surface-foreground: var(--w42-text-primary);
+  --surface-hover: var(--w42-fill-secondary);
+  --surface-focus: var(--w42-fill-secondary);
+  --surface-active: var(--w42-fill-primary);
+
+  --muted: var(--w42-backdrop);
+  --muted-foreground: var(--w42-label-tertiary);
+  --muted-foreground-1: var(--w42-text-tertiary);
+  --muted-foreground-2: var(--w42-text-secondary);
+  --muted-hover: var(--w42-chip-fill);
+  --muted-focus: var(--w42-chip-fill);
+  --muted-active: var(--w42-chip-fill);
+
+  --destructive: var(--w42-red);
+  --destructive-foreground: var(--w42-on-accent);
+  --destructive-hover: color-mix(in srgb, var(--w42-red) 90%, black);
+  --destructive-focus: color-mix(in srgb, var(--w42-red) 90%, black);
+
+  /* Navbar / sidebar / footer families (source-list look) */
+  --navbar: var(--w42-surface);
+  --navbar-line: var(--w42-separator);
+  --navbar-divider: var(--w42-separator);
+  --navbar-nav-foreground: var(--w42-text-secondary);
+  --navbar-nav-hover: var(--w42-fill-tertiary);
+  --navbar-nav-focus: var(--w42-fill-tertiary);
+  --navbar-nav-active: var(--w42-fill-secondary);
+  --navbar-nav-list-divider: var(--w42-separator);
+  --navbar-inverse: var(--w42-text-primary);
+  --navbar-1: var(--navbar);
+  --navbar-1-line: var(--navbar-line);
+  --navbar-1-divider: var(--navbar-divider);
+  --navbar-1-nav-foreground: var(--navbar-nav-foreground);
+  --navbar-1-nav-hover: var(--navbar-nav-hover);
+  --navbar-1-nav-focus: var(--navbar-nav-focus);
+  --navbar-1-nav-active: var(--navbar-nav-active);
+  --navbar-1-nav-list-divider: var(--navbar-nav-list-divider);
+  --navbar-2: var(--navbar);
+  --navbar-2-line: var(--navbar-line);
+  --navbar-2-divider: var(--navbar-divider);
+  --navbar-2-nav-foreground: var(--navbar-nav-foreground);
+  --navbar-2-nav-hover: var(--navbar-nav-hover);
+  --navbar-2-nav-focus: var(--navbar-nav-focus);
+  --navbar-2-nav-active: var(--navbar-nav-active);
+  --navbar-2-nav-list-divider: var(--navbar-nav-list-divider);
+
+  --sidebar: var(--w42-backdrop);
+  --sidebar-line: var(--w42-separator);
+  --sidebar-divider: var(--w42-separator);
+  --sidebar-nav-foreground: var(--w42-text-primary);
+  --sidebar-nav-hover: var(--w42-fill-tertiary);
+  --sidebar-nav-focus: var(--w42-fill-tertiary);
+  --sidebar-nav-active: var(--w42-fill-secondary);
+  --sidebar-nav-list-divider: var(--w42-separator);
+  --sidebar-inverse: var(--w42-text-primary);
+  --sidebar-1: var(--sidebar);
+  --sidebar-1-line: var(--sidebar-line);
+  --sidebar-1-divider: var(--sidebar-divider);
+  --sidebar-1-nav-foreground: var(--sidebar-nav-foreground);
+  --sidebar-1-nav-hover: var(--sidebar-nav-hover);
+  --sidebar-1-nav-focus: var(--sidebar-nav-focus);
+  --sidebar-1-nav-active: var(--sidebar-nav-active);
+  --sidebar-1-nav-list-divider: var(--sidebar-nav-list-divider);
+  --sidebar-2: var(--sidebar);
+  --sidebar-2-line: var(--sidebar-line);
+  --sidebar-2-divider: var(--sidebar-divider);
+  --sidebar-2-nav-foreground: var(--sidebar-nav-foreground);
+  --sidebar-2-nav-hover: var(--sidebar-nav-hover);
+  --sidebar-2-nav-focus: var(--sidebar-nav-focus);
+  --sidebar-2-nav-active: var(--sidebar-nav-active);
+  --sidebar-2-nav-list-divider: var(--sidebar-nav-list-divider);
+
+  --footer: var(--w42-surface);
+  --footer-line: var(--w42-separator);
+  --footer-inverse: var(--w42-text-primary);
+
+  /* Cards */
+  --card: var(--w42-surface);
+  --card-line: var(--w42-separator);
+  --card-divider: var(--w42-separator);
+  --card-header: var(--w42-separator);
+  --card-footer: var(--w42-separator);
+  --card-inverse: var(--w42-text-primary);
+
+  /* Floating surfaces — frosted material */
+  --dropdown: var(--w42-material-thick);
+  --dropdown-1: var(--w42-material-thick);
+  --dropdown-line: var(--w42-separator);
+  --dropdown-divider: var(--w42-separator);
+  --dropdown-header: var(--w42-separator);
+  --dropdown-footer: var(--w42-separator);
+  --dropdown-item-foreground: var(--w42-text-primary);
+  --dropdown-item-hover: var(--w42-accent);
+  --dropdown-item-focus: var(--w42-accent);
+  --dropdown-item-active: var(--w42-accent);
+  --dropdown-inverse: var(--w42-text-primary);
+
+  --select: var(--w42-material-thick);
+  --select-1: var(--w42-material-thick);
+  --select-line: var(--w42-separator);
+  --select-item-foreground: var(--w42-text-primary);
+  --select-item-hover: var(--w42-accent);
+  --select-item-focus: var(--w42-accent);
+  --select-item-active: var(--w42-accent);
+  --select-inverse: var(--w42-text-primary);
+
+  --overlay: var(--w42-elevated);
+  --overlay-line: var(--w42-separator);
+  --overlay-divider: var(--w42-separator);
+  --overlay-header: var(--w42-separator);
+  --overlay-footer: var(--w42-separator);
+  --overlay-inverse: var(--w42-text-primary);
+
+  --popover: var(--w42-material-thick);
+  --popover-line: var(--w42-separator);
+
+  --tooltip: var(--w42-material-ultra-thick);
+  --tooltip-line: var(--w42-separator);
+  --tooltip-foreground: var(--w42-text-primary);
+
+  --table-line: var(--w42-separator);
+  --switch: var(--w42-surface);
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: var(--w42-fill-primary);
+  --scrollbar-track-inverse: transparent;
+  --scrollbar-thumb-inverse: var(--w42-fill-primary);
+
+  /* Chart variables: Preline's chart helpers (ApexCharts) are not part of the
+     kit; only the palette tokens that plain CSS rings/sparklines can use. */
+  --chart-primary: var(--w42-accent);
+  --chart-1: var(--w42-accent);
+  --chart-2: var(--w42-green);
+  --chart-3: var(--w42-orange);
+  --chart-4: var(--w42-cyan);
+  --chart-5: var(--w42-amber);
+  --chart-6: var(--w42-red);
+}

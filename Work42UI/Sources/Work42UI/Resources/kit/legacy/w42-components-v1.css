@@ -1,0 +1,1766 @@
+/* w42-components.css — Work42 tokenized Liquid Glass component library (Web Kit)
+ *
+ * Styles agent-authored HTML artifacts, task specs and every markdown
+ * surface. Every rule uses only --w42-* custom properties emitted by
+ * CanvasTheme.css(), so light/dark switching and the system accent come for
+ * free with zero extra effort from the author.
+ *
+ * NEVER hardcode a color, size or font value here. Always use
+ * var(--w42-<token>); the token catalog is CanvasTheme.swift. A test fails on
+ * any color or font-family literal in this file.
+ *
+ * Source order for every look (WOR-151): the Work42 Design System component or
+ * token for the concept first, then the Apple macOS kit values, then pieces
+ * composed from both. The Figma "Web Kit" page is the visual source of truth.
+ *
+ * Section order:
+ *   1. Glass           .w42-glass · .w42-glass-lg · .w42-glass-sm · .w42-material-*
+ *   2. Element defaults  plain HTML renders as the Liquid Glass families
+ *                        (zero specificity: any class or author rule wins)
+ *   3. Controls        .w42-button · .w42-tabs · .w42-toolbar · .w42-chip · fields · progress
+ *   4. Containers      .w42-card · .w42-group · .w42-list · .w42-metric · .w42-callout · code
+ *   5. Overlays        .w42-popover · .w42-menu · .w42-tooltip · .w42-dialog · .w42-sheet · .w42-toast
+ *   6. Spec / doc      .w42-hero · .w42-toc · .w42-shead · .w42-ac-list
+ *   7. Layout          .w42-columns · .w42-grid · .w42-stack · .w42-row
+ *   8. Back-compat aliases   legacy class names mapped onto the new look
+ */
+
+
+
+
+/* ══════════════════════════════════════════════════════════════════
+   1. Glass
+   ══════════════════════════════════════════════════════════════════
+   The Liquid Glass material from the Apple macOS kit (Liquid Glass - Medium
+   and Large), as web tokens:
+     fill        glass-fill over glass-tint
+     blur        glass-blur, saturated
+     shadow      0 18 48 glass-shadow
+     rim         0.5 hairline glass-rim, plus +-1.25 side edges glass-edge
+     glow        inner top and bottom highlights glass-glow
+   Usage:
+     <div class="w42-glass">…</div>        regular (12 panel)
+     <div class="w42-glass-lg">…</div>     large (34): popover, menu, dialog, hero
+     <div class="w42-glass-sm">…</div>     capsule: tab strip, toolbar, icon buttons
+   ══════════════════════════════════════════════════════════════════ */
+.w42-glass,
+.w42-glass-lg,
+.w42-glass-sm,
+.w42-toc,
+.w42-ac-list,
+.w42-hero-panel,
+.w42-spec-hero,
+.w42-card,
+.w42-panel,
+.w42-group,
+.w42-list,
+.w42-metric,
+.w42-metric-card,
+.w42-metric-card-rich,
+.w42-callout,
+.w42-mermaid,
+.w42-artifact-embed,
+:where(fieldset, pre, table) {
+  position: relative;
+  background:
+    linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  border-radius: var(--w42-r-panel);
+  box-shadow:
+    0 18px 48px var(--w42-glass-shadow),
+    0 0 0 0.5px var(--w42-glass-rim),
+    -1.25px 0 0 -0.75px var(--w42-glass-edge),
+    1.25px 0 0 -0.75px var(--w42-glass-edge),
+    inset 0 40px 10px -40px var(--w42-glass-glow),
+    inset 0 -40px 10px -40px var(--w42-glass-glow),
+    inset 0 1px 0 var(--w42-glass-glow);
+}
+.w42-glass,
+.w42-glass-lg { padding: var(--w42-s16); }
+.w42-glass-lg { border-radius: var(--w42-r-glass-lg); padding: var(--w42-s24); }
+.w42-glass-sm,
+.w42-toc {
+  border-radius: var(--w42-r-pill);
+  box-shadow:
+    0 8px 15px color-mix(in srgb, var(--w42-glass-shadow) 16%, transparent),
+    0 0 0 0.5px var(--w42-glass-rim),
+    inset 0 1px 0 var(--w42-glass-glow);
+}
+
+/* Materials: large flat areas (sidebars, hero bands). Background blur only: no
+   rim or shadow, unlike glass. */
+.w42-material-ultra-thin,
+.w42-material-thin,
+.w42-material-medium,
+.w42-material-thick,
+.w42-material-ultra-thick {
+  -webkit-backdrop-filter: blur(var(--w42-material-blur));
+  backdrop-filter: blur(var(--w42-material-blur));
+}
+.w42-material-ultra-thin  { background: var(--w42-material-ultra-thin); }
+.w42-material-thin        { background: var(--w42-material-thin); }
+.w42-material-medium      { background: var(--w42-material-medium); }
+.w42-material-thick       { background: var(--w42-material-thick); }
+.w42-material-ultra-thick { background: var(--w42-material-ultra-thick); }
+
+/* Reduce Transparency, or no backdrop-filter support: opaque surface, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .w42-glass,
+  .w42-glass-lg,
+  .w42-glass-sm,
+  .w42-toc,
+  .w42-ac-list,
+  .w42-hero-panel,
+  .w42-spec-hero,
+  .w42-card,
+  .w42-panel,
+  .w42-group,
+  .w42-list,
+  .w42-metric,
+  .w42-metric-card,
+  .w42-metric-card-rich,
+  .w42-callout,
+  .w42-mermaid,
+  .w42-artifact-embed,
+  :where(fieldset, pre, table),
+  .w42-material-ultra-thin,
+  .w42-material-thin,
+  .w42-material-medium,
+  .w42-material-thick,
+  .w42-material-ultra-thick {
+    background: var(--w42-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .w42-glass,
+  .w42-glass-lg,
+  .w42-glass-sm,
+  .w42-toc,
+  .w42-ac-list,
+  .w42-hero-panel,
+  .w42-spec-hero,
+  .w42-card,
+  .w42-panel,
+  .w42-group,
+  .w42-list,
+  .w42-metric,
+  .w42-metric-card,
+  .w42-metric-card-rich,
+  .w42-callout,
+  .w42-mermaid,
+  .w42-artifact-embed,
+  :where(fieldset, pre, table),
+  .w42-material-ultra-thin,
+  .w42-material-thin,
+  .w42-material-medium,
+  .w42-material-thick,
+  .w42-material-ultra-thick {
+    background: var(--w42-surface);
+  }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   2. Element defaults
+   ══════════════════════════════════════════════════════════════════
+   Plain HTML with no classes renders as the matching Liquid Glass family, so
+   even lazy markup looks right. Every selector is wrapped in :where(), so it
+   carries ZERO specificity: any class, tag expansion, or author rule wins.
+   Controls and inputs that carry a w42-* class style themselves and are
+   skipped here.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* — Type (sizes come from the base reset in CanvasTheme.css) — */
+/* Type mirrors the native chat text: heading scale and weights are set in the
+   base reset (24 bold, then 21 / 18 / 16 semibold); no heading tracking. */
+:where(h1, h2, h3, h4, h5, h6) {
+  line-height: 1.25;
+}
+:where(a) { color: var(--w42-primary); text-decoration: underline; }
+:where(h5) { font-size: 16px; font-weight: 600; }
+:where(h6) { font-size: 14px; font-weight: 600; }
+:where(strong, b) { font-weight: 600; }
+:where(mark) {
+  color: inherit;
+  background: color-mix(in srgb, var(--w42-amber) 35%, transparent);
+  border-radius: var(--w42-r-input);
+  padding: 0 var(--w42-s4);
+}
+:where(img, video) { max-width: 100%; height: auto; border-radius: var(--w42-r-button); }
+
+/* — Button: Action Button, bordered treatment (36 capsule) — */
+:where(button:not([class*="w42-"]), input[type="button"]:not([class*="w42-"]),
+       input[type="submit"]:not([class*="w42-"]), input[type="reset"]:not([class*="w42-"])) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--w42-s8);
+  height: var(--w42-h-action);
+  padding: 0 var(--w42-s16);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--w42-label-primary);
+  background: var(--w42-fill-secondary);
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background var(--w42-dur-fast) var(--w42-ease),
+              transform var(--w42-dur-base) var(--w42-spring);
+}
+:where(button:not([class*="w42-"]):hover, input[type="button"]:not([class*="w42-"]):hover,
+       input[type="submit"]:not([class*="w42-"]):hover) { background: var(--w42-fill-primary); transform: translateY(-1px); }
+:where(button:not([class*="w42-"]):active, input[type="button"]:not([class*="w42-"]):active,
+       input[type="submit"]:not([class*="w42-"]):active) {
+  background: var(--w42-fill-primary);
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
+:where(button:not([class*="w42-"]):disabled, input[type="button"]:not([class*="w42-"]):disabled,
+       input[type="submit"]:not([class*="w42-"]):disabled) { color: var(--w42-label-tertiary); cursor: default; }
+:where(button, input, select, textarea, summary):focus-visible {
+  outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
+  outline-offset: 0;
+}
+
+/* — Text field, search field, textarea: kit Text Field (24 high, r6, 1 ring) — */
+:where(input:not([type]):not([class*="w42-"]),
+       input[type="text"]:not([class*="w42-"]), input[type="search"]:not([class*="w42-"]),
+       input[type="email"]:not([class*="w42-"]), input[type="url"]:not([class*="w42-"]),
+       input[type="tel"]:not([class*="w42-"]), input[type="password"]:not([class*="w42-"]),
+       input[type="number"]:not([class*="w42-"]), input[type="date"]:not([class*="w42-"]),
+       input[type="time"]:not([class*="w42-"]), textarea:not([class*="w42-"]),
+       select:not([class*="w42-"])) {
+  box-sizing: border-box;
+  height: var(--w42-h-control);
+  max-width: 100%;
+  padding: 0 var(--w42-s8);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  line-height: 1.2;
+  color: var(--w42-label-primary);
+  background: var(--w42-field-bg);
+  border: 0;
+  border-radius: var(--w42-r-button);
+  box-shadow: 0 0 0 1px var(--w42-field-ring);
+  outline: none;
+}
+:where(input[type="search"]:not([class*="w42-"])) { border-radius: var(--w42-r-pill); padding: 0 var(--w42-s12); }
+:where(textarea:not([class*="w42-"])) {
+  height: auto;
+  min-height: 64px;
+  padding: var(--w42-s8);
+  resize: vertical;
+}
+:where(input:not([type]):not([class*="w42-"]):focus, input[type="text"]:not([class*="w42-"]):focus,
+       input[type="search"]:not([class*="w42-"]):focus, input[type="email"]:not([class*="w42-"]):focus,
+       input[type="url"]:not([class*="w42-"]):focus, input[type="tel"]:not([class*="w42-"]):focus,
+       input[type="password"]:not([class*="w42-"]):focus, input[type="number"]:not([class*="w42-"]):focus,
+       textarea:not([class*="w42-"]):focus, select:not([class*="w42-"]):focus) {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--w42-accent) 50%, transparent),
+    0 0 0 var(--w42-focus-ring) color-mix(in srgb, var(--w42-accent) 50%, transparent);
+}
+:where(input:not([class*="w42-"]))::placeholder,
+:where(textarea:not([class*="w42-"]))::placeholder { color: var(--w42-label-tertiary); }
+:where(input:not([class*="w42-"]):disabled, textarea:not([class*="w42-"]):disabled,
+       select:not([class*="w42-"]):disabled) { opacity: 0.5; }
+
+/* — Pop-up button: <select> with a chevron — */
+:where(select:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: calc(var(--w42-s8) + 18px);
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--w42-label-secondary) 50%),
+    linear-gradient(135deg, var(--w42-label-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  background-color: var(--w42-fill-secondary);
+  box-shadow: none;
+}
+
+/* — Checkbox, radio, switch: kit Toggles — */
+:where(input[type="checkbox"]:not([class*="w42-"]), input[type="radio"]:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0 var(--w42-s4) 0 0;
+  vertical-align: -3px;
+  background: var(--w42-fill-primary);
+  border-radius: 5.5px;
+  cursor: pointer;
+}
+:where(input[type="radio"]:not([class*="w42-"])) { border-radius: 50%; }
+:where(input[type="checkbox"]:not([class*="w42-"]):checked, input[type="radio"]:not([class*="w42-"]):checked,
+       input[type="checkbox"]:not([class*="w42-"]):indeterminate) { background: var(--w42-accent); }
+:where(input[type="checkbox"]:not([class*="w42-"]):checked)::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--w42-on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+:where(input[type="checkbox"]:not([class*="w42-"]):indeterminate)::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 7px;
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--w42-on-accent);
+}
+:where(input[type="radio"]:not([class*="w42-"]):checked)::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--w42-on-accent);
+}
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"])) {
+  width: 54px;
+  height: var(--w42-h-control);
+  margin: 0;
+  vertical-align: middle;
+  border-radius: var(--w42-r-pill);
+  background: color-mix(in srgb, var(--w42-label-primary) 10%, transparent);
+  transition: background var(--w42-dur-fast) var(--w42-ease);
+}
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"]))::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-field-bg);
+  box-shadow: 0 1px 3px var(--w42-glass-shadow);
+  transform: none;
+  transition: left var(--w42-dur-base) var(--w42-spring);
+}
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"]):checked) { background: var(--w42-accent); }
+:where(input[type="checkbox"][role="switch"]:not([class*="w42-"]):checked)::after { left: 20px; }
+:where(input[type="checkbox"]:not([class*="w42-"]):disabled, input[type="radio"]:not([class*="w42-"]):disabled) { opacity: 0.5; cursor: default; }
+
+/* — Slider: kit Slider (6 track, 20x16 knob). --w42-range-fill is the filled
+     share (0% to 100%); the tag runtime keeps it in sync. — */
+:where(input[type="range"]:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--w42-h-control);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+:where(input[type="range"]:not([class*="w42-"]))::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--w42-r-pill);
+  background:
+    linear-gradient(var(--w42-accent), var(--w42-accent)) 0 / var(--w42-range-fill, 0%) 100% no-repeat,
+    var(--w42-fill-secondary);
+}
+:where(input[type="range"]:not([class*="w42-"]))::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-field-bg);
+  box-shadow: 0 0 0 0.5px var(--w42-field-ring), 0 1px 3px var(--w42-glass-shadow);
+}
+
+/* — Progress: kit Linear - Determinate (6 high) — */
+:where(progress:not([class*="w42-"])) {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 6px;
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-fill-secondary);
+  overflow: hidden;
+}
+:where(progress:not([class*="w42-"]))::-webkit-progress-bar { background: var(--w42-fill-secondary); }
+:where(progress:not([class*="w42-"]))::-webkit-progress-value {
+  background: var(--w42-accent);
+  border-radius: var(--w42-r-pill);
+}
+
+/* — Group box: <fieldset> on glass with the legend as the Group Title — */
+:where(fieldset) {
+  min-width: 0;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s16);
+  border: 0;
+}
+:where(legend) {
+  padding: 0 var(--w42-s4);
+  font-size: var(--w42-f10);
+  font-weight: 600;
+  color: var(--w42-label-secondary);
+}
+
+/* — Table: kit Column Header + Table Rows on glass (28 header, 20 rows) — */
+:where(table) {
+  width: 100%;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4) var(--w42-s8) var(--w42-s8);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--w42-f11);
+}
+:where(th) {
+  height: var(--w42-h-table-header);
+  padding: 0 var(--w42-s8);
+  text-align: left;
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+}
+:where(th + th, td + td) { border-left: 1px solid transparent; }
+:where(th + th) { border-left-color: var(--w42-separator); }
+:where(td) {
+  height: var(--w42-h-row);
+  padding: 0 var(--w42-s8);
+  font-weight: 500;
+  color: var(--w42-label-primary);
+}
+:where(tbody tr:nth-child(even) td) { background: var(--w42-row-alt); }
+:where(tbody tr:nth-child(even) td:first-child) { border-radius: var(--w42-r-card) 0 0 var(--w42-r-card); }
+:where(tbody tr:nth-child(even) td:last-child) { border-radius: 0 var(--w42-r-card) var(--w42-r-card) 0; }
+:where(tbody tr[aria-selected="true"] td, tbody tr.is-selected td) {
+  background: var(--w42-row-selected);
+  color: var(--w42-on-accent);
+}
+
+/* — Code: inline code, kbd, and <pre> on glass (kit-style mono 12) — */
+:where(code, kbd, samp) {
+  font-family: var(--w42-font-mono);
+  font-size: 15px;
+}
+:where(:not(pre) > code) {
+  padding: 1px 5px;
+  color: var(--w42-label-primary);
+  background: color-mix(in srgb, var(--w42-label-primary) 8%, transparent);
+  border-radius: 4px;
+}
+:where(kbd) {
+  display: inline-block;
+  padding: 2px 6px;
+  color: var(--w42-label-primary);
+  background: var(--w42-field-bg);
+  border-radius: var(--w42-r-button);
+  box-shadow: 0 0 0 1px var(--w42-separator);
+}
+:where(pre) {
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s12);
+  font-family: var(--w42-font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--w42-label-primary);
+  overflow: auto;
+}
+:where(pre code) { padding: 0; background: transparent; box-shadow: none; font-size: inherit; color: inherit; }
+
+/* — Blockquote and divider — */
+:where(blockquote) {
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4) 0 var(--w42-s4) var(--w42-s12);
+  color: var(--w42-label-secondary);
+  border-left: 3px solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
+  border-radius: 2px;
+}
+:where(hr) {
+  height: 1px;
+  margin: var(--w42-s12) 0;
+  border: 0;
+  background: color-mix(in srgb, var(--w42-label-primary) 10%, transparent);
+}
+
+/* — Disclosure: <details><summary> with the kit Disclosure Button chevron — */
+:where(details) { margin: 0 0 var(--w42-s8); }
+:where(summary) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  min-height: var(--w42-h-control);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-primary);
+  cursor: pointer;
+  list-style: none;
+}
+:where(summary)::-webkit-details-marker { display: none; }
+:where(summary)::before {
+  content: "";
+  flex: none;
+  width: var(--w42-h-control);
+  height: var(--w42-h-control);
+  border-radius: var(--w42-r-button);
+  background: var(--w42-fill-secondary);
+}
+:where(summary)::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border: solid var(--w42-label-primary);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+:where(details[open] > summary)::after { top: 11px; transform: rotate(225deg); }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   3. Controls
+   ══════════════════════════════════════════════════════════════════
+   Tag-first: the <w42-*> tags (w42-components.js) expand to these classes.
+   Usage:
+     <w42-button variant="solid">Save</w42-button>
+     <w42-tabs><w42-tab label="Overview" selected></w42-tab></w42-tabs>
+     <w42-chip tone="success">Passing</w42-chip>
+   ══════════════════════════════════════════════════════════════════ */
+
+/* — Button: Action Button, 36 capsule — */
+:is(.w42-button, .w42-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--w42-s8);
+  box-sizing: border-box;
+  height: var(--w42-h-action);
+  padding: 0 var(--w42-s16);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--w42-label-primary);
+  background: var(--w42-fill-secondary);
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background var(--w42-dur-fast) var(--w42-ease),
+              transform var(--w42-dur-base) var(--w42-spring);
+}
+:is(.w42-button, .w42-btn):hover { background: var(--w42-fill-primary); transform: translateY(-1px); }
+:is(.w42-button, .w42-btn):active {
+  background: var(--w42-fill-primary);
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
+:is(.w42-button, .w42-btn):focus-visible {
+  outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
+  outline-offset: 0;
+}
+:is(.w42-button, .w42-btn)[disabled],
+:is(.w42-button, .w42-btn):disabled,
+:is(.w42-button, .w42-btn)[aria-disabled="true"] { color: var(--w42-label-tertiary); cursor: default; pointer-events: none; }
+:is(.w42-button-solid, .w42-btn-primary) { color: var(--w42-on-accent); background: var(--w42-accent); }
+:is(.w42-button-solid, .w42-btn-primary):hover,
+:is(.w42-button-solid, .w42-btn-primary):active { background: var(--w42-accent); filter: brightness(1.08); }
+:is(.w42-button-solid, .w42-btn-primary):disabled,
+:is(.w42-button-solid, .w42-btn-primary)[aria-disabled="true"] { color: var(--w42-label-tertiary); background: var(--w42-fill-secondary); }
+:is(.w42-button-glass, .w42-btn-glass) {
+  background:
+    linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  box-shadow:
+    0 8px 15px color-mix(in srgb, var(--w42-glass-shadow) 16%, transparent),
+    0 0 0 0.5px var(--w42-glass-rim),
+    inset 0 1px 0 var(--w42-glass-glow);
+}
+.w42-button-menu { padding-right: var(--w42-s12); }
+.w42-button-menu::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-left: var(--w42-s4);
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+.w42-button-icon { width: var(--w42-h-action); padding: 0; }
+.w42-button-icon > svg,
+:is(.w42-button, .w42-btn) > svg { width: 16px; height: 16px; flex: none; }
+
+/* — Tabs: segmented glass capsule (kit Glass Tab Strip, composed) — */
+:is(.w42-tabs, .w42-segmented) {
+  display: flex;
+  width: fit-content;
+  margin: 0 0 var(--w42-s12);
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  max-width: 100%;
+  box-sizing: border-box;
+  background:
+    linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  border-radius: var(--w42-r-pill);
+  box-shadow:
+    0 8px 15px color-mix(in srgb, var(--w42-glass-shadow) 16%, transparent),
+    0 0 0 0.5px var(--w42-glass-rim),
+    inset 0 1px 0 var(--w42-glass-glow);
+}
+:is(.w42-tab, .w42-segment) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--w42-s4);
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 var(--w42-s12);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--w42-label-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+:is(.w42-tab, .w42-segment) {
+  position: relative;
+  transition: color var(--w42-dur-fast) var(--w42-ease), background var(--w42-dur-fast) var(--w42-ease);
+}
+:is(.w42-tab, .w42-segment):hover { background: var(--w42-fill-quaternary); }
+:is(.w42-tab, .w42-segment)[aria-selected="true"],
+:is(.w42-tab-selected, .w42-segment-active) { color: var(--w42-label-primary); background: var(--w42-fill-primary); }
+/* One pill glides between tabs (added by the runtime); the selected tab itself
+   then drops its own fill so the two never double up. */
+.w42-tab-pill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  z-index: 0;
+  border-radius: var(--w42-r-pill);
+  background: var(--w42-fill-primary);
+  pointer-events: none;
+  transition: transform var(--w42-dur-slow) var(--w42-spring), width var(--w42-dur-slow) var(--w42-spring);
+}
+.w42-tabs-glide { position: relative; }
+.w42-tabs-glide > .w42-tab { z-index: 1; }
+.w42-tabs-glide > .w42-tab[aria-selected="true"] { background: transparent; }
+:is(.w42-tab, .w42-segment):focus-visible {
+  outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
+  outline-offset: 0;
+}
+:is(.w42-tab, .w42-segment):disabled,
+:is(.w42-tab, .w42-segment)[aria-disabled="true"] { color: var(--w42-label-tertiary); cursor: default; pointer-events: none; }
+.w42-tab-badge {
+  min-width: 16px;
+  box-sizing: border-box;
+  padding: 2px 5px;
+  font-size: var(--w42-f10);
+  line-height: 1;
+  text-align: center;
+  color: var(--w42-on-accent);
+  background: var(--w42-accent);
+  border-radius: var(--w42-r-pill);
+}
+
+/* — Capsule: the 42 mark in a liquid-glass capsule (also the comment bubble) —
+   <w42-capsule label="Comment" size="sm|md|lg"> — the label slides out on hover. */
+.w42-capsule {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 44px;
+  padding: 0 var(--w42-s12);
+  gap: 0;
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 550;
+  line-height: 1;
+  color: var(--w42-capsule-fg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--w42-glass-glow) 160%, transparent),
+                    color-mix(in srgb, var(--w42-glass-glow) 30%, transparent)),
+    linear-gradient(var(--w42-capsule-tint), var(--w42-capsule-tint)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(1.5);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(1.5);
+  border: 0;
+  border-radius: var(--w42-r-pill);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow:
+    0 0 0 0.5px var(--w42-glass-rim),
+    inset 0 1px 0 var(--w42-glass-glow),
+    inset 0 -6px 10px -6px color-mix(in srgb, var(--w42-glass-shadow) 30%, transparent),
+    0 8px 20px -8px color-mix(in srgb, var(--w42-glass-shadow) 70%, transparent);
+  transition: transform var(--w42-dur-slow) var(--w42-spring),
+              padding var(--w42-dur-slow) var(--w42-spring),
+              gap var(--w42-dur-slow) var(--w42-spring);
+}
+.w42-capsule::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 3px;
+  height: 36%;
+  border-radius: var(--w42-r-pill);
+  background: linear-gradient(180deg, var(--w42-glass-glow), transparent);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.w42-capsule-mark {
+  position: relative;
+  display: block;
+  width: 29px;
+  height: 15px;
+  background: url("data:image/png;base64,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") center / contain no-repeat;
+}
+.w42-capsule-label {
+  position: relative;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width var(--w42-dur-slow) var(--w42-spring), opacity var(--w42-dur-fast) var(--w42-ease);
+}
+.w42-capsule:hover { transform: scale(1.06); gap: var(--w42-s8); padding: 0 14px 0 var(--w42-s12); }
+.w42-capsule:hover .w42-capsule-label { max-width: 96px; opacity: 1; }
+.w42-capsule:active { transform: scale(0.92); transition-duration: 80ms; }
+.w42-capsule:focus-visible {
+  outline: var(--w42-focus-ring) solid color-mix(in srgb, var(--w42-accent) 50%, transparent);
+  outline-offset: 2px;
+}
+.w42-capsule-sm { height: 26px; min-width: 36px; padding: 0 var(--w42-s8); }
+.w42-capsule-sm .w42-capsule-mark { width: 23px; height: 12px; }
+.w42-capsule-lg { height: 40px; min-width: 56px; padding: 0 var(--w42-s16); }
+.w42-capsule-lg .w42-capsule-mark { width: 37px; height: 19px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html:root { --w42-dur-fast: 1ms; --w42-dur-base: 1ms; --w42-dur-slow: 1ms; }
+}
+
+
+/* — Tab set: the glass strip with the selected tab's panel below — */
+.w42-tabset { display: block; margin: 0 0 var(--w42-s12); }
+.w42-tabset > .w42-tabs { margin: 0; }
+.w42-tab-panel { margin-top: var(--w42-s12); }
+.w42-tab-panel[hidden] { display: none; }
+
+/* — Toolbar: glass capsule holding buttons, tabs and a separator — */
+.w42-toolbar {
+  display: flex;
+  width: fit-content;
+  margin: 0 0 var(--w42-s12);
+  align-items: center;
+  gap: var(--w42-s4);
+  padding: 3px;
+  max-width: 100%;
+  box-sizing: border-box;
+  background:
+    linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  border-radius: var(--w42-r-pill);
+  box-shadow:
+    0 8px 15px color-mix(in srgb, var(--w42-glass-shadow) 16%, transparent),
+    0 0 0 0.5px var(--w42-glass-rim),
+    inset 0 1px 0 var(--w42-glass-glow);
+}
+.w42-toolbar > :is(.w42-button, .w42-btn) { background: transparent; height: 30px; }
+.w42-toolbar > .w42-button-icon { width: 30px; }
+.w42-toolbar > :is(.w42-button, .w42-btn):hover { background: var(--w42-fill-quaternary); }
+.w42-toolbar-sep { align-self: stretch; width: 1px; margin: 6px 2px; background: var(--w42-separator); }
+
+/* — Chip: status capsule — */
+:is(.w42-chip, .w42-badge, .w42-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--w42-s4);
+  box-sizing: border-box;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--w42-label-secondary);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+:is(.w42-chip, .w42-badge, .w42-pill) > svg { width: 12px; height: 12px; flex: none; }
+.w42-chip-success { color: var(--w42-chip-fg-success); }
+.w42-chip-warning { color: var(--w42-chip-fg-warning); }
+.w42-chip-failure { color: var(--w42-chip-fg-failure); }
+.w42-chip-accent  { color: var(--w42-chip-fg-accent); }
+
+/* — Section header — */
+.w42-section-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--w42-s4) var(--w42-s12);
+  margin: var(--w42-s24) 0 var(--w42-s12) 0;
+  padding-bottom: var(--w42-s8);
+  border-bottom: 0.5px solid var(--w42-separator);
+}
+.w42-section-header-title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--w42-f17);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--w42-label-primary);
+}
+.w42-section-header-sub {
+  flex: 1 0 100%;
+  order: 3;
+  margin: 0;
+  font-size: var(--w42-f11);
+  line-height: 1.3;
+  color: var(--w42-label-tertiary);
+}
+.w42-section-header-right { flex: 0 0 auto; }
+
+/* — Empty state — */
+.w42-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--w42-s8);
+  padding: var(--w42-s32) var(--w42-s16);
+  text-align: center;
+  color: var(--w42-label-secondary);
+}
+.w42-empty-title { margin: 0; font-size: var(--w42-f15); font-weight: 600; color: var(--w42-label-primary); }
+.w42-empty-body  { margin: 0; max-width: 40ch; font-size: var(--w42-f13); }
+.w42-empty > svg { width: 32px; height: 32px; color: var(--w42-label-tertiary); }
+
+/* — Loading: indeterminate spinner and skeleton — */
+.w42-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 2px solid var(--w42-fill-primary);
+  border-top-color: var(--w42-label-secondary);
+  border-radius: 50%;
+  animation: w42-spin 0.8s linear infinite;
+}
+@keyframes w42-spin { to { transform: rotate(360deg); } }
+.w42-loading { display: inline-flex; align-items: center; gap: var(--w42-s8); font-size: var(--w42-f11); color: var(--w42-label-secondary); }
+.w42-skeleton {
+  display: block;
+  height: 12px;
+  background: var(--w42-fill-tertiary);
+  border-radius: 6px;
+  animation: w42-pulse 1.4s ease-in-out infinite;
+}
+@keyframes w42-pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) {
+  .w42-spinner, .w42-skeleton { animation: none; }
+}
+
+/* — Progress: linear bar and circular ring — */
+.w42-progress {
+  display: block;
+  margin: 0 0 var(--w42-s12);
+  box-sizing: border-box;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  background: var(--w42-fill-primary);
+  border-radius: var(--w42-r-pill);
+}
+.w42-progress > span { display: block; height: 100%; width: var(--w42-progress, 0%); background: var(--w42-accent); border-radius: inherit; }
+.w42-progress-circular {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  background: conic-gradient(var(--w42-accent) calc(var(--w42-progress, 0) * 1%), var(--w42-fill-primary) 0);
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, transparent 8px, var(--w42-surface) 9px);
+  mask: radial-gradient(circle, transparent 8px, var(--w42-surface) 9px);
+}
+
+/* — Field: label, control, hint — */
+.w42-field { display: flex; flex-direction: column; gap: var(--w42-s4); margin: 0 0 var(--w42-s12); }
+.w42-field-label { font-size: var(--w42-f11); font-weight: 600; color: var(--w42-label-primary); }
+.w42-field-hint  { font-size: var(--w42-f11); color: var(--w42-label-tertiary); }
+
+/* — Disclosure — */
+.w42-disclosure { border-bottom: 0.5px solid var(--w42-separator); }
+.w42-disclosure > summary { padding: var(--w42-s8) 0; font-weight: 600; }
+.w42-disclosure > :not(summary) { padding-bottom: var(--w42-s12); }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   4. Containers
+   ══════════════════════════════════════════════════════════════════
+   Everything here sits on Liquid Glass (the surface list in section 1).
+   Tables, <pre>, <code>, <kbd>, <blockquote> and <fieldset> are styled by the
+   element defaults in section 2; this section adds the classed and tagged
+   containers on top.
+   Usage:
+     <w42-card title="Build"> … </w42-card>
+     <w42-metric label="Families" value="42" delta="+12%" tone="up"></w42-metric>
+     <w42-callout tone="warning" title="Check the badge">Body</w42-callout>
+   ══════════════════════════════════════════════════════════════════ */
+
+/* — Card and group box — */
+.w42-card,
+.w42-panel,
+.w42-group {
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s16);
+  min-width: 0;
+}
+.w42-card > :last-child,
+.w42-group > :last-child { margin-bottom: 0; }
+.w42-card > .w42-section-header { margin-top: 0; }
+.w42-group-title {
+  margin: 0 0 var(--w42-s8);
+  font-size: var(--w42-f10);
+  font-weight: 600;
+  color: var(--w42-label-secondary);
+}
+
+/* — Table wrapper: horizontal scroll for wide tables (the glass sits on the table) — */
+.w42-table-wrap { margin: 0 0 var(--w42-s12); overflow-x: auto; }
+.w42-table-wrap > table { margin: 0; }
+td.w42-table-num,
+th.w42-table-num,
+td[data-num],
+th[data-num] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* — List: outline rows (title, detail, icon, disclosure) — */
+.w42-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4);
+}
+.w42-list-row {
+  --w42-depth: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  box-sizing: border-box;
+  min-height: var(--w42-h-control);
+  padding: 0 var(--w42-s8) 0 calc(var(--w42-s8) + var(--w42-depth) * 16px);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-primary);
+  border-radius: var(--w42-r-button);
+}
+.w42-list-row-title { flex: none; }
+.w42-list-row-detail { flex: 1 1 auto; color: var(--w42-label-secondary); }
+.w42-list-row[aria-selected="true"],
+.w42-list-row.is-selected { color: var(--w42-on-accent); background: var(--w42-row-selected); }
+.w42-list-row[aria-selected="true"] .w42-list-row-detail,
+.w42-list-row.is-selected .w42-list-row-detail { color: var(--w42-on-accent); }
+.w42-list-row[data-has-children]::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+}
+.w42-list-row[data-depth="1"] { --w42-depth: 1; }
+.w42-list-row[data-depth="2"] { --w42-depth: 2; }
+.w42-list-row[data-depth="3"] { --w42-depth: 3; }
+.w42-list-row[data-depth="4"] { --w42-depth: 4; }
+
+/* — Metric: label over a large tabular value, optional change chip — */
+.w42-metric,
+.w42-metric-card,
+.w42-metric-card-rich {
+  display: flex;
+  flex-direction: column;
+  gap: var(--w42-s4);
+  min-width: 120px;
+  box-sizing: border-box;
+  padding: var(--w42-s12) var(--w42-s16);
+}
+.w42-metric-label,
+.w42-metric-lab {
+  order: -1;
+  display: block;
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+}
+.w42-metric-value,
+.w42-metric-val {
+  display: block;
+  font-size: var(--w42-f30);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--w42-label-primary);
+}
+.w42-metric-delta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-metric-delta-up   { color: var(--w42-chip-fg-success); }
+.w42-metric-delta-down { color: var(--w42-chip-fg-failure); }
+.w42-metrics-row,
+.w42-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--w42-s12);
+  margin: 0 0 var(--w42-s12);
+}
+
+/* — Callout: tinted circular glyph, title and text on glass — */
+.w42-callout {
+  --w42-tone: var(--w42-chip-fg-accent);
+  display: block;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s12) var(--w42-s16);
+  font-size: var(--w42-f11);
+  line-height: 1.45;
+  color: var(--w42-label-secondary);
+}
+.w42-callout-info { --w42-tone: var(--w42-chip-fg-accent); }
+:is(.w42-callout-success) { --w42-tone: var(--w42-chip-fg-success); }
+:is(.w42-callout-warning, .w42-callout-warn) { --w42-tone: var(--w42-chip-fg-warning); }
+:is(.w42-callout-failure, .w42-callout-danger) { --w42-tone: var(--w42-chip-fg-failure); }
+.w42-callout > :first-child { margin-top: 0; }
+.w42-callout > :last-child { margin-bottom: 0; }
+.w42-callout-label {
+  display: block;
+  margin-bottom: var(--w42-s4);
+  font-size: var(--w42-f11);
+  font-weight: 600;
+  color: var(--w42-tone);
+}
+.w42-callout-icon {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--w42-s12);
+  align-items: start;
+}
+.w42-callout-icon-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  font-size: var(--w42-f11);
+  font-weight: 700;
+  color: var(--w42-tone);
+  background: color-mix(in srgb, var(--w42-tone) 16%, transparent);
+  border-radius: 50%;
+}
+.w42-callout-icon-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--w42-f11);
+  font-weight: 600;
+  color: var(--w42-label-primary);
+}
+:is(.w42-callout-failure, .w42-callout-danger) .w42-callout-icon-label { color: var(--w42-chip-fg-failure); }
+
+/* — Code block: figure with a language chip over the glass <pre> — */
+.w42-code-block { margin: 0 0 var(--w42-s12); }
+pre.w42-code-block { margin: 0 0 var(--w42-s12); }
+.w42-code-block pre { margin: 0; }
+.w42-code-block-lang {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin: 0 0 var(--w42-s4) var(--w42-s4);
+  padding: 0 var(--w42-s8);
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  color: var(--w42-label-primary);
+  background: var(--w42-field-bg);
+  border-radius: var(--w42-r-button);
+  box-shadow: 0 0 0 1px var(--w42-separator);
+}
+
+/* — Diagram wrapper — */
+.w42-mermaid {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s16);
+  overflow-x: auto;
+}
+.w42-mermaid pre.mermaid {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+pre.mermaid { text-align: center; }
+
+/* — Artifact embed: a live same-origin artifact in a glass figure — */
+.w42-artifact-embed {
+  display: block;
+  margin: 0 0 var(--w42-s12);
+  overflow: hidden;
+}
+.w42-artifact-embed-caption {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--w42-s8);
+  padding: var(--w42-s8) var(--w42-s12);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--w42-label-secondary);
+  border-bottom: 0.5px solid var(--w42-separator);
+}
+.w42-artifact-embed-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  color: var(--w42-chip-fg-accent);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-artifact-embed-id { font-family: var(--w42-font-mono); font-size: var(--w42-f11); font-weight: 600; color: var(--w42-label-primary); }
+.w42-artifact-embed-label { flex: 1 1 auto; color: var(--w42-label-secondary); }
+.w42-artifact-embed-frame {
+  display: block;
+  width: 100%;
+  height: 200px; /* initial; the auto-height bridge updates it */
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
+.w42-artifact-embed-placeholder {
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  padding: var(--w42-s16) var(--w42-s20);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-chip-fg-warning);
+}
+.w42-artifact-embed-placeholder::before { content: "⚠"; font-size: var(--w42-f15); line-height: 1; flex: none; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   5. Overlays
+   ══════════════════════════════════════════════════════════════════
+   Popover, menu, dialog and toast are Liquid Glass; the tooltip is the
+   ultra-thick material; the sheet is an opaque panel (as in the kit). They
+   position themselves (top layer or fixed), so they carry their own glass
+   recipe rather than the section 1 surface list, which sets position.
+   Usage:
+     <w42-button id="share">Share</w42-button>
+     <w42-popover for="share" edge="top"> … </w42-popover>
+     <w42-menu for="more"><w42-menu-item shortcut="⌘A">Simulator</w42-menu-item></w42-menu>
+     <w42-dialog for="del" title="Delete the artifact?">This cannot be undone.
+       <w42-button data-close>Cancel</w42-button></w42-dialog>
+     <w42-toast tone="success" title="QA passed">20 of 20 criteria</w42-toast>
+     <button data-tooltip="Run the build">Run</button>
+   ══════════════════════════════════════════════════════════════════ */
+
+.w42-popover,
+.w42-menu,
+.w42-dialog,
+.w42-toast {
+  background:
+    linear-gradient(var(--w42-glass-tint), var(--w42-glass-tint)),
+    var(--w42-glass-fill);
+  -webkit-backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--w42-glass-blur)) saturate(180%);
+  box-shadow:
+    0 18px 48px var(--w42-glass-shadow),
+    0 0 0 0.5px var(--w42-glass-rim),
+    -1.25px 0 0 -0.75px var(--w42-glass-edge),
+    1.25px 0 0 -0.75px var(--w42-glass-edge),
+    inset 0 1px 0 var(--w42-glass-glow);
+  color: var(--w42-label-primary);
+  font-family: var(--w42-font-family);
+  border: 0;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .w42-popover, .w42-menu, .w42-dialog, .w42-toast, .w42-tooltip {
+    background: var(--w42-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* — Popover — */
+.w42-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  max-width: min(360px, calc(100vw - 16px));
+  padding: var(--w42-s16);
+  border-radius: var(--w42-r-glass-lg);
+  font-size: var(--w42-f11);
+  overflow: visible;
+}
+.w42-popover:not([data-open]),
+.w42-menu:not([data-open]) { display: none; }
+.w42-popover::before {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--w42-glass-fill);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+.w42-popover[data-edge="top"]::before      { top: -5px;    left: calc(50% - 6px); }
+.w42-popover[data-edge="bottom"]::before   { bottom: -5px; left: calc(50% - 6px); }
+.w42-popover[data-edge="leading"]::before  { left: -5px;   top: calc(50% - 6px); }
+.w42-popover[data-edge="trailing"]::before { right: -5px;  top: calc(50% - 6px); }
+.w42-popover-actions { display: flex; justify-content: flex-end; gap: var(--w42-s8); margin-top: var(--w42-s12); }
+
+/* — Menu — */
+.w42-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  min-width: 180px;
+  padding: var(--w42-s4);
+  border-radius: var(--w42-r-panel);
+  font-size: var(--w42-f11);
+}
+.w42-menu hr { height: 1px; margin: var(--w42-s4) var(--w42-s8); background: var(--w42-separator); }
+.w42-menu-label { display: block; padding: 4px var(--w42-s8); font-size: var(--w42-f10); font-weight: 600; color: var(--w42-label-secondary); }
+.w42-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s16);
+  box-sizing: border-box;
+  min-height: var(--w42-h-control);
+  padding: 0 var(--w42-s8);
+  font-weight: 500;
+  color: var(--w42-label-primary);
+  border-radius: var(--w42-r-button);
+  cursor: default;
+  outline: none;
+}
+.w42-menu-item:hover,
+.w42-menu-item:focus-visible { background: var(--w42-fill-primary); }
+.w42-menu-item[aria-disabled="true"] { color: var(--w42-label-tertiary); pointer-events: none; }
+.w42-menu-item-shortcut { margin-left: auto; color: var(--w42-label-secondary); }
+
+/* — Tooltip: one shared node, ultra-thick material pill — */
+.w42-tooltip {
+  position: fixed;
+  z-index: 1100;
+  box-sizing: border-box;
+  max-width: 240px;
+  padding: 3px var(--w42-s8);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f10);
+  line-height: 1.3;
+  color: var(--w42-label-primary);
+  background: var(--w42-material-ultra-thick);
+  -webkit-backdrop-filter: blur(var(--w42-material-blur));
+  backdrop-filter: blur(var(--w42-material-blur));
+  box-shadow: 0 0 0 0.5px var(--w42-glass-rim), 0 4px 12px var(--w42-glass-shadow);
+  border-radius: var(--w42-r-button);
+  pointer-events: none;
+}
+.w42-tooltip:not([data-open]) { display: none; }
+
+/* — Dialog (kit Alert) and sheet — */
+dialog.w42-dialog,
+dialog.w42-sheet {
+  box-sizing: border-box;
+  padding: var(--w42-s16);
+  color: var(--w42-label-primary);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+}
+dialog.w42-dialog {
+  width: min(320px, calc(100vw - 32px));
+  border-radius: var(--w42-r-glass-lg);
+  text-align: center;
+}
+dialog.w42-dialog::backdrop,
+dialog.w42-sheet::backdrop { background: var(--w42-overlay); }
+.w42-dialog-title { margin: 0 0 var(--w42-s4); font-size: var(--w42-f13); font-weight: 600; color: var(--w42-label-primary); }
+.w42-dialog-body { margin: 0 0 var(--w42-s16); color: var(--w42-label-secondary); }
+.w42-dialog-actions { display: flex; gap: var(--w42-s8); }
+.w42-dialog-actions > * { flex: 1 1 0; }
+.w42-dialog-stacked .w42-dialog-actions { flex-direction: column; }
+dialog.w42-sheet {
+  width: min(560px, calc(100vw - 32px));
+  margin: 0 auto;
+  top: 0;
+  background: var(--w42-surface);
+  border: 0;
+  border-radius: 0 0 var(--w42-r-glass-lg) var(--w42-r-glass-lg);
+  box-shadow: 0 18px 48px var(--w42-glass-shadow), 0 0 0 0.5px var(--w42-glass-rim);
+  padding: var(--w42-s20);
+  text-align: left;
+}
+.w42-sheet .w42-dialog-actions { justify-content: flex-end; }
+.w42-sheet .w42-dialog-actions > * { flex: 0 0 auto; }
+
+/* — Toast: notification stack, top right — */
+.w42-toast-region {
+  position: fixed;
+  top: var(--w42-s16);
+  right: var(--w42-s16);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: var(--w42-s8);
+  width: min(320px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.w42-toast {
+  --w42-tone: var(--w42-chip-fg-accent);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--w42-s12);
+  align-items: start;
+  box-sizing: border-box;
+  padding: var(--w42-s12) var(--w42-s12) var(--w42-s12) var(--w42-s16);
+  border-radius: var(--w42-r-panel);
+  font-size: var(--w42-f11);
+  color: var(--w42-label-secondary);
+  pointer-events: auto;
+}
+.w42-toast-success { --w42-tone: var(--w42-chip-fg-success); }
+.w42-toast-warning { --w42-tone: var(--w42-chip-fg-warning); }
+.w42-toast-failure { --w42-tone: var(--w42-chip-fg-failure); }
+.w42-toast-glyph {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: var(--w42-f10);
+  font-weight: 700;
+  color: var(--w42-on-accent);
+  background: var(--w42-tone);
+  border-radius: 50%;
+}
+.w42-toast-title { display: block; font-weight: 600; color: var(--w42-label-primary); }
+.w42-toast-close {
+  all: unset;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--w42-label-tertiary);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.w42-toast-close:hover { background: var(--w42-fill-primary); color: var(--w42-label-primary); }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   6. Spec / doc
+   ══════════════════════════════════════════════════════════════════
+   The spec-document language: a hero over a brand scene, a glass tab-strip
+   table of contents, numbered sections and EARS acceptance criteria.
+   Usage:
+     <w42-hero eyebrow="WOR-151, Approved, main" title="…" subtitle="…"></w42-hero>
+     <w42-toc></w42-toc>
+     <w42-section n="1" title="Context"> … </w42-section>
+     <w42-ac-list><w42-ac id="AC1">WHEN a user approves, THE SYSTEM SHALL start.</w42-ac></w42-ac-list>
+   ══════════════════════════════════════════════════════════════════ */
+
+.w42-spec-root,
+.w42-spec-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 var(--w42-s24) var(--w42-s40);
+  font-size: var(--w42-f13);
+  line-height: 1.55;
+}
+
+/* — Hero: the brand scene (cyan, accent, orange) behind a large glass panel — */
+.w42-hero {
+  position: relative;
+  isolation: isolate;
+  margin: 0 0 var(--w42-s24);
+  padding: var(--w42-s24);
+  border-radius: var(--w42-r-glass-lg);
+}
+.w42-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 8% 12%, color-mix(in srgb, var(--w42-cyan) 55%, transparent), transparent 38%),
+    radial-gradient(circle at 48% 30%, color-mix(in srgb, var(--w42-accent) 35%, transparent), transparent 34%),
+    radial-gradient(circle at 40% 95%, color-mix(in srgb, var(--w42-orange) 45%, transparent), transparent 36%);
+  filter: blur(24px);
+  pointer-events: none;
+}
+.w42-hero-panel,
+.w42-spec-hero {
+  margin: 0;
+  padding: var(--w42-s24);
+  border-radius: var(--w42-r-glass-lg);
+}
+.w42-spec-hero { margin: 0 0 var(--w42-s24); }
+.w42-hero-eyebrow,
+.w42-spec-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--w42-s8);
+}
+.w42-spec-meta { margin-top: var(--w42-s16); }
+.w42-spec-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-chip-fg-accent);
+  background: var(--w42-chip-fill);
+  box-shadow: inset 0 0 0 0.5px var(--w42-chip-stroke);
+  border-radius: var(--w42-r-pill);
+}
+.w42-hero-title,
+.w42-spec-hero h1 {
+  margin: var(--w42-s8) 0 var(--w42-s4);
+  font-size: var(--w42-f30);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: var(--w42-label-primary);
+}
+.w42-hero-subtitle,
+.w42-spec-hero-sub {
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--w42-f13);
+  color: var(--w42-label-secondary);
+}
+.w42-hero-extra { display: flex; flex-wrap: wrap; gap: var(--w42-s8); margin-top: var(--w42-s12); }
+
+/* — Table of contents: a Glass Tab Strip of section links — */
+.w42-toc {
+  display: flex;
+  width: fit-content;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: var(--w42-s12) 0 var(--w42-s12);
+  padding: 3px;
+}
+.w42-toc a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--w42-s4);
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 var(--w42-s12);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--w42-label-secondary);
+  border-radius: var(--w42-r-pill);
+}
+.w42-toc a:hover { background: var(--w42-fill-quaternary); }
+.w42-toc a[aria-current="true"],
+.w42-toc a.is-selected { color: var(--w42-accent-fg); background: var(--w42-fill-primary); }
+.w42-toc-num { font-variant-numeric: tabular-nums; }
+
+/* — Numbered section: accent number chip, title and a trailing rule — */
+.w42-shead {
+  display: flex;
+  align-items: center;
+  gap: var(--w42-s8);
+  margin: var(--w42-s24) 0 var(--w42-s12);
+}
+.w42-shead-chip {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--w42-f10);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--w42-accent-fg);
+  background: color-mix(in srgb, var(--w42-accent) 16%, transparent);
+  border-radius: 50%;
+}
+.w42-shead h2,
+.w42-shead-title {
+  margin: 0;
+  font-size: var(--w42-f13);
+  font-weight: 600;
+  color: var(--w42-label-primary);
+}
+.w42-shead-rule { flex: 1 1 auto; height: 1px; background: var(--w42-separator); }
+.w42-spec-section { margin: var(--w42-s24) 0; }
+.w42-spec-section h2 {
+  margin: 0 0 var(--w42-s12);
+  font-size: var(--w42-f15);
+  font-weight: 600;
+  color: var(--w42-label-primary);
+}
+.w42-spec-section h3 { margin: var(--w42-s16) 0 var(--w42-s8); font-size: var(--w42-f13); font-weight: 600; color: var(--w42-label-primary); }
+w42-section { display: block; }
+
+/* — Acceptance criteria: table-style rows on glass, the id as a mono accent chip — */
+.w42-ac-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 var(--w42-s12);
+  padding: var(--w42-s4);
+  list-style: none;
+}
+.w42-ac,
+.w42-ac-rich {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--w42-s12);
+  align-items: center;
+  padding: var(--w42-s8);
+  font-size: var(--w42-f11);
+  line-height: 1.5;
+  color: var(--w42-label-primary);
+  border-radius: var(--w42-r-card);
+}
+.w42-ac:nth-child(even),
+.w42-ac-rich:nth-child(even) { background: var(--w42-row-alt); }
+.w42-ac::before {
+  content: attr(data-ac-id);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  box-sizing: border-box;
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  color: var(--w42-accent-fg);
+  background: color-mix(in srgb, var(--w42-accent) 16%, transparent);
+  border-radius: var(--w42-r-pill);
+  white-space: nowrap;
+}
+.w42-ac-id {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 20px;
+  padding: 0 var(--w42-s8);
+  box-sizing: border-box;
+  font-family: var(--w42-font-mono);
+  font-size: var(--w42-f10);
+  color: var(--w42-accent-fg);
+  background: color-mix(in srgb, var(--w42-accent) 16%, transparent);
+  border-radius: var(--w42-r-pill);
+}
+.w42-ac-body { color: var(--w42-label-primary); }
+.w42-ears,
+.w42-ac strong {
+  display: inline;
+  font-weight: 600;
+  color: var(--w42-accent-fg);
+}
+w42-ac { display: grid; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   7. Layout
+   ══════════════════════════════════════════════════════════════════
+   .w42-columns  flex-based equal-width columns
+   .w42-grid     CSS grid with auto-fill
+   .w42-stack    vertical flow, 12 gap
+   .w42-row      horizontal flow, 12 gap, wraps, centred
+   ══════════════════════════════════════════════════════════════════ */
+
+.w42-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--w42-s16);
+  margin: var(--w42-s16) 0;
+}
+
+.w42-columns > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.w42-columns-2 > * { flex-basis: calc(50% - var(--w42-s8));  min-width: 200px; }
+.w42-columns-3 > * { flex-basis: calc(33% - var(--w42-s12)); min-width: 160px; }
+
+.w42-grid {
+  display: grid;
+  gap: var(--w42-s16);
+  margin: var(--w42-s16) 0;
+}
+
+.w42-grid-2 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.w42-grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
+.w42-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--w42-s12);
+}
+.w42-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--w42-s12);
+}
+
+/* — Spacing —
+   Vertical rhythm: every block component carries one bottom margin (s12) and a
+   section header carries the s24 break, so stacked blocks space themselves. The
+   runtime wraps adjacent inline controls (buttons, chips) in .w42-cluster, and
+   <w42-stack> / <w42-cluster> set an explicit token gap. Children of a layout
+   container are spaced by its gap alone, so their own margin is dropped. */
+.w42-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--w42-s8);
+  margin: 0 0 var(--w42-s12);
+}
+.w42-columns > *,
+.w42-grid > *,
+.w42-stack > *,
+.w42-row > *,
+.w42-cluster > *,
+.w42-toolbar > *,
+.w42-hero-extra > *,
+.w42-hero-eyebrow > *,
+.w42-dialog-actions > *,
+.w42-popover-actions > * { margin: 0; }
+.w42-cluster-start   { justify-content: flex-start; }
+.w42-cluster-center  { justify-content: center; }
+.w42-cluster-end     { justify-content: flex-end; }
+.w42-cluster-between { justify-content: space-between; }
+w42-stack, w42-cluster { display: flex; }
+w42-diagram { display: block; }
+/* The last block in a container does not add a trailing gap. */
+w42-section > section > :last-child,
+.w42-hero-panel > :last-child,
+.w42-popover > :last-child { margin-bottom: 0; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   8. Back-compat aliases   (each family sub-issue maps its legacy class names
+      onto the new look here)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* — Controls (WOR-157): legacy class names. The :is() lists in section 3 give
+   .w42-btn, .w42-segmented/.w42-segment and .w42-badge/.w42-pill the new
+   shape; these rules map the legacy variants onto the new tones and sizes. — */
+.w42-btn-secondary { color: var(--w42-accent-fg); }
+.w42-btn-sm { height: var(--w42-h-control); padding: 0 var(--w42-s12); }
+.w42-btn-lg { height: 44px; padding: 0 var(--w42-s24); font-size: var(--w42-f13); }
+.w42-segmented > button {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 var(--w42-s12);
+  font-family: var(--w42-font-family);
+  font-size: var(--w42-f11);
+  font-weight: 500;
+  color: var(--w42-label-secondary);
+  border-radius: var(--w42-r-pill);
+  cursor: pointer;
+}
+.w42-segmented > button[aria-selected="true"] { color: var(--w42-label-primary); background: var(--w42-fill-primary); }
+:is(.w42-badge-success, .w42-pill-success, .w42-badge-green, .w42-pill-green) { color: var(--w42-chip-fg-success); }
+:is(.w42-badge-warn, .w42-pill-warn) { color: var(--w42-chip-fg-warning); }
+:is(.w42-badge-danger, .w42-pill-danger) { color: var(--w42-chip-fg-failure); }
+:is(.w42-badge-info, .w42-pill-info, .w42-badge-accent, .w42-pill-accent, .w42-badge-cyan, .w42-pill-cyan) { color: var(--w42-chip-fg-accent); }

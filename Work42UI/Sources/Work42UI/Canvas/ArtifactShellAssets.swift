@@ -8,6 +8,7 @@
 //   _w42/mermaid.min.js   — the bundled mermaid v11 UMD library
 //   _w42/w42-components.css — the tokenized component library CSS
 //   _w42/w42-components.js  — the <w42-*> tag runtime
+//   _w42/kit/<file>         — the Preline + Work42 kit (Resources/kit)
 //
 // `CanvasTemplate.mermaidLibrary()` already exposes the mermaid bytes.
 // This file adds the analogous accessor for the component CSS so the
@@ -58,6 +59,51 @@ public enum ArtifactShellAssets {
             forResource: "w42-components", withExtension: "js"
         ) else { return nil }
         return try? Data(contentsOf: url)
+    }
+
+    // MARK: - Kit (Preline + Work42 theme)
+
+    /// URL prefix the artifact shell serves the kit files from
+    /// (`_w42/kit/<relative path inside Resources/kit>`).
+    public nonisolated static let kitAssetPrefix = "_w42/kit/"
+
+    /// The bundled kit directory (`Resources/kit`): Preline files, the Work42
+    /// theme and recipes, `w42-kit.js`, the precompiled `w42-kit-full.css`, the
+    /// gallery and the frozen `legacy/` copies. `nil` only if it is missing from
+    /// the build.
+    @MainActor
+    public static func kitDirectoryURL() -> URL? {
+        Bundle.module.url(forResource: "kit", withExtension: nil)
+    }
+
+    /// Reads one file from the bundled kit directory by its path relative to
+    /// `Resources/kit` (e.g. `"w42-kit-full.css"`, `"preline/preline.js"`).
+    /// Returns `nil` for a missing file or any path that would escape the kit
+    /// directory. Same lifecycle and isolation as ``componentCSSData()``.
+    @MainActor
+    public static func kitFileData(_ relativePath: String) -> Data? {
+        guard let dir = kitDirectoryURL(),
+              let url = resolveKitFile(relativePath, in: dir) else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    /// Resolves `relativePath` inside `directory`, refusing anything that is
+    /// empty, absolute, contains a `..` / backslash / NUL component, or that
+    /// resolves (after symlinks) outside `directory`. Pure, so it is unit-tested
+    /// without the bundle.
+    public nonisolated static func resolveKitFile(_ relativePath: String, in directory: URL) -> URL? {
+        guard !relativePath.isEmpty,
+              !relativePath.hasPrefix("/"),
+              !relativePath.contains("\\"),
+              !relativePath.contains("\0") else { return nil }
+        let components = relativePath.split(separator: "/", omittingEmptySubsequences: false)
+        guard !components.contains(where: { $0 == ".." || $0 == "." || $0.isEmpty }) else { return nil }
+        let base = directory.standardizedFileURL.resolvingSymlinksInPath()
+        let candidate = base.appendingPathComponent(relativePath).standardizedFileURL.resolvingSymlinksInPath()
+        guard candidate.path.hasPrefix(base.path + "/") else { return nil }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDir), !isDir.boolValue else { return nil }
+        return candidate
     }
 
     /// Absolute path of the bundled Web Kit gallery fragment (`w42-gallery.html`),
