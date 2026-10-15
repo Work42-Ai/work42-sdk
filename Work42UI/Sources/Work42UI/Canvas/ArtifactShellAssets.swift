@@ -24,6 +24,12 @@ import Foundation
 
 public enum ArtifactShellAssets {
 
+    /// URLs the legacy composition links its (frozen) component CSS / tag runtime from.
+    /// They are served from `kit/legacy/`; the older `_w42/w42-components.*` paths below
+    /// keep working and return the same bytes.
+    public nonisolated static let legacyCSSAssetPath = "_w42/legacy/w42-components-v1.css"
+    public nonisolated static let legacyJSAssetPath = "_w42/legacy/w42-components-v1.js"
+
     /// Relative URL path the artifact shell serves the component CSS from.
     ///
     /// Resolved against the artifact root (`/<sessionId>-<token>/<artifactId>/`),
@@ -42,10 +48,7 @@ public enum ArtifactShellAssets {
     /// path (mirroring the `CanvasTemplate.mermaidLibrary()` pattern).
     @MainActor
     public static func componentCSSData() -> Data? {
-        guard let url = Bundle.module.url(
-            forResource: "w42-components", withExtension: "css"
-        ) else { return nil }
-        return try? Data(contentsOf: url)
+        kitFileData("legacy/w42-components-v1.css")
     }
 
     /// Relative URL path the artifact shell serves the `<w42-*>` tag runtime from.
@@ -55,10 +58,7 @@ public enum ArtifactShellAssets {
     /// isolation as ``componentCSSData()``.
     @MainActor
     public static func componentJSData() -> Data? {
-        guard let url = Bundle.module.url(
-            forResource: "w42-components", withExtension: "js"
-        ) else { return nil }
-        return try? Data(contentsOf: url)
+        kitFileData("legacy/w42-components-v1.js")
     }
 
     // MARK: - Kit (Preline + Work42 theme)

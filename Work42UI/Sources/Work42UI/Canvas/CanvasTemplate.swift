@@ -80,9 +80,8 @@ public enum CanvasTemplate {
 
     @MainActor
     public static func componentLibraryCSS() -> String {
-        guard let url = Bundle.module.url(
-            forResource: "w42-components", withExtension: "css"
-        ), let css = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        guard let data = ArtifactShellAssets.kitFileData("legacy/w42-components-v1.css"),
+              let css = String(data: data, encoding: .utf8) else { return "" }
         return css
     }
 
@@ -90,9 +89,8 @@ public enum CanvasTemplate {
     /// inline it (markdown documents) instead of loading `_w42/w42-components.js`.
     @MainActor
     public static func componentLibraryJS() -> String {
-        guard let url = Bundle.module.url(
-            forResource: "w42-components", withExtension: "js"
-        ), let js = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        guard let data = ArtifactShellAssets.kitFileData("legacy/w42-components-v1.js"),
+              let js = String(data: data, encoding: .utf8) else { return "" }
         return js
     }
 
@@ -1609,7 +1607,8 @@ public enum CanvasTemplate {
     """
 
     /// Composes a complete, theme-matched HTML document from an agent
-    /// content fragment.
+    /// content fragment, in the LEGACY Web Kit (artifacts saved before the Preline
+    /// kit, i.e. `meta.json` without `kit`). New artifacts use `composeKit`.
     ///
     /// The agent supplies only the markup it wants shown; this wraps it in
     /// the document shell (`<head>` with charset/viewport/`color-scheme` +
@@ -1631,7 +1630,7 @@ public enum CanvasTemplate {
     ///   - themeCSS: the theme stylesheet to inline, normally the output
     ///     of `CanvasTheme.legacyCSS()`.
     /// - Returns: a complete `<!doctype html>` document string.
-    public nonisolated static func compose(content: String, themeCSS: String) -> String {
+    public nonisolated static func composeLegacy(content: String, themeCSS: String) -> String {
         return """
         <!doctype html>
         <html lang="en">
@@ -1643,7 +1642,7 @@ public enum CanvasTemplate {
         <style>
         \(themeCSS)
         </style>
-        <link rel="stylesheet" href="_w42/w42-components.css">
+        <link rel="stylesheet" href="\(ArtifactShellAssets.legacyCSSAssetPath)">
         <style>
         \(proseCSS)
         </style>
@@ -1667,7 +1666,7 @@ public enum CanvasTemplate {
         <script>
         \(mermaidJS())
         </script>
-        <script src="_w42/w42-components.js"></script>
+        <script src="\(ArtifactShellAssets.legacyJSAssetPath)"></script>
         <script>
         \(highlightJS())
         </script>
@@ -1677,5 +1676,144 @@ public enum CanvasTemplate {
         </body>
         </html>
         """
+    }
+
+    // MARK: - Kit pages (Preline + Work42 theme)
+
+    /// Optional kit runtimes a page may need (`KitCompiler.detectRuntime`).
+    public nonisolated static let kitRuntimePreline = "preline"
+    public nonisolated static let kitRuntimeW42 = "w42"
+
+    /// What a kit page puts in `<head>`: the token stylesheet, the appearance
+    /// script (so the `dark` class is set before first paint), the compiled
+    /// `kit.css` (or, when the per-artifact compile failed or has not run, the
+    /// precompiled `w42-kit-full.css`), and the error overlay's CSS. No element
+    /// rules: the kit (Tailwind + Preline) owns every element style.
+    public nonisolated static func kitHead(themeCSS: String, hasKitCSS: Bool) -> String {
+        let kit = hasKitCSS ? "kit.css" : "\(ArtifactShellAssets.kitAssetPrefix)w42-kit-full.css"
+        return """
+        <style>
+        \(themeCSS)
+        </style>
+        \(appearanceScript)
+        <link rel="stylesheet" href="\(kit)">
+        <style>
+        \(overlayCSS)
+        </style>
+        <style>
+        \(highlightCSS)
+        </style>
+
+        """
+    }
+
+    /// What a kit page puts before `</body>`: the error overlay, mermaid and
+    /// highlight auto-renderers (both no-ops when the page has no diagram or code
+    /// block), then the optional runtimes the artifact needs.
+    public nonisolated static func kitBodyEnd(runtime: [String]) -> String {
+        var out = """
+        <script>
+        \(overlayJS)
+        </script>
+        <script>
+        \(mermaidJS())
+        </script>
+        <script>
+        \(highlightJS())
+        </script>
+
+        """
+        if runtime.contains(kitRuntimePreline) {
+            out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)preline/preline.js\"></script>\n"
+        }
+        if runtime.contains(kitRuntimeW42) {
+            out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)w42-kit.js\"></script>\n"
+        }
+        return out
+    }
+
+    /// The shell's own page rules for a FRAGMENT artifact (a full document owns its
+    /// own). Plain CSS inside `@layer base` — Tailwind only compiles the classes in
+    /// the artifact's `index.html`, so the shell cannot rely on utility classes —
+    /// which keeps every utility the artifact uses able to override it.
+    nonisolated static let kitShellCSS = """
+    @layer theme, base, components, utilities;
+    @layer base {
+      html { background: var(--w42-backdrop); }
+      body {
+        margin: 0;
+        background: var(--w42-backdrop);
+        color: var(--w42-text-primary);
+        font-family: var(--w42-font-family);
+        font-size: var(--w42-f13);
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
+        -webkit-text-size-adjust: 100%;
+      }
+      #w42-canvas-content { padding: var(--w42-s16); }
+    }
+    """
+
+    /// Composes a kit page.
+    ///
+    /// - Parameters:
+    ///   - content: the artifact's `index.html` — a fragment, or a whole document when `full`.
+    ///   - themeCSS: `CanvasTheme.tokensCSS()`.
+    ///   - runtime: the optional runtimes the artifact needs (`meta.kitRuntime`).
+    ///   - full: serve `content` as the document and splice the kit pieces into it.
+    ///   - hasKitCSS: whether the artifact has its compiled `kit.css`.
+    public nonisolated static func composeKit(
+        content: String, themeCSS: String, runtime: [String], full: Bool, hasKitCSS: Bool
+    ) -> String {
+        let head = kitHead(themeCSS: themeCSS, hasKitCSS: hasKitCSS)
+        let bodyEnd = kitBodyEnd(runtime: runtime)
+        if full {
+            return injectIntoDocument(content, head: head, bodyEnd: bodyEnd)
+        }
+        return """
+        <!doctype html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="color-scheme" content="light dark">
+        <title>Canvas</title>
+        <style>
+        \(kitShellCSS)
+        </style>
+        \(head)</head>
+        <body>
+        <main id="w42-canvas-content">
+        \(content)
+        </main>
+        \(bodyEnd)</body>
+        </html>
+        """
+    }
+
+    // MARK: - Document splice
+
+    /// Splices `head` before the first `</head>` and `bodyEnd` before the first
+    /// `</body>` (case-insensitive) of an agent-authored document, so a full-document
+    /// artifact still lands on the app theme and surfaces JS errors. A missing tag
+    /// gets its fragment appended at the end (browsers tolerate trailing
+    /// `<style>` / `<script>`).
+    public nonisolated static func injectIntoDocument(_ document: String, head: String, bodyEnd: String) -> String {
+        var result = insert(head, before: "</head>", in: document)
+        result = insert(bodyEnd, before: "</body>", in: result)
+        if result.range(of: "</head>", options: .caseInsensitive) == nil && !result.contains(head) {
+            result += "\n" + head
+        }
+        if result.range(of: "</body>", options: .caseInsensitive) == nil && !result.contains(bodyEnd) {
+            result += "\n" + bodyEnd
+        }
+        return result
+    }
+
+    private nonisolated static func insert(_ fragment: String, before tag: String, in source: String) -> String {
+        guard let range = source.range(of: tag, options: .caseInsensitive) else { return source }
+        var result = source
+        result.replaceSubrange(range, with: fragment + String(source[range]))
+        return result
     }
 }
