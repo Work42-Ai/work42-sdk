@@ -1727,6 +1727,8 @@ public enum CanvasTemplate {
             out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)preline/preline.js\"></script>\n"
         }
         if runtime.contains(kitRuntimeW42) {
+            // The diagram bridge (cards for every rendered diagram) and the mockup / toast runtime.
+            out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)w42-diagram.js\"></script>\n"
             out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)w42-kit.js\"></script>\n"
         }
         return out

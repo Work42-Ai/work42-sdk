@@ -1,0 +1,169 @@
+/* ============================================================
+   Work42 kit widgets — the diagram card, the device mockup and the
+   42 brand loader (the DOM that w42-diagram.js / w42-kit.js build).
+
+   Plain CSS in @layer components, so it is emitted into every
+   artifact's kit.css regardless of the artifact's own classes
+   (Tailwind compiles only what is in index.html, and this markup is
+   created at runtime). Colours and sizes come from --w42-* tokens.
+   The only literals are real hardware and brand colours: the black
+   device bezel and status-bar white, and the 42 loader's orange and
+   violet.
+   ============================================================ */
+
+@layer components {
+
+  w42-diagram, w42-mockup, w42-flutter-mockup { display: block; }
+
+  /* ---- The card (diagram + mockup + error) ---- */
+  .wk-dcard {
+    display: block; width: 100%; margin: 16px 0; box-sizing: border-box; overflow: hidden;
+    border-radius: var(--w42-r-panel);
+    background: var(--w42-surface);
+    box-shadow: 0 0 0 0.5px var(--w42-separator), 0 1px 2px rgb(0 0 0 / .04), 0 3px 8px -3px rgb(0 0 0 / .06);
+    font-family: var(--w42-font-family);
+  }
+  /* A diagram card hugs the graph's natural width, centred; the bridge sets the pixel width. */
+  .wk-dcard.is-diagram { width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; }
+
+  .wk-dhead {
+    display: flex; align-items: center; gap: 10px;
+    min-height: 48px; padding: 8px 10px 8px 12px; box-sizing: border-box;
+    border-bottom: 0.5px solid var(--w42-separator);
+    -webkit-user-select: none; user-select: none;
+  }
+  .wk-dicon {
+    flex: none; width: 28px; height: 28px; display: grid; place-items: center;
+    border-radius: 8px; font-size: 15px;
+    color: var(--w42-chip-fg-accent);
+    background: color-mix(in srgb, var(--w42-accent) 12%, transparent);
+  }
+  .wk-dicon.is-success { color: var(--w42-chip-fg-success); background: color-mix(in srgb, var(--w42-green) 15%, transparent); }
+  .wk-dicon.is-danger { color: var(--w42-chip-fg-failure); background: color-mix(in srgb, var(--w42-red) 14%, transparent); }
+  .wk-dtext { flex: 1 1 auto; min-width: 0; line-height: 1.25; }
+  .wk-dtitle {
+    font-size: var(--w42-f13); font-weight: 600; color: var(--w42-text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wk-dsub {
+    font-size: var(--w42-f10); color: var(--w42-text-tertiary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wk-dzoom { flex: none; min-width: 34px; text-align: right; font-size: var(--w42-f10); font-variant-numeric: tabular-nums; color: var(--w42-text-tertiary); }
+  .wk-dactions { flex: none; display: inline-flex; align-items: center; gap: 8px; }
+  .wk-dbody { display: block; width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* The diagram body is pannable. */
+  .wk-dslot {
+    display: block; width: 100%; box-sizing: border-box; cursor: grab;
+    background-image: radial-gradient(var(--w42-separator) 1px, transparent 1px);
+    background-size: 14px 14px;
+  }
+  .wk-dslot:active { cursor: grabbing; }
+  .wk-dcard.is-sized .wk-dslot > svg { display: block; width: 100%; height: auto; max-width: none; }
+  .wk-dslot > svg { padding: 12px; box-sizing: border-box; }
+
+  /* ---- Mermaid, refined: rounded elevated nodes, accent only on borders and arrowheads ---- */
+  .wk-dslot svg .node > rect,
+  .wk-dslot svg .node > polygon,
+  .wk-dslot svg .node > circle {
+    rx: 12px; ry: 12px;
+    fill: var(--w42-elevated) !important;
+    stroke: color-mix(in srgb, var(--w42-accent) 42%, transparent) !important;
+    stroke-width: 1.4px !important;
+  }
+  .wk-dslot svg .node { filter: drop-shadow(0 1px 2px rgb(0 0 0 / .14)) drop-shadow(0 4px 10px rgb(0 0 0 / .10)); }
+  .wk-dslot svg .cluster rect {
+    rx: 18px; ry: 18px;
+    fill: color-mix(in srgb, var(--w42-accent) 6%, var(--w42-surface)) !important;
+    stroke: color-mix(in srgb, var(--w42-accent) 22%, transparent) !important;
+  }
+  .wk-dslot svg .edgePath path, .wk-dslot svg .flowchart-link {
+    stroke: color-mix(in srgb, var(--w42-text-tertiary) 85%, transparent) !important;
+    stroke-width: 1.6px !important;
+  }
+  .wk-dslot svg marker path { fill: color-mix(in srgb, var(--w42-text-tertiary) 85%, transparent) !important; }
+  pre.mermaid { max-width: 100%; margin: 0; text-align: left; }
+
+  /* ---- Error card: the body shows the message instead of a blank render ---- */
+  .wk-dcard.is-error .wk-dbody {
+    padding: 12px 14px; font-family: var(--w42-font-mono); font-size: var(--w42-f10); line-height: 1.5;
+    color: var(--w42-chip-fg-failure); white-space: pre-wrap; word-break: break-word;
+  }
+
+  /* ---- Device mockup ---- */
+  .wk-mk-stage {
+    position: relative; display: flex; align-items: flex-start; justify-content: center;
+    padding: 8px; overflow: hidden; background: var(--w42-backdrop);
+    background-image: radial-gradient(var(--w42-separator) 1px, transparent 1px); background-size: 14px 14px;
+  }
+  .wk-mk-scaler { transform-origin: top center; flex: 0 0 auto; }
+  .wk-mk-frame {
+    position: relative; display: flex; flex-direction: column; overflow: hidden;
+    border-radius: 20px; border: 1px solid var(--w42-elevated); background: black;
+    box-shadow: 0 8px 28px rgb(0 0 0 / .20);
+  }
+  /* The OS status bar over the bezel. */
+  .wk-mk-statusbar {
+    flex: 0 0 auto; position: relative; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 26px 0 30px; color: white; font: 600 15px var(--w42-font-family);
+  }
+  .wk-mk-android .wk-mk-statusbar { padding: 0 16px; font-size: 13px; }
+  .wk-mk-sb-time { letter-spacing: 0.3px; }
+  .wk-mk-android .wk-mk-sb-time { font-weight: 500; }
+  .wk-mk-sb-icons { display: flex; align-items: center; gap: 6px; }
+  .wk-mk-sb-icons svg { height: 12px; width: auto; display: block; }
+  /* The embedded app, inset between the two safe areas. */
+  .wk-mk-screen { flex: 1 1 auto; position: relative; overflow: hidden; background: white; }
+  .wk-mk-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: white; }
+  /* The home indicator (iOS) / gesture bar (Android). */
+  .wk-mk-home { flex: 0 0 auto; position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; }
+  .wk-mk-home-bar { width: 36%; max-width: 148px; height: 5px; border-radius: 3px; background: rgb(255 255 255 / .85); }
+  .wk-mk-android .wk-mk-home-bar { width: 28%; height: 4px; background: rgb(255 255 255 / .6); }
+  .wk-mk-ipados .wk-mk-home-bar { width: 22%; }
+  /* Device cutouts: Dynamic Island (iPhone) / punch-hole (Pixel). */
+  .wk-mk-chrome { position: absolute; top: 0; left: 0; right: 0; height: 54px; z-index: 3; pointer-events: none; }
+  .wk-mk-chrome-island::before {
+    content: ""; position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 30%; max-width: 118px; height: 30px; background: black; border-radius: 16px;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / .10);
+  }
+  .wk-mk-chrome-island::after {
+    content: ""; position: absolute; top: 20px; left: 50%; transform: translateX(31px);
+    width: 9px; height: 9px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgb(58 58 69) 0 35%, rgb(16 16 20) 60%);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / .05);
+  }
+  .wk-mk-chrome-punch::before {
+    content: ""; position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgb(44 44 52) 0 35%, rgb(5 5 7) 60%);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / .08);
+  }
+  .wk-mk-loading { position: absolute; inset: 0; z-index: 4; }
+  .wk-mk-status {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font: 500 var(--w42-f11) var(--w42-font-family); color: var(--w42-text-secondary);
+    background: var(--w42-glass-fill); padding: 8px 14px; border-radius: var(--w42-r-pill);
+    box-shadow: 0 0 0 0.5px var(--w42-glass-rim);
+  }
+  .wk-mk-status.is-error { color: var(--w42-chip-fg-failure); }
+
+  /* ---- The 42 brand loader: THE shared loading indicator for every widget ---- */
+  .wk-loader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  .wk-loader-mark { width: 76px; height: 76px; }
+  .wk-loader-mark svg, .wk-loader42 { width: 100%; height: 100%; display: block; }
+  .wk-l42-o { fill: rgb(255 138 61); }
+  .wk-l42-v { fill: rgb(91 33 182); }
+  .wk-l42-shade { fill: rgb(60 60 67 / .14); }
+  .dark .wk-l42-o { fill: rgb(255 160 96); }
+  .dark .wk-l42-v { fill: rgb(122 73 225); }
+  .dark .wk-l42-shade { fill: rgb(235 235 245 / .14); }
+  .wk-loader-text { font: 500 var(--w42-f11) var(--w42-font-family); color: var(--w42-text-secondary); text-align: center; }
+  /* Reduced motion shows the fully painted static mark. */
+  @media (prefers-reduced-motion: reduce) {
+    .wk-l42-mask { mask: none !important; -webkit-mask: none !important; }
+    .wk-l42-shade { display: none; }
+  }
+}
