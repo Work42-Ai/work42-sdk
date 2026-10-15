@@ -5,7 +5,7 @@
 // The base is the app's One Dark / One Light editor palette. A theme may override
 // any field via its per-mode `editor:` block (`ThemeEditorTokenSet`). Both the
 // native editor (`SourceEditorThemes.stable`, which builds `NSColor`s from
-// `baseDark`/`baseLight`) and `CanvasTheme.css()` (which emits `--w42-syntax-*`
+// `baseDark`/`baseLight`) and `CanvasTheme.legacyCSS()` (which emits `--w42-syntax-*`
 // custom properties from `resolvedHex`) resolve through HERE — so the two
 // surfaces never drift. Edit a syntax colour in ONE place.
 //
@@ -54,7 +54,7 @@ public enum EditorSyntaxPalette {
     )
 
     /// `(cssVarSuffix, "#RRGGBB")` pairs for a mode — the base overlaid with the
-    /// active theme's `editor:` overrides. `CanvasTheme.css()` emits these as
+    /// active theme's `editor:` overrides. `CanvasTheme.legacyCSS()` emits these as
     /// `--w42-<suffix>` custom properties (light in `:root`, dark under the
     /// dark media query), which `highlightCSS` maps every hljs scope onto.
     public nonisolated static func resolvedHex(dark: Bool) -> [(name: String, hex: String)] {

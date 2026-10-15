@@ -37,7 +37,7 @@ enum MarkdownDocumentTemplate {
             ? "<script>\n\(Self.artifactBridgeScript)\n</script>"
             : ""
         // Inject the SAME --w42-* custom properties the artifact/canvas system
-        // exposes (CanvasTheme.css(), sourced from the DT design tokens) so any
+        // exposes (CanvasTheme.legacyCSS(), sourced from the DT design tokens) so any
         // content composed into a markdown document — including content this
         // template's caller injects as trailingHTML/raw-HTML substitutions
         // (FlowHTMLRenderer, TestingPlanFlowsHTML, the QA report augmenter) —
@@ -45,7 +45,7 @@ enum MarkdownDocumentTemplate {
         // var(--w42-s8), var(--w42-green), …) instead of a second hand-picked
         // palette. The document keeps its existing Palette-based rules except
         // that hyperlinks intentionally consume the shared primary token.
-        let designTokenCSS = CanvasTheme.css()
+        let designTokenCSS = CanvasTheme.legacyCSS()
         // Inline the component library (rather than the artifact server's
         // `_w42/w42-components.css` link, which a file:// spec doc can't reach)
         // so spec-embedded HTML — trailing components, raw HTML — uses the same
@@ -159,7 +159,7 @@ enum MarkdownDocumentTemplate {
     /// gallery card / diagram card exactly — a macOS-styled bar with a
     /// document icon, the artifact's human title, and a ⤢ expand button —
     /// instead of a "LIVE" badge + raw id. Theme-driven via the `--w42-*`
-    /// tokens (injected by CanvasTheme.css) so it tracks the app theme.
+    /// tokens (injected by CanvasTheme.legacyCSS) so it tracks the app theme.
     /// `dark` is retained for signature stability; colors now come from tokens.
     private static func artifactBridgeCSS(dark: Bool) -> String {
         return """

@@ -133,7 +133,7 @@ struct DiagramExpandDialog: View {
         .frame(minWidth: 800, idealWidth: 1100, minHeight: 560, idealHeight: 800)
         .onAppear {
             (canvas.webView as? PolicyWebView)?.linkSource = linkSource
-            canvas.load(svg: svg, themeCSS: CanvasTheme.css())
+            canvas.load(svg: svg, themeCSS: CanvasTheme.legacyCSS())
         }
     }
 

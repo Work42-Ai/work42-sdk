@@ -15,7 +15,7 @@
 //
 // `compose(content:themeCSS:)` is `nonisolated` pure string work: it
 // takes the already-generated theme CSS as input (so it never has to call
-// the `@MainActor CanvasTheme.css()` itself) and can be invoked freely
+// the `@MainActor CanvasTheme.legacyCSS()` itself) and can be invoked freely
 // from the canvas server off the main actor.
 
 import Foundation
@@ -53,7 +53,7 @@ public enum CanvasTemplate {
     /// `Bundle.module` is `@MainActor`-isolated under this module's default
     /// isolation, so the read happens on the main actor; the canvas server
     /// calls this once at start and caches the bytes for its off-main
-    /// request path (mirroring how it caches `CanvasTheme.css()`).
+    /// request path (mirroring how it caches `CanvasTheme.legacyCSS()`).
     @MainActor
     public static func mermaidLibrary() -> Data? {
         guard let url = Bundle.module.url(
@@ -1152,7 +1152,7 @@ public enum CanvasTemplate {
     """
 
     /// CSS for the inline error overlay banner. Theme-aware: it leans on
-    /// the `--w42-*` custom properties emitted by `CanvasTheme.css()`
+    /// the `--w42-*` custom properties emitted by `CanvasTheme.legacyCSS()`
     /// (e.g. `--w42-red`, `--w42-surface`), with hard fallbacks so it
     /// still renders if the theme stylesheet failed to load.
     ///
@@ -1563,6 +1563,51 @@ public enum CanvasTemplate {
     })();
     """
 
+    /// The kit page's appearance + theme bridge, injected in `<head>` BEFORE first
+    /// paint (so a dark OS never flashes light). It does two things:
+    ///
+    /// 1. Sets/clears ONLY the `dark` class on `<html>` from
+    ///    `prefers-color-scheme` and follows live changes. `CanvasTheme.tokensCSS()`
+    ///    keys the dark token values on `.dark`, and the kit's Tailwind `dark:`
+    ///    variant is `(&:where(.dark, .dark *))`. Other classes on `<html>` (a
+    ///    full-document artifact may set its own) are left alone.
+    /// 2. Defines `window.__w42.theme.apply(tokens)`, the live re-theme entry point
+    ///    `ThemeReactiveLayer` calls on an accent/theme change: it writes the pushed
+    ///    `--w42-*` values onto `:root` and re-runs mermaid if present. (Same contract
+    ///    the legacy `w42-components.js` provided; kit pages do not load that file.)
+    public nonisolated static let appearanceScript = """
+    <script>
+    (function () {
+      var root = document.documentElement;
+      var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+      function sync() { root.classList.toggle("dark", !!(mq && mq.matches)); }
+      sync();
+      if (mq) {
+        if (mq.addEventListener) { mq.addEventListener("change", sync); }
+        else if (mq.addListener) { mq.addListener(sync); }
+      }
+      window.__w42 = window.__w42 || {};
+      window.__w42.theme = window.__w42.theme || {
+        apply: function (tokens) {
+          if (!tokens) { return; }
+          try {
+            for (var k in tokens) {
+              if (!Object.prototype.hasOwnProperty.call(tokens, k)) { continue; }
+              var name = (k.indexOf("--") === 0) ? k : ("--w42-" + k);
+              root.style.setProperty(name, String(tokens[k]));
+            }
+          } catch (e) { if (window.console && console.error) { console.error("w42 theme.apply:", e); } }
+          try {
+            if (window.__w42.mermaid && typeof window.__w42.mermaid.rerender === "function") {
+              window.__w42.mermaid.rerender();
+            }
+          } catch (e2) {}
+        }
+      };
+    })();
+    </script>
+    """
+
     /// Composes a complete, theme-matched HTML document from an agent
     /// content fragment.
     ///
@@ -1584,7 +1629,7 @@ public enum CanvasTemplate {
     /// - Parameters:
     ///   - content: the agent's HTML fragment (rendered as markup as-is).
     ///   - themeCSS: the theme stylesheet to inline, normally the output
-    ///     of `CanvasTheme.css()`.
+    ///     of `CanvasTheme.legacyCSS()`.
     /// - Returns: a complete `<!doctype html>` document string.
     public nonisolated static func compose(content: String, themeCSS: String) -> String {
         return """
