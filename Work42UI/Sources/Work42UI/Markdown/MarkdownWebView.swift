@@ -11,6 +11,28 @@ import SwiftUI
 import WebKit
 import AppKit
 
+/// Where the native add-comment capsule sits over a markdown web view (WOR-216): just above the
+/// start of the selection, or just below when there is no room, kept inside the view. The frame
+/// is wider than the capsule so its "Comment" label has room to slide out on hover.
+enum MarkdownCommentCapsulePlacement {
+    static let capsuleSize = CGSize(width: 112, height: 30)
+    private static let margin: CGFloat = 4
+    private static let gap: CGFloat = 6
+
+    /// - Parameters:
+    ///   - selection: the selection's rect in the web view's coordinate space (flipped, y down).
+    ///   - container: the web view's size.
+    static func frame(selection: CGRect, container: CGSize, capsule: CGSize = capsuleSize) -> CGRect {
+        let maxX = max(margin, container.width - capsule.width - margin)
+        let x = min(max(selection.minX, margin), maxX)
+        var y = selection.minY - capsule.height - gap
+        if y < margin { y = selection.maxY + gap }
+        let maxY = max(margin, container.height - capsule.height - margin)
+        y = min(max(y, margin), maxY)
+        return CGRect(x: x, y: y, width: capsule.width, height: capsule.height)
+    }
+}
+
 /// A 1-based inclusive source line range that carries a comment, projected into
 /// the preview so the block(s) covering it get an accent mark.
 public struct MarkdownCommentRange: Equatable, Sendable {
@@ -143,7 +165,8 @@ struct MarkdownWebView: NSViewRepresentable {
         config.setURLSchemeHandler(
             MarkdownResourceSchemeHandler(
                 mermaidLibrary: CanvasTemplate.mermaidLibrary(),
-                highlightLibrary: CanvasTemplate.highlightLibrary()
+                highlightLibrary: CanvasTemplate.highlightLibrary(),
+                symbolPNG: { [symbols = SFSymbolCache()] name in symbols.png(for: name) }
             ),
             forURLScheme: MarkdownResourceSchemeHandler.scheme
         )
@@ -229,6 +252,7 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        coordinator.hideCapsule(animated: false)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.messageName)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.heightMessageName)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.bridgeMessageName)
@@ -407,6 +431,54 @@ struct MarkdownWebView: NSViewRepresentable {
             evaluateApply(comments, in: webView)
         }
 
+        // MARK: Native comment capsule
+
+        /// The add-comment capsule currently drawn over the web view, and the selection it is for.
+        private(set) var capsuleHost: NSHostingView<Work42CommentCapsule>?
+        private var capsuleSelection: (startLine: Int, endLine: Int, excerpt: String)?
+
+        /// Show (or move) the native capsule at `selection` (a rect in the web view's coordinates).
+        /// A new capsule is built each time, so its label starts closed and it pops in fresh.
+        func showCapsule(on web: WKWebView, selection: CGRect, startLine: Int, endLine: Int, excerpt: String) {
+            let frame = MarkdownCommentCapsulePlacement.frame(selection: selection, container: web.bounds.size)
+            if let host = capsuleHost, host.superview === web {
+                capsuleSelection = (startLine, endLine, excerpt)
+                host.frame = frame
+                return
+            }
+            hideCapsule(animated: false)
+            // After the hide above, which clears the selection it was showing.
+            capsuleSelection = (startLine, endLine, excerpt)
+            let host = NSHostingView(rootView: Work42CommentCapsule(label: "Comment") { [weak self] in
+                self?.commitCapsule()
+            })
+            host.frame = frame
+            web.addSubview(host)
+            capsuleHost = host
+        }
+
+        /// Remove the capsule (a short fade), keeping the page's selection.
+        func hideCapsule(animated: Bool = true) {
+            capsuleSelection = nil
+            guard let host = capsuleHost else { return }
+            capsuleHost = nil
+            guard animated else { host.removeFromSuperview(); return }
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.14
+                host.animator().alphaValue = 0
+            }, completionHandler: { host.removeFromSuperview() })
+        }
+
+        /// The capsule was clicked: start the add-comment flow for its selection, anchored at the capsule.
+        func commitCapsule() {
+            guard let host = capsuleHost, let web = host.superview as? WKWebView,
+                  let selection = capsuleSelection else { return }
+            let anchor = host.frame
+            hideCapsule()
+            web.evaluateJavaScript("(function(){var s=window.getSelection(); if(s){ s.removeAllRanges(); }})()", completionHandler: nil)
+            onAddComment?(web, anchor, selection.startLine, selection.endLine, selection.excerpt)
+        }
+
         // MARK: Script messages (add / view comment)
 
         public func userContentController(
@@ -462,12 +534,26 @@ struct MarkdownWebView: NSViewRepresentable {
                   let dict = message.body as? [String: Any],
                   let type = dict["type"] as? String,
                   let web = message.webView else { return }
-            // Live-selection publish for dictation-to-comment (no rect needed).
-            if type == "select-clear" { onSelectionCleared?(); return }
+            // The selection cleared: hide the capsule and tell the host (dictation-to-comment).
+            if type == "select-clear" { hideCapsule(); onSelectionCleared?(); return }
+            // The page scrolled: only the capsule goes; the selection is still there.
+            if type == "capsule-hide" { hideCapsule(); return }
+            // A live selection: publish it for dictation-to-comment, and show the native capsule at it.
             if type == "select" {
                 let s = (dict["startLine"] as? NSNumber)?.intValue ?? 1
                 let e = (dict["endLine"] as? NSNumber)?.intValue ?? s
-                onSelectionChanged?(s, e, dict["excerpt"] as? String ?? "")
+                let excerpt = dict["excerpt"] as? String ?? ""
+                onSelectionChanged?(s, e, excerpt)
+                if commentsEnabled, let r = dict["rect"] as? [String: Any] {
+                    let x = (r["x"] as? NSNumber)?.doubleValue ?? 0
+                    let y = (r["y"] as? NSNumber)?.doubleValue ?? 0
+                    let w = (r["w"] as? NSNumber)?.doubleValue ?? 0
+                    let h = (r["h"] as? NSNumber)?.doubleValue ?? 0
+                    let viewRect = web.isFlipped
+                        ? NSRect(x: x, y: y, width: w, height: h)
+                        : NSRect(x: x, y: web.bounds.height - y - h, width: w, height: h)
+                    showCapsule(on: web, selection: viewRect, startLine: s, endLine: e, excerpt: excerpt)
+                }
                 return
             }
             guard let rectDict = dict["rect"] as? [String: Any] else { return }
@@ -661,44 +747,22 @@ struct MarkdownWebView: NSViewRepresentable {
             }
           }
 
-          var addBtn = document.createElement('button');
-          addBtn.id = 'w42-add';
-          addBtn.className = 'w42-capsule';
-          addBtn.innerHTML = '<span class="w42-capsule-mark"></span><span class="w42-capsule-label">Comment</span>';
-          addBtn.title = 'Comment (⌘K)';
-          addBtn.setAttribute('aria-label', 'Comment');
-          document.body.appendChild(addBtn);
+          // The add-comment capsule is NATIVE (Work42CommentCapsule, drawn over the web view by
+          // the coordinator). This script only reports the live selection and its rect.
           var pending = null;
 
-          var addShown = false, addTimer = null;
           function hideAdd(){
             pending = null;
-            if(addShown){
-              addShown = false;
-              addBtn.classList.remove('w42-pop'); addBtn.classList.add('w42-out');
-              clearTimeout(addTimer);
-              addTimer = setTimeout(function(){ addBtn.style.display = 'none'; addBtn.classList.remove('w42-out'); }, 260);
-            }
             post({ type:'select-clear' });
           }
           function refreshAdd(){
             var info = selectionInfo();
             if(!info){ hideAdd(); return; }
             pending = info;
-            // Gutter-style: pin to the left margin, vertically at the selection
-            // start — mirrors the file editor's "+" at the start of the line.
-            addBtn.style.top = Math.max(4, info.rect.y - 8) + 'px';
-            addBtn.style.left = '8px';
-            if(!addShown){
-              addShown = true;
-              clearTimeout(addTimer);
-              addBtn.classList.remove('w42-out');
-              addBtn.style.display = 'inline-flex';
-              addBtn.classList.remove('w42-pop'); void addBtn.offsetWidth; addBtn.classList.add('w42-pop');
-            }
-            // Publish the live selection so push-to-talk can dictate a comment
-            // on it without opening the dialog.
-            post({ type:'select', startLine:info.startLine, endLine:info.endLine, excerpt:info.excerpt });
+            // Publish the live selection: the host shows the capsule at `rect`, and push-to-talk
+            // can dictate a comment on it without opening the dialog.
+            post({ type:'select', startLine:info.startLine, endLine:info.endLine, excerpt:info.excerpt,
+                   rect:{ x:info.rect.x, y:info.rect.y, w:info.rect.w, h:info.rect.h } });
           }
           function commit(info, rect){
             post({ type:'add', startLine:info.startLine, endLine:info.endLine, excerpt:info.excerpt,
@@ -709,15 +773,11 @@ struct MarkdownWebView: NSViewRepresentable {
 
           document.addEventListener('mouseup', function(){ setTimeout(refreshAdd, 10); });
           document.addEventListener('keyup', function(){ setTimeout(refreshAdd, 10); });
-          document.addEventListener('mousedown', function(e){ if(e.target !== addBtn) hideAdd(); });
-          addBtn.addEventListener('mousedown', function(e){ e.preventDefault(); });
-          addBtn.addEventListener('click', function(e){
-            e.preventDefault();
-            var info = pending || selectionInfo();
-            if(!info) return;
-            var br = addBtn.getBoundingClientRect();
-            commit(info, { x:br.left, y:br.top, w:br.width, h:br.height });
-          });
+          document.addEventListener('mousedown', function(){ hideAdd(); });
+          // Scrolling moves the selection out from under the capsule: hide it (the selection stays).
+          window.addEventListener('scroll', function(){
+            if(pending){ pending = null; post({ type:'capsule-hide' }); }
+          }, true);
 
           // ⌘K (⌃K) — comment on the current selection, anchored to it. The same
           // universal shortcut the file editor uses; not a replacement for the

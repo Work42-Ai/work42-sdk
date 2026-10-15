@@ -17,8 +17,9 @@ enum MarkdownDocumentTemplate {
 
     /// Compose a full HTML document around `fragment`, styled for `dark`/light.
     /// `accent` supplies the active primary color for links, selection, and
-    /// comment marks; `commentsEnabled` adds the comment-layer CSS (marks + floating
-    /// add button) — off for read-only surfaces (spec/meeting/menu previews).
+    /// comment marks; `commentsEnabled` adds the comment-layer CSS (the block marks; the
+    /// add-comment capsule is native, drawn by the web view's coordinator) — off for read-only
+    /// surfaces (spec/meeting/menu previews).
     /// `injectArtifactBridge` adds the CSS + JS needed to convert
     /// `.w42-artifact-ref` divs (emitted by `MarkdownArtifactRewriter`) into
     /// live auto-sized iframes pointing at the ArtifactServer.
@@ -36,69 +37,60 @@ enum MarkdownDocumentTemplate {
         let artifactScript = injectArtifactBridge
             ? "<script>\n\(Self.artifactBridgeScript)\n</script>"
             : ""
-        // Inject the SAME --w42-* custom properties the artifact/canvas system
-        // exposes (CanvasTheme.legacyCSS(), sourced from the DT design tokens) so any
-        // content composed into a markdown document — including content this
-        // template's caller injects as trailingHTML/raw-HTML substitutions
-        // (FlowHTMLRenderer, TestingPlanFlowsHTML, the QA report augmenter) —
-        // can reference the real, single-source-of-truth tokens (var(--w42-f11),
-        // var(--w42-s8), var(--w42-green), …) instead of a second hand-picked
-        // palette. The document keeps its existing Palette-based rules except
-        // that hyperlinks intentionally consume the shared primary token.
-        let designTokenCSS = CanvasTheme.legacyCSS()
-        // Inline the component library (rather than the artifact server's
-        // `_w42/w42-components.css` link, which a file:// spec doc can't reach)
-        // so spec-embedded HTML — trailing components, raw HTML — uses the same
-        // `.w42-*` classes as artifacts.
-        let componentCSS = CanvasTemplate.componentLibraryCSS()
-        // The `<w42-*>` tag runtime is inlined for the same reason, so tags work
-        // in markdown documents exactly as they do in artifacts.
-        let componentRuntime = CanvasTemplate.componentLibraryJS()
+        // The Preline + Work42 kit, inlined because a markdown document is not served by the artifact
+        // server (so no `_w42/` URLs): the app's `--w42-*` tokens (light on :root, dark on `.dark` —
+        // this document knows its appearance, so the class is set below), the precompiled kit
+        // stylesheet, then the prose typography. Content composed into the document — trailing
+        // HTML, raw HTML, the QA report — references the same tokens and kit classes as artifacts.
+        let designTokenCSS = CanvasTheme.tokensCSS()
+        let kitCSS = ArtifactShellAssets.kitFileData("w42-kit-full.css").flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        // The diagram bridge (a card for every rendered diagram) and the mockup / toast runtime. SF
+        // Symbols come from the `w42res://sf/` route of this surface's scheme handler.
+        let diagramBridge = ArtifactShellAssets.kitFileData("w42-diagram.js").flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        let kitRuntime = ArtifactShellAssets.kitFileData("w42-kit.js").flatMap { String(data: $0, encoding: .utf8) } ?? ""
         return """
         <!doctype html>
-        <html>
+        <html\(dark ? " class=\"dark\"" : "")>
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
         \(designTokenCSS)
+        </style>
+        <style>
+        \(kitCSS)
+        </style>
+        <style>
         :root { color-scheme: \(dark ? "dark" : "light"); }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; background: transparent; }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+          font-family: var(--w42-font-family);
           padding: 16px 22px 40px;
           -webkit-user-select: text;
           user-select: text;
         }
-        </style>
-        <style>
-        \(componentCSS)
-        </style>
-        <style>
-        /* Shared prose typography — the single source of truth, identical to
-           the artifacts and driven by the --w42-* theme tokens. */
-        \(CanvasTemplate.proseCSS)
+        \(CanvasTemplate.kitProseCSS)
         ::selection { background: \(selection); }
         \(commentCSS)
         \(artifactCSS)
-        \(CanvasTemplate.diagramControlsCSS)
         \(CanvasTemplate.highlightCSS)
         </style>
         </head>
         <body class="w42-md w42-prose">
         \(fragment)
+        <script>window.__w42SfBase = "\(MarkdownImageRewriter.symbolBaseURL)";</script>
         <script>
         \(CanvasTemplate.mermaidJS(src: MarkdownImageRewriter.mermaidScriptURL))
-        </script>
-        <script>
-        \(componentRuntime)
         </script>
         <script>
         \(CanvasTemplate.highlightJS(src: MarkdownImageRewriter.highlightScriptURL))
         </script>
         <script>
-        \(CanvasTemplate.diagramControlsJS)
+        \(diagramBridge)
+        </script>
+        <script>
+        \(kitRuntime)
         </script>
         \(artifactScript)
         </body>
@@ -107,9 +99,8 @@ enum MarkdownDocumentTemplate {
     }
 
     /// CSS for the Preview comment layer: an accent left-border + subtle tint on
-    /// commented blocks, a clickable marker dot, and the floating "add comment"
-    /// button that appears next to a live text selection. Mirrors the native
-    /// editor gutter affordance, adapted to flowed HTML (block granularity).
+    /// commented blocks and a clickable marker dot. (The "add comment" capsule that
+    /// appears next to a live text selection is native: `MarkdownWebView`.)
     private static func commentCSS(accent: Accent, dark: Bool) -> String {
         """
         .w42-commented {
@@ -134,22 +125,6 @@ enum MarkdownDocumentTemplate {
           box-shadow: 0 1px 3px rgba(0,0,0,0.35);
         }
         .w42-comment-host { position: relative; }
-        /* The comment bubble: the 42 capsule, labelled "Comment", pinned to the
-           left margin at the start of the selection. It pops with the kit
-           spring and bursts away when the selection clears. Individual
-           `scale` / `opacity` are animated so the capsule's own hover and press
-           transforms still compose. */
-        #w42-add {
-          position: fixed;
-          z-index: 9999;
-          display: none;
-          transform-origin: 50% 100%;
-        }
-        #w42-add.w42-pop { animation: w42-bubble-in 620ms var(--w42-spring) backwards; }
-        #w42-add.w42-out { animation: w42-bubble-out 260ms var(--w42-ease) forwards; pointer-events: none; }
-        @keyframes w42-bubble-in { from { scale: 0.2; opacity: 0; } 35% { opacity: 1; } to { scale: 1; opacity: 1; } }
-        @keyframes w42-bubble-out { from { scale: 1; opacity: 1; } 45% { scale: 1.14; opacity: 1; } to { scale: 1.5; opacity: 0; } }
-        @media (prefers-reduced-motion: reduce) { #w42-add.w42-pop, #w42-add.w42-out { animation: none; } }
         """
     }
 

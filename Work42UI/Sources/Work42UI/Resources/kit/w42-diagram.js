@@ -34,11 +34,12 @@
     } catch (e) { /* no native host (plain browser) */ }
   }
 
-  // An SF Symbol, drawn by the app (`_w42/sf/<name>.png`) and tinted by currentColor.
+  // An SF Symbol, drawn by the app (`_w42/sf/<name>.png`, or `window.__w42SfBase` when a host serves
+  // them elsewhere, e.g. a markdown document) and tinted by currentColor.
   function sf(name) {
     var s = document.createElement("span");
     s.className = "w42-sf";
-    s.style.setProperty("--sf", 'url("_w42/sf/' + name + '.png")');
+    s.style.setProperty("--sf", 'url("' + (window.__w42SfBase || "_w42/sf/") + name + '.png")');
     s.setAttribute("aria-hidden", "true");
     return s;
   }

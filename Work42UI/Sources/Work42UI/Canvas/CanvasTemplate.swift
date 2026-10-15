@@ -1793,6 +1793,72 @@ public enum CanvasTemplate {
         """
     }
 
+    // MARK: - Markdown prose (kit)
+
+    /// Typography for a markdown document on the kit. The kit's preflight strips every element
+    /// default, so this restores the whole set — headings, links, lists, code, quotes, tables —
+    /// on the Work42 type scale (`--w42-f*`) and label colours, scoped to `.w42-prose`.
+    /// It sits in `@layer components`: above the preflight, below utilities, so a utility class on
+    /// raw HTML inside a document (`text-sm`, `rounded-card`) still overrides it.
+    public nonisolated static let kitProseCSS = """
+    @layer components {
+      .w42-prose {
+        font-size: var(--w42-f13); line-height: 1.55; color: var(--w42-text-primary);
+        word-wrap: break-word; overflow-wrap: anywhere;
+      }
+      .w42-prose > :first-child { margin-top: 0; }
+      .w42-prose h1, .w42-prose h2, .w42-prose h3, .w42-prose h4, .w42-prose h5, .w42-prose h6 {
+        margin: var(--w42-s16) 0 var(--w42-s4); line-height: 1.25; font-weight: 600; color: var(--w42-text-primary);
+      }
+      .w42-prose h1 { font-size: var(--w42-f22); font-weight: 700; letter-spacing: -0.02em; margin-bottom: var(--w42-s8); }
+      .w42-prose h2 { font-size: var(--w42-f17); letter-spacing: -0.01em; }
+      .w42-prose h3 { font-size: var(--w42-f15); margin-top: var(--w42-s12); }
+      .w42-prose h4 { font-size: var(--w42-f13); margin-top: var(--w42-s8); margin-bottom: 0; }
+      .w42-prose h5, .w42-prose h6 { font-size: var(--w42-f12); margin-top: var(--w42-s8); margin-bottom: 0; color: var(--w42-text-secondary); }
+      .w42-prose p { margin: 0 0 var(--w42-s12); }
+      .w42-prose strong, .w42-prose b { font-weight: 600; }
+      .w42-prose em, .w42-prose i { font-style: italic; }
+      .w42-prose a { color: var(--w42-primary); text-decoration: none; }
+      .w42-prose a:hover { text-decoration: underline; }
+      .w42-prose ul, .w42-prose ol { margin: 0 0 var(--w42-s12); padding-left: 1.6em; }
+      .w42-prose ul { list-style: disc; }
+      .w42-prose ol { list-style: decimal; }
+      .w42-prose ul ul, .w42-prose ol ul { list-style: circle; }
+      .w42-prose li { margin: var(--w42-s4) 0; }
+      .w42-prose li > ul, .w42-prose li > ol { margin-bottom: 0; }
+      .w42-prose li.task-list-item { list-style: none; margin-left: -1.3em; }
+      .w42-prose li.task-list-item input { margin-right: 0.5em; }
+      .w42-prose img { max-width: 100%; height: auto; }
+      .w42-prose code, .w42-prose kbd, .w42-prose samp { font-family: var(--w42-font-mono); font-size: var(--w42-f12); }
+      .w42-prose :not(pre) > code {
+        padding: 0.1em 0.35em; border-radius: 4px; background: var(--w42-chip-fill);
+      }
+      .w42-prose kbd {
+        padding: 1px 5px; border-radius: 4px; font-size: var(--w42-f10); font-weight: 500;
+        color: var(--w42-text-secondary); background: var(--w42-chip-fill); box-shadow: inset 0 0 0 0.5px var(--w42-separator);
+      }
+      .w42-prose pre {
+        margin: 0 0 var(--w42-s12); padding: var(--w42-s12) var(--w42-s16); overflow: auto;
+        border-radius: var(--w42-r-card); background: var(--w42-chip-fill); box-shadow: inset 0 0 0 0.5px var(--w42-separator);
+        font-size: var(--w42-f12); line-height: 1.5;
+      }
+      .w42-prose pre code { padding: 0; background: none; font-size: inherit; }
+      .w42-prose blockquote {
+        margin: 0 0 var(--w42-s12); padding: 0 0 0 var(--w42-s12);
+        border-left: 3px solid var(--w42-separator); color: var(--w42-text-secondary);
+      }
+      .w42-prose blockquote > :last-child { margin-bottom: 0; }
+      .w42-prose hr { margin: var(--w42-s16) 0; border: 0; border-top: 0.5px solid var(--w42-separator); }
+      .w42-prose table {
+        display: block; max-width: 100%; overflow-x: auto; margin: 0 0 var(--w42-s12);
+        border-collapse: collapse; font-size: var(--w42-f12);
+      }
+      .w42-prose th, .w42-prose td { padding: 6px 12px; text-align: left; border-bottom: 0.5px solid var(--w42-separator); }
+      .w42-prose th { font-weight: 500; color: var(--w42-text-secondary); }
+      .w42-prose tr:last-child td { border-bottom: 0; }
+    }
+    """
+
     // MARK: - Document splice
 
     /// Splices `head` before the first `</head>` and `bodyEnd` before the first

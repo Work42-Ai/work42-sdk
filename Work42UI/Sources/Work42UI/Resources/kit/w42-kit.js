@@ -21,10 +21,11 @@
     if (text != null) { n.textContent = text; }
     return n;
   }
-  // An SF Symbol, drawn by the app (`_w42/sf/<name>.png`) and tinted by currentColor.
+  // An SF Symbol, drawn by the app (`_w42/sf/<name>.png`, or `window.__w42SfBase` when a host serves
+  // them elsewhere, e.g. a markdown document) and tinted by currentColor.
   function sf(name) {
     var s = el("span", "w42-sf");
-    s.style.setProperty("--sf", 'url("_w42/sf/' + name + '.png")');
+    s.style.setProperty("--sf", 'url("' + (window.__w42SfBase || "_w42/sf/") + name + '.png")');
     s.setAttribute("aria-hidden", "true");
     return s;
   }
