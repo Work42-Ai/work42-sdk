@@ -179,9 +179,8 @@ public struct ArtifactPreviewCard: View {
         .accessibilityLabel("\(appearance.kindLabel): \(title)")
     }
 
-    /// The tile's controls, built exactly like the app's own glass buttons, just without the accent colour:
-    /// the export button is the reload button's twin (a bare symbol on `glassIconButton()`), and Open is
-    /// "Add Widget"'s twin (icon + semibold label on the glass capsule, neutral foreground).
+    /// The tile's controls, both on the design system's liquid glass: an export button (when the host
+    /// supports exporting) that opens the format popover, and Open.
     private var actions: some View {
         HStack(spacing: DT.s8) {
             if let onExport {
@@ -189,6 +188,7 @@ public struct ArtifactPreviewCard: View {
                     showExport = true
                 } label: {
                     Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: DT.f13, weight: .medium))
                 }
                 .glassIconButton()
                 .help("Export \(title)")
@@ -207,12 +207,8 @@ public struct ArtifactPreviewCard: View {
             Button {
                 onExpand(artifactId)
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: DT.f13, weight: .semibold))
-                    Text("Open")
-                        .font(.system(size: DT.f13, weight: .semibold))
-                }
+                Text("Open")
+                    .font(.system(size: DT.f12, weight: .semibold))
             }
             .glassPlainCapsule()
             .help("Open \(title)")
@@ -225,36 +221,22 @@ public struct ArtifactPreviewCard: View {
         return "\(appearance.kindLabel) · \(Self.relativeFormatter.localizedString(for: timestamp, relativeTo: Date()))"
     }
 
-    /// The tilted object: a lit rounded slab in the artifact colour carrying the type icon. The hue is deepened
-    /// (and a little more at the base, where it blends into its companion hue), a soft highlight falls from the
-    /// top-left, a thin rim light runs along the edge, and a gentle glow of the colour spills onto the glass
-    /// behind it. The icon casts its own soft shadow. It bleeds off the bottom-left of the card, tips a different
-    /// way on each card, and lifts on hover.
+    /// The tilted object: a glossy rounded slab in the artifact colour (blending into its companion hue)
+    /// carrying the type icon, with the icon's own soft shadow for depth. It bleeds off the bottom-left
+    /// of the card, tips a different way on each card, and lifts on hover.
     private func object(_ appearance: ArtifactCardAppearance, look: Look) -> some View {
         let tint = appearance.tint
         let corner: CGFloat = 20
-        // Deepening is stronger in dark appearance, where a bright slab would glare.
-        let depth: Double = colorScheme == .dark ? 1 : 0.55
-        let slab = RoundedRectangle(cornerRadius: corner, style: .continuous)
         return ZStack {
-            // Hue: the artifact colour into its companion.
-            slab.fill(LinearGradient(colors: [tint.color, tint.companion], startPoint: .topLeading, endPoint: .bottomTrailing))
-            // Deepen, a little more towards the base.
-            slab.fill(LinearGradient(
-                colors: [Color.black.opacity(0.20 * depth), Color.black.opacity(0.40 * depth)],
-                startPoint: .top, endPoint: .bottom))
-            // The companion hue warming the base.
-            slab.fill(LinearGradient(
-                colors: [tint.companion.opacity(0.35), .clear],
-                startPoint: .bottom, endPoint: UnitPoint(x: 0.5, y: 0.6)))
-            // Soft highlight from the top-left.
-            slab.fill(RadialGradient(
-                colors: [Color.white.opacity(0.24), .clear],
-                center: .topLeading, startRadius: 0, endRadius: 64))
-            // Rim light.
-            slab.strokeBorder(
-                LinearGradient(colors: [Color.white.opacity(0.34), Color.white.opacity(0.10)], startPoint: .top, endPoint: .bottom),
-                lineWidth: 1)
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(LinearGradient(colors: [tint.color, tint.companion], startPoint: .topLeading, endPoint: .bottomTrailing))
+            // Deepen the hue so it reads as a rich, muted shade rather than a bright one.
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(Color.black.opacity(colorScheme == .dark ? 0.30 : 0.16))
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(LinearGradient(colors: [Color.white.opacity(0.26), Color.white.opacity(0.04), .clear], startPoint: .top, endPoint: .bottom))
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
             ZStack {
                 Image(systemName: appearance.symbol)
                     .symbolVariant(.fill)
@@ -270,20 +252,12 @@ public struct ArtifactPreviewCard: View {
             .padding(.bottom, 16)
         }
         .frame(width: 70, height: 104)
-        .shadow(color: tint.color.opacity(0.18), radius: 10, y: 8)
-        .shadow(color: Color.black.opacity(0.25), radius: 3, y: 2)
+        .shadow(color: Color.black.opacity(0.30), radius: 8, y: 5)
         .rotation3DEffect(.degrees(look.turn + (isHovering ? 4 : 0)), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .rotationEffect(.degrees(look.tilt))
         .offset(x: 6, y: isHovering ? 8 : 14)
         .frame(width: 100, height: sizeMode.height, alignment: .topLeading)
-        .background(alignment: .topLeading) {
-            // The glow spilling onto the glass behind the object.
-            Circle()
-                .fill(tint.companion.opacity(0.18))
-                .frame(width: 140, height: 140)
-                .blur(radius: 28)
-                .offset(x: -28, y: -8)
-        }
+        .clipped()
     }
 
     /// Per-artifact variety, derived from the id so it is stable across launches.
