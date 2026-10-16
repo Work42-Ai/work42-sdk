@@ -261,6 +261,32 @@ nonisolated public protocol WidgetPillService: Sendable {
     func isPresented(widgetId: String) async throws -> Bool
 }
 
+// MARK: - Account
+
+/// The signed-in Work42 account, as a widget may see it.
+///
+/// Privacy: every installed plugin can read this. It is the person's display name, email and profile
+/// photo URL; plugins already run shell commands as the user, so it adds no new capability, but it is
+/// an explicit data surface (see the SDK changelog).
+nonisolated public struct WidgetAccountUser: Sendable, Equatable {
+    public let displayName: String?
+    public let email: String?
+    /// The provider's profile photo (Google or GitHub), a remote https URL.
+    public let photoURL: URL?
+
+    public init(displayName: String?, email: String?, photoURL: URL?) {
+        self.displayName = displayName
+        self.email = email
+        self.photoURL = photoURL
+    }
+}
+
+/// Who is signed in to Work42, for widgets that show "you" (a transcript, a comment author).
+nonisolated public protocol WidgetAccountService: Sendable {
+    /// The signed-in user, or nil when signed out (or in a build without sign-in).
+    func currentUser() async -> WidgetAccountUser?
+}
+
 // MARK: - SessionServices
 
 /// The bundle of session services handed to a widget's lifecycle and view
@@ -315,4 +341,25 @@ nonisolated public struct SessionServices: Sendable {
         self.sessionId = sessionId
         self.worktreePath = worktreePath
     }
+}
+
+// MARK: - Account access
+
+/// Where the host registers its account service. Set once at startup; nil on hosts without
+/// sign-in (tests, previews, SDK before 2.6.0).
+///
+/// It lives here rather than as a stored property of `SessionServices` because that struct's
+/// memory layout is part of the binary contract with plugins built against older SDKs (see
+/// `PublicLayoutStabilityTests`): adding a stored property would change its size.
+@MainActor
+public enum WidgetAccountRegistry {
+    public static var service: (any WidgetAccountService)?
+}
+
+extension SessionServices {
+    /// Who is signed in (name, email, photo URL), or nil on a host without account support.
+    /// A nil `account` and a nil `currentUser()` both mean "show the fallback". Computed, so the
+    /// struct's layout is unchanged.
+    @MainActor
+    public var account: (any WidgetAccountService)? { WidgetAccountRegistry.service }
 }

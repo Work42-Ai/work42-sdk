@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.6.0
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.5.0 remain binary-compatible. Everything below is
+  additive public API; the one changed declaration, `ChatBubble`, keeps its previous initializer.
+- **`ConversationView`**: one scrolling conversation for the agent chat and the meeting transcript. It windows long
+  conversations (only the newest page is laid out and older pages load automatically near the top, keeping the reader's
+  place), follows new items only while the user is at the bottom, and shows a "Jump to latest" pill with the count of
+  unseen items when they are not. Rows are built per item with a `ConversationRowContext`; `ConversationBubble` places
+  a `ChatBubble` for it; `ConversationDateDivider` is the shared time divider.
+- **Labels by actor count.** With one other actor a conversation is sides only. With three or more distinct actors
+  (counted over the whole conversation) every run from a non-me actor shows a 32pt avatar, a coloured name and a time.
+  The pure rules live in `ConversationLayout` and are unit tested.
+- **`GlassAvatar`**: the one avatar look, a liquid-glass circle tinted with a single plain colour and the initials in
+  that colour (a material fallback before macOS 26). `ChatBubble` now draws its header avatar with it, and gains an
+  `avatarSize` initializer parameter (default 22, unchanged footprint).
+- **Profile photos and who is signed in.** `GlassAvatar` gains an `imageURL` initializer: the photo is clipped to a
+  circle inside the glass ring, loaded once per URL through the shared `GlassAvatarImageCache` (a failed URL is
+  remembered and not retried), with the initials shown until it arrives or if it never does. `ConversationActor` gains
+  an `imageURL`. In Work42PluginKit, `SessionServices.account` (computed, backed by `WidgetAccountRegistry`, which the
+  host sets at startup; `WidgetAccountService.currentUser()` returns a `WidgetAccountUser` with display name, email and
+  photo URL) lets a widget show "you". It is `nil` on hosts without it. `SessionServices` gets no stored property, so its
+  layout (and every plugin built against an earlier SDK) is unchanged. **Privacy:** every installed plugin can now read
+  the signed-in user's display name, email and profile photo URL. Plugins already run shell commands as the user, so
+  this adds no new capability, but it is a new, explicit data surface.
+- **`ConversationLabels`.** `ConversationView` takes `labels: .automatic` (default: avatars and names from three actors,
+  never on my lines, as in the agent chat) or `.always` (every run labeled whatever the number of actors, mine included,
+  with my label and avatar on the trailing side: the meeting transcript). `ConversationRowContext` gains `labelsMe`,
+  with its previous initializer kept.
+- **A mouse wheel now counts as the user scrolling.** The scroll probe also watches wheel events that land inside its
+  scroll view (trackpad and scrollbar gestures keep using the live-scroll notifications), so a wheel scroll can unpin the
+  view and load older pages.
+
 ## 2.5.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.4.1 remain binary-compatible. The source-level changes

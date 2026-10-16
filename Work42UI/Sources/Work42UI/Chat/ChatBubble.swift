@@ -93,6 +93,8 @@ public struct ChatBubble<Content: View>: View {
     /// "who is this?" speaker resolver (the avatar IS the affordance there,
     /// per the confirmed speaker-people-redesign mockup).
     let onAvatarTap: (() -> Void)?
+    /// Diameter of the header avatar (a `GlassAvatar`). 22 keeps the original footprint.
+    let avatarSize: CGFloat
     @ViewBuilder let content: () -> Content
 
     public init(
@@ -102,10 +104,26 @@ public struct ChatBubble<Content: View>: View {
         onAvatarTap: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
+        self.init(
+            side: side, style: style, header: header, onAvatarTap: onAvatarTap,
+            avatarSize: 22, content: content
+        )
+    }
+
+    /// As above, with an explicit header avatar diameter (the conversation view uses 32).
+    public init(
+        side: ChatBubbleSide,
+        style: ChatBubbleStyle,
+        header: ChatBubbleHeader? = nil,
+        onAvatarTap: (() -> Void)? = nil,
+        avatarSize: CGFloat,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.side = side
         self.style = style
         self.header = header
         self.onAvatarTap = onAvatarTap
+        self.avatarSize = avatarSize
         self.content = content
     }
 
@@ -118,6 +136,13 @@ public struct ChatBubble<Content: View>: View {
     // first layout pass simply hugs content (no cap) until the real
     // width arrives — same pattern as Flow42UserMessageBubble.
     @State private var availableWidth: CGFloat = 0
+
+    /// Width of the row a host (`ConversationView`) already measured once for the whole list. When
+    /// it is set the bubble skips its own per-row `GeometryReader`: with dozens of rows, each row's
+    /// measure-then-set-state round trip made every append cost a second layout pass per row.
+    @Environment(\.chatBubbleContainerWidth) private var containerWidth
+
+    private var effectiveWidth: CGFloat { containerWidth > 0 ? containerWidth : availableWidth }
 
     /// Fraction of the container width the bubble may occupy at most.
     /// 75% matches the existing Flow42UserMessageBubble cap.
@@ -178,17 +203,19 @@ public struct ChatBubble<Content: View>: View {
                 }
             }
         }
-        .background(
-            // Zero-height probe: measures the container's content width
-            // without affecting the bubble's intrinsic height.
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(
-                        key: ChatBubbleWidthKey.self,
-                        value: proxy.size.width
-                    )
+        .background {
+            // Zero-height probe: measures the container's content width without affecting the
+            // bubble's intrinsic height. Skipped when the host supplied the width.
+            if containerWidth == 0 {
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(
+                            key: ChatBubbleWidthKey.self,
+                            value: proxy.size.width
+                        )
+                }
             }
-        )
+        }
         .onPreferenceChange(ChatBubbleWidthKey.self) { width in
             availableWidth = width
         }
@@ -220,7 +247,7 @@ public struct ChatBubble<Content: View>: View {
             }
         }
         .frame(
-            maxWidth: availableWidth > 0 ? availableWidth * maxWidthFraction : nil,
+            maxWidth: effectiveWidth > 0 ? effectiveWidth * maxWidthFraction : nil,
             alignment: side == .leading ? .leading : .trailing
         )
         .padding(.horizontal, 4)
@@ -292,11 +319,7 @@ public struct ChatBubble<Content: View>: View {
     }
 
     private func initialsCircle(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(Color.white)
-            .frame(width: 22, height: 22)
-            .background(color, in: Circle())
+        GlassAvatar(initials: text, color: color, size: avatarSize)
     }
 
     private var relativeFormatter: DateFormatter { chatBubbleRelativeFormatter }
@@ -314,6 +337,20 @@ public extension EnvironmentValues {
     var chatBubbleForegroundColor: Color {
         get { self[ChatBubbleForegroundColorKey.self] }
         set { self[ChatBubbleForegroundColorKey.self] = newValue }
+    }
+}
+
+// MARK: - Host-supplied container width
+
+private struct ChatBubbleContainerWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// The width a bubble's row may use, measured once by the host list. 0 means "measure yourself".
+    var chatBubbleContainerWidth: CGFloat {
+        get { self[ChatBubbleContainerWidthKey.self] }
+        set { self[ChatBubbleContainerWidthKey.self] = newValue }
     }
 }
 
