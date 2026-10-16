@@ -339,6 +339,11 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
 
     // MARK: Layout
 
+    private struct RowKey {
+        let index: Int
+        let id: Item.ID
+    }
+
     private struct Layout {
         var labeled: Bool
         var runStarts: Set<Item.ID>
@@ -380,7 +385,10 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     public var body: some View {
         let windowStart = ConversationLayout.renderedStart(itemCount: items.count, renderCount: renderCount)
         let hiddenOlder = windowStart
-        let window = Array(items[windowStart...])
+        // The ForEach iterates light keys (an index and an id), not `Item` values: SwiftUI copies
+        // the data element on every placement pass, and for a multi-word enum that copy plus its
+        // ARC traffic dominated a fast scroll in the agent chat. The row looks its item up.
+        let rowKeys = (windowStart..<items.count).map { RowKey(index: $0, id: items[$0].id) }
         let layout = layout(windowStart: windowStart)
 
         return ScrollViewReader { proxy in
@@ -412,7 +420,9 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                     }
-                    ForEach(Array(window.enumerated()), id: \.element.id) { offset, item in
+                    ForEach(rowKeys, id: \.id) { key in
+                        let item = items[key.index]
+                        let offset = key.index - windowStart
                         let actor = layout.actors[item.id]
                         let isRunStart = actor == nil || layout.runStarts.contains(item.id)
                         let isFirst = offset == 0
@@ -541,12 +551,17 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             .onChange(of: scrollToBottomTrigger) { _, _ in
                 isPinnedToBottom = true
                 seenCount = items.count
+                // Order matters (a chat bug fixed the hard way): scroll to the bottom of the CURRENT,
+                // not-yet-trimmed content first, THEN trim the window. Dropping rows above the
+                // viewport once we are at the bottom is invisible; trimming before or together with
+                // the animated scroll races the content shrink's offset clamping against the scroll
+                // and can land away from the bottom.
+                scrollToBottom(proxy, animated: true)
                 if renderCount != pageSize {
                     var tx = Transaction()
                     tx.disablesAnimations = true
                     withTransaction(tx) { renderCount = pageSize }
                 }
-                scrollToBottom(proxy, animated: true)
             }
             // A turn can finish while the app is in the background, where the scroll cannot apply.
             // Re-pin on return, but only when already pinned so a deliberate scroll-up is kept.
