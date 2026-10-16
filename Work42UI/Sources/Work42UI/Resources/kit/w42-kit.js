@@ -178,8 +178,8 @@
     scaler.appendChild(frame);
     var status = el("div", "wk-mk-status");
     status.style.display = "none";
-    var loading = buildLoader("");
-    loading.className = "wk-loader wk-mk-loading";
+    var loading = el("div", "wk-mk-loading");
+    loading.appendChild(buildLoader(""));
     loading.style.display = "none";
     var stage = el("div", "wk-mk-stage");
     stage.appendChild(scaler); stage.appendChild(loading); stage.appendChild(status);
