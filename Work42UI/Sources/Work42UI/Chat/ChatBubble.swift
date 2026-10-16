@@ -93,6 +93,8 @@ public struct ChatBubble<Content: View>: View {
     /// "who is this?" speaker resolver (the avatar IS the affordance there,
     /// per the confirmed speaker-people-redesign mockup).
     let onAvatarTap: (() -> Void)?
+    /// Diameter of the header avatar (a `GlassAvatar`). 22 keeps the original footprint.
+    let avatarSize: CGFloat
     @ViewBuilder let content: () -> Content
 
     public init(
@@ -102,10 +104,26 @@ public struct ChatBubble<Content: View>: View {
         onAvatarTap: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
+        self.init(
+            side: side, style: style, header: header, onAvatarTap: onAvatarTap,
+            avatarSize: 22, content: content
+        )
+    }
+
+    /// As above, with an explicit header avatar diameter (the conversation view uses 32).
+    public init(
+        side: ChatBubbleSide,
+        style: ChatBubbleStyle,
+        header: ChatBubbleHeader? = nil,
+        onAvatarTap: (() -> Void)? = nil,
+        avatarSize: CGFloat,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.side = side
         self.style = style
         self.header = header
         self.onAvatarTap = onAvatarTap
+        self.avatarSize = avatarSize
         self.content = content
     }
 
@@ -292,11 +310,7 @@ public struct ChatBubble<Content: View>: View {
     }
 
     private func initialsCircle(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(Color.white)
-            .frame(width: 22, height: 22)
-            .background(color, in: Circle())
+        GlassAvatar(initials: text, color: color, size: avatarSize)
     }
 
     private var relativeFormatter: DateFormatter { chatBubbleRelativeFormatter }
