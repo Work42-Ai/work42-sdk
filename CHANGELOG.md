@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.5.0
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.4.1 remain binary-compatible. The source-level changes
+  below affect only hosts that call the artifact, markdown or card APIs directly; no plugin, template or Work42 host
+  code used the removed declarations.
+- **A new design kit for artifacts and documents.** Preline UI 4.2 and Tailwind v4 replace the hand-built Web Kit.
+  `Resources/kit/` carries vendored Preline, a Work42 theme that maps the type scale (`text-2xs` to `text-4xl`), the
+  semantic colours, radii and shadows onto the app's `--w42-*` tokens (so light, dark and the system accent drive
+  everything), the `wk-*` recipe layer (liquid-glass buttons, segmented control, fields, badges, cards, menus, toasts),
+  a precompiled `w42-kit-full.css` and a reference gallery (`kit/w42-gallery.html`). Agents write Tailwind and Preline
+  markup and `<i data-sf="…">` SF Symbols; the three kept components are `<w42-diagram>`, `<w42-mockup>` and
+  `<w42-flutter-mockup>`, rebuilt on the kit. Artifacts saved before the kit keep rendering with a frozen copy of the
+  old Web Kit (`kit/legacy/`).
+- **Token-only theme.** `CanvasTheme.tokensCSS()` emits the `--w42-*` tokens (light on `:root`, dark on `.dark`, live
+  accent, and a readable `--w42-on-accent`). `CanvasTemplate.composeKit` and `composeLegacy` build the artifact page;
+  `ArtifactShellAssets` serves the kit files (`_w42/kit/*`, `_w42/legacy/*`) and `SFSymbolRenderer` (moved here from the
+  app) draws SF Symbols as PNGs for `_w42/sf/<name>.png`.
+- **Markdown documents on the kit**, with the comment capsule now the native SwiftUI `Work42CommentCapsule`, placed
+  over the web view from the page's selection rect.
+- **Artifact tiles.** `ArtifactPreviewCard` no longer previews the content: it is a tile (a tilted 3D object in the
+  artifact's colour carrying its type icon, the title, and "Kind · age") on the design system's liquid-glass card
+  surface, with a glass Open button and, when the host supplies `onExport`, an export button. New:
+  `ArtifactCardAppearance`, `ArtifactExportFormat` (HTML, Markdown, PDF), `ArtifactExportButton` and
+  `ArtifactExportPopover`. The host does the exporting.
+- **The glass logo loader on web content.** The native web view loading and stalled overlays and the browser toolbar
+  use `LoadingIndicator`; the kit's `.wk-loader` is its web twin, used by the device mockup.
+- **Removed or changed public API** (none used by plugins or templates): `ArtifactPreviewCard.PreviewState`,
+  `.state`, `.reloadToken` and `SizeMode.narrowThreshold` (the card takes an `ArtifactCardAppearance`);
+  `CanvasTheme.css()` (use `tokensCSS()`, or `legacyCSS()` for the old output);
+  `CanvasTemplate.compose(content:themeCSS:)` (use `composeKit` or `composeLegacy`). The old `w42-components.css/js`
+  and `w42-gallery.html` resources are gone from the bundle root (the frozen copies live under `kit/legacy/`).
+  `MarkdownResources.init` gained an optional `symbolPNG` parameter (source-compatible).
+
 ## 2.4.1
 
 - Retain ABI generation `12`; no API changes.
