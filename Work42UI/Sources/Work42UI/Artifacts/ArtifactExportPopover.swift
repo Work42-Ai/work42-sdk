@@ -46,6 +46,43 @@ public enum ArtifactExportFormat: String, CaseIterable, Identifiable, Sendable {
     public var savesFile: Bool { self != .pdf }
 }
 
+/// The export button: a symbol on the design system's glass icon button that opens the format popover.
+/// One component for every place an artifact can be exported from (the tile and the detail header), so
+/// they always look and behave the same. The host does the exporting through `onExport`.
+public struct ArtifactExportButton: View {
+    private let title: String
+    private let onExport: (ArtifactExportFormat) -> Void
+
+    @State private var isShowing = false
+
+    public init(title: String, onExport: @escaping (ArtifactExportFormat) -> Void) {
+        self.title = title
+        self.onExport = onExport
+    }
+
+    public var body: some View {
+        Button {
+            isShowing = true
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: DT.f13, weight: .medium))
+        }
+        .glassIconButton()
+        .help("Export \(title)")
+        .accessibilityLabel("Export")
+        .popover(isPresented: $isShowing, arrowEdge: .bottom) {
+            ArtifactExportPopover(
+                title: title,
+                onSelect: { format in
+                    isShowing = false
+                    onExport(format)
+                },
+                onClose: { isShowing = false }
+            )
+        }
+    }
+}
+
 /// The popover content: the artifact's title, a close control and one row per format.
 struct ArtifactExportPopover: View {
     let title: String

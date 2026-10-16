@@ -124,7 +124,6 @@ public struct ArtifactPreviewCard: View {
     }
 
     @State private var isHovering = false
-    @State private var showExport = false
     @Environment(\.colorScheme) private var colorScheme
 
     public var body: some View {
@@ -184,25 +183,7 @@ public struct ArtifactPreviewCard: View {
     private var actions: some View {
         HStack(spacing: DT.s8) {
             if let onExport {
-                Button {
-                    showExport = true
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: DT.f13, weight: .medium))
-                }
-                .glassIconButton()
-                .help("Export \(title)")
-                .accessibilityLabel("Export")
-                .popover(isPresented: $showExport, arrowEdge: .bottom) {
-                    ArtifactExportPopover(
-                        title: title,
-                        onSelect: { format in
-                            showExport = false
-                            onExport(format)
-                        },
-                        onClose: { showExport = false }
-                    )
-                }
+                ArtifactExportButton(title: title, onExport: onExport)
             }
             Button {
                 onExpand(artifactId)
