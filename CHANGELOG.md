@@ -15,6 +15,14 @@
 - **`GlassAvatar`**: the one avatar look, a liquid-glass circle tinted with a single plain colour and the initials in
   that colour (a material fallback before macOS 26). `ChatBubble` now draws its header avatar with it, and gains an
   `avatarSize` initializer parameter (default 22, unchanged footprint).
+- **Profile photos and who is signed in.** `GlassAvatar` gains an `imageURL` initializer: the photo is clipped to a
+  circle inside the glass ring, loaded once per URL through the shared `GlassAvatarImageCache` (a failed URL is
+  remembered and not retried), with the initials shown until it arrives or if it never does. `ConversationActor` gains
+  an `imageURL`. In Work42PluginKit, `SessionServices.account` (`WidgetAccountService.currentUser()` returning a
+  `WidgetAccountUser` with display name, email and photo URL) lets a widget show "you"; it is `nil` on hosts without it,
+  and the previous `SessionServices` initializer is kept. **Privacy:** every installed plugin can now read the signed-in
+  user's display name, email and profile photo URL. Plugins already run shell commands as the user, so this adds no new
+  capability, but it is a new, explicit data surface.
 
 ## 2.5.0
 

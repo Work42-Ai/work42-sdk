@@ -4,24 +4,36 @@
 // colour. No gradient, no white ring, no drop shadow. `ChatBubble`, `ConversationView` and
 // meet42's `MeetAvatarView` all draw through this, so a person looks the same everywhere.
 
+import AppKit
 import SwiftUI
 
-/// A liquid-glass circle in one plain colour with the initials in that colour.
+/// A liquid-glass circle in one plain colour with the initials in that colour, or a photo.
 ///
 /// On macOS 26 the circle is real Liquid Glass (`.glassEffect`) tinted with `color`. Earlier
 /// systems get a thin material, a `color` wash and a hairline inner stroke, which reads the same
 /// way without the lensing.
+///
+/// With an `imageURL` the photo is clipped to a circle and inset inside the glass ring. Until it
+/// has loaded, or if it never does (offline, a broken URL), the initials show, so a row never waits
+/// on the network.
 public struct GlassAvatar: View {
     let initials: String
     let color: Color
     let size: CGFloat
+    let imageURL: URL?
 
     @Environment(\.colorScheme) private var colorScheme
+    @State private var photo: NSImage?
 
     public init(initials: String, color: Color, size: CGFloat = 32) {
+        self.init(initials: initials, color: color, size: size, imageURL: nil)
+    }
+
+    public init(initials: String, color: Color, size: CGFloat = 32, imageURL: URL?) {
         self.initials = initials
         self.color = color
         self.size = size
+        self.imageURL = imageURL
     }
 
     /// Initials colour: the plain colour in dark mode, deepened a little in light mode so it
@@ -30,15 +42,67 @@ public struct GlassAvatar: View {
         colorScheme == .dark ? color : color.mix(with: .black, by: 0.18)
     }
 
+    /// Width of the glass ring left visible around a photo.
+    private var ring: CGFloat { max(1.5, size * 0.05) }
+
     public var body: some View {
-        Text(initials)
-            .font(.system(size: size * 0.38, weight: .semibold))
-            .foregroundStyle(initialsColor)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .frame(width: size, height: size)
-            .modifier(GlassAvatarBackground(color: color))
-            .accessibilityLabel(initials)
+        ZStack {
+            Text(initials)
+                .font(.system(size: size * 0.38, weight: .semibold))
+                .foregroundStyle(initialsColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .opacity(photo == nil ? 1 : 0)
+            if let photo {
+                Image(nsImage: photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size - ring * 2, height: size - ring * 2)
+                    .clipShape(Circle())
+            }
+        }
+        .frame(width: size, height: size)
+        .modifier(GlassAvatarBackground(color: color))
+        .accessibilityLabel(initials)
+        .task(id: imageURL) {
+            guard let imageURL else { photo = nil; return }
+            photo = await GlassAvatarImageCache.shared.image(for: imageURL)
+        }
+    }
+}
+
+/// One decoded image per URL for the whole process, so a hundred rows showing the same person do
+/// not fetch it a hundred times. A URL that fails is remembered and not retried, so a broken photo
+/// costs one request, not one per redraw.
+@MainActor
+public final class GlassAvatarImageCache {
+
+    public static let shared = GlassAvatarImageCache()
+
+    private var images: [URL: NSImage] = [:]
+    private var failed: Set<URL> = []
+    private var inFlight: [URL: Task<NSImage?, Never>] = [:]
+
+    public init() {}
+
+    /// The cached image for `url` if it has loaded already.
+    public func cachedImage(for url: URL) -> NSImage? { images[url] }
+
+    /// The image at `url`: from the cache, else loaded once (concurrent callers share one request).
+    /// nil if it cannot be loaded; that outcome is cached too.
+    public func image(for url: URL) async -> NSImage? {
+        if let image = images[url] { return image }
+        if failed.contains(url) { return nil }
+        if let running = inFlight[url] { return await running.value }
+        let task = Task<NSImage?, Never> {
+            guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
+            return NSImage(data: data)
+        }
+        inFlight[url] = task
+        let image = await task.value
+        inFlight[url] = nil
+        if let image { images[url] = image } else { failed.insert(url) }
+        return image
     }
 }
 

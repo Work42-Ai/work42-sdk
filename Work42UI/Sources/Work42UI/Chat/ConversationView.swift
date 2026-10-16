@@ -27,15 +27,22 @@ public struct ConversationActor: Sendable, Hashable {
     public let initials: String
     /// The plain colour of this actor's avatar glass, initials and name.
     public let color: Color
-    /// True for the local user: trailing edge, accent bubble, never labeled.
+    /// True for the local user: trailing edge, accent bubble, never labeled in automatic mode.
     public let isMe: Bool
+    /// A profile photo shown in the avatar's glass ring instead of the initials, when there is one.
+    public let imageURL: URL?
 
     public init(id: String, name: String, initials: String, color: Color, isMe: Bool) {
+        self.init(id: id, name: name, initials: initials, color: color, isMe: isMe, imageURL: nil)
+    }
+
+    public init(id: String, name: String, initials: String, color: Color, isMe: Bool, imageURL: URL?) {
         self.id = id
         self.name = name
         self.initials = initials
         self.color = color
         self.isMe = isMe
+        self.imageURL = imageURL
     }
 }
 
@@ -91,7 +98,7 @@ public struct ConversationBubble<Content: View>: View {
         } else if context.labeled, let actor = context.actor {
             HStack(alignment: .top, spacing: 8) {
                 if context.showsLabel {
-                    GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize)
+                    GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize, imageURL: actor.imageURL)
                 } else {
                     Color.clear.frame(width: avatarSize, height: 1)
                 }

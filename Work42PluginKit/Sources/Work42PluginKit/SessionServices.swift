@@ -261,6 +261,32 @@ nonisolated public protocol WidgetPillService: Sendable {
     func isPresented(widgetId: String) async throws -> Bool
 }
 
+// MARK: - Account
+
+/// The signed-in Work42 account, as a widget may see it.
+///
+/// Privacy: every installed plugin can read this. It is the person's display name, email and profile
+/// photo URL; plugins already run shell commands as the user, so it adds no new capability, but it is
+/// an explicit data surface (see the SDK changelog).
+nonisolated public struct WidgetAccountUser: Sendable, Equatable {
+    public let displayName: String?
+    public let email: String?
+    /// The provider's profile photo (Google or GitHub), a remote https URL.
+    public let photoURL: URL?
+
+    public init(displayName: String?, email: String?, photoURL: URL?) {
+        self.displayName = displayName
+        self.email = email
+        self.photoURL = photoURL
+    }
+}
+
+/// Who is signed in to Work42, for widgets that show "you" (a transcript, a comment author).
+nonisolated public protocol WidgetAccountService: Sendable {
+    /// The signed-in user, or nil when signed out (or in a build without sign-in).
+    func currentUser() async -> WidgetAccountUser?
+}
+
 // MARK: - SessionServices
 
 /// The bundle of session services handed to a widget's lifecycle and view
@@ -298,6 +324,11 @@ nonisolated public struct SessionServices: Sendable {
     /// (s3). `nil` only when neither is available.
     public let worktreePath: String?
 
+    /// Who is signed in (name, email, photo URL), or nil on a host without account support
+    /// (SDK before 2.6.0, tests, previews). A nil `account` and a nil `currentUser()` both mean
+    /// "show the fallback".
+    public let account: (any WidgetAccountService)?
+
     public init(
         composer: any WidgetComposerService,
         shell: any WidgetShellService,
@@ -314,5 +345,27 @@ nonisolated public struct SessionServices: Sendable {
         self.pill = pill
         self.sessionId = sessionId
         self.worktreePath = worktreePath
+        self.account = nil
+    }
+
+    /// As above, with the account service (SDK 2.6.0).
+    public init(
+        composer: any WidgetComposerService,
+        shell: any WidgetShellService,
+        intents: any WidgetIntentsService,
+        storage: any WidgetStorageService,
+        pill: any WidgetPillService,
+        sessionId: String?,
+        worktreePath: String?,
+        account: (any WidgetAccountService)?
+    ) {
+        self.composer = composer
+        self.shell = shell
+        self.intents = intents
+        self.storage = storage
+        self.pill = pill
+        self.sessionId = sessionId
+        self.worktreePath = worktreePath
+        self.account = account
     }
 }
