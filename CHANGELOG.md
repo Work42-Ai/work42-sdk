@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.6.0
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.5.0 remain binary-compatible. Everything below is
+  additive public API; the one changed declaration, `ChatBubble`, keeps its previous initializer.
+- **`ConversationView`**: one scrolling conversation for the agent chat and the meeting transcript. It windows long
+  conversations (only the newest page is laid out and older pages load automatically near the top, keeping the reader's
+  place), follows new items only while the user is at the bottom, and shows a "Jump to latest" pill with the count of
+  unseen items when they are not. Rows are built per item with a `ConversationRowContext`; `ConversationBubble` places
+  a `ChatBubble` for it; `ConversationDateDivider` is the shared time divider.
+- **Labels by actor count.** With one other actor a conversation is sides only. With three or more distinct actors
+  (counted over the whole conversation) every run from a non-me actor shows a 32pt avatar, a coloured name and a time.
+  The pure rules live in `ConversationLayout` and are unit tested.
+- **`GlassAvatar`**: the one avatar look, a liquid-glass circle tinted with a single plain colour and the initials in
+  that colour (a material fallback before macOS 26). `ChatBubble` now draws its header avatar with it, and gains an
+  `avatarSize` initializer parameter (default 22, unchanged footprint).
+
 ## 2.5.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.4.1 remain binary-compatible. The source-level changes
