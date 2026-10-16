@@ -272,10 +272,50 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
                 endWheel()
                 return
             }
-            guard foundScrollView == nil else { return }
-            var candidate = superview
-            while let v = candidate, !(v is NSScrollView) { candidate = v.superview }
-            guard let scrollView = candidate as? NSScrollView else { return }
+            if wheelMonitor == nil {
+                wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                    MainActor.assumeIsolated { self?.handleWheel(event) }
+                    return event
+                }
+            }
+            bindScrollViewIfNeeded()
+        }
+
+        // The scroll view may not exist yet when this view first joins the window; try again as
+        // layout settles.
+        override func layout() {
+            super.layout()
+            bindScrollViewIfNeeded()
+        }
+
+        /// The `NSScrollView` this probe belongs to.
+        ///
+        /// The probe is a `.background` of the SwiftUI `ScrollView` and is sized to fill it, so it is a
+        /// SIBLING of the scroll view, not a descendant: walking up its superviews never reaches an
+        /// `NSScrollView`. Instead take the smallest scroll view in the window whose frame contains
+        /// the probe's centre.
+        private func resolveScrollView() -> NSScrollView? {
+            if let foundScrollView { return foundScrollView }
+            guard let content = window?.contentView else { return nil }
+            let centre = convert(NSPoint(x: bounds.midX, y: bounds.midY), to: nil)
+            var best: NSScrollView?
+            var bestArea = CGFloat.infinity
+            func visit(_ view: NSView) {
+                if let scroll = view as? NSScrollView {
+                    let frame = scroll.convert(scroll.bounds, to: nil)
+                    if frame.contains(centre), frame.width * frame.height < bestArea {
+                        best = scroll
+                        bestArea = frame.width * frame.height
+                    }
+                }
+                view.subviews.forEach(visit)
+            }
+            visit(content)
+            return best
+        }
+
+        private func bindScrollViewIfNeeded() {
+            guard foundScrollView == nil, let scrollView = resolveScrollView() else { return }
             foundScrollView = scrollView
             let center = NotificationCenter.default
             observers = [
@@ -290,18 +330,16 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
                     MainActor.assumeIsolated { self?.onLiveScrollChange?(false) }
                 },
             ]
-            wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                MainActor.assumeIsolated { self?.handleWheel(event) }
-                return event
-            }
         }
 
         private func handleWheel(_ event: NSEvent) {
-            guard let scrollView = foundScrollView, event.window === window else { return }
+            guard event.window === window else { return }
             // Phased events (trackpad, Magic Mouse) already post live-scroll notifications.
             guard event.phase.isEmpty, event.momentumPhase.isEmpty else { return }
+            bindScrollViewIfNeeded()
             // Only a wheel over THIS scroll view: scrolling another tile must not unpin this one.
-            guard scrollView.bounds.contains(scrollView.convert(event.locationInWindow, from: nil)) else { return }
+            guard let scrollView = foundScrollView,
+                  scrollView.bounds.contains(scrollView.convert(event.locationInWindow, from: nil)) else { return }
             if !wheelActive {
                 wheelActive = true
                 onLiveScrollChange?(true)
@@ -342,6 +380,10 @@ private final class ConversationScrollMetrics {
     var topOffset: CGFloat = .infinity
     /// One automatic page load per arrival at the top; re-armed once the page has landed.
     var loadArmed = true
+    /// The `renderCount` an append-driven growth is about to set. The re-anchor that keeps a reader's
+    /// place is for older PAGES loading above the viewport; growth from appended lines must not
+    /// re-anchor (it would scroll to the top of the window and cascade into page loads).
+    var appendGrowthTarget: Int?
     /// True once the user has scrolled by hand. The first layout pass reports the top before the
     /// bottom anchor applies, so without this a fresh open would load a page it does not need.
     var userHasScrolled = false
@@ -591,7 +633,6 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     isLiveScrolling = scrolling
                     if scrolling { metrics.userHasScrolled = true }
                 }
-                .frame(width: 0, height: 0)
             )
             // Distance may RE-pin (arriving back at the bottom is unambiguous, whatever the cause)
             // but may UNPIN only during a real gesture: content insertion, an animation settling
@@ -646,6 +687,9 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 if isPinnedToBottom {
                     seenCount = count
                 } else if count > lastItemCount {
+                    // Appended lines keep the window a superset so the reader's rows do not change;
+                    // flag it so the page-load re-anchor below ignores this growth.
+                    metrics.appendGrowthTarget = renderCount + (count - lastItemCount)
                     renderCount += count - lastItemCount
                 }
             }
@@ -654,6 +698,10 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             .onChange(of: renderCount) { oldCount, newCount in
                 defer { metrics.loadArmed = true }
                 guard newCount > oldCount else { return }
+                if metrics.appendGrowthTarget == newCount {
+                    metrics.appendGrowthTarget = nil
+                    return
+                }
                 let previousTop = ConversationLayout.renderedStart(itemCount: items.count, renderCount: oldCount)
                 guard items.indices.contains(previousTop) else { return }
                 var tx = Transaction()
