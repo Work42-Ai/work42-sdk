@@ -324,11 +324,6 @@ nonisolated public struct SessionServices: Sendable {
     /// (s3). `nil` only when neither is available.
     public let worktreePath: String?
 
-    /// Who is signed in (name, email, photo URL), or nil on a host without account support
-    /// (SDK before 2.6.0, tests, previews). A nil `account` and a nil `currentUser()` both mean
-    /// "show the fallback".
-    public let account: (any WidgetAccountService)?
-
     public init(
         composer: any WidgetComposerService,
         shell: any WidgetShellService,
@@ -345,27 +340,26 @@ nonisolated public struct SessionServices: Sendable {
         self.pill = pill
         self.sessionId = sessionId
         self.worktreePath = worktreePath
-        self.account = nil
     }
+}
 
-    /// As above, with the account service (SDK 2.6.0).
-    public init(
-        composer: any WidgetComposerService,
-        shell: any WidgetShellService,
-        intents: any WidgetIntentsService,
-        storage: any WidgetStorageService,
-        pill: any WidgetPillService,
-        sessionId: String?,
-        worktreePath: String?,
-        account: (any WidgetAccountService)?
-    ) {
-        self.composer = composer
-        self.shell = shell
-        self.intents = intents
-        self.storage = storage
-        self.pill = pill
-        self.sessionId = sessionId
-        self.worktreePath = worktreePath
-        self.account = account
-    }
+// MARK: - Account access
+
+/// Where the host registers its account service. Set once at startup; nil on hosts without
+/// sign-in (tests, previews, SDK before 2.6.0).
+///
+/// It lives here rather than as a stored property of `SessionServices` because that struct's
+/// memory layout is part of the binary contract with plugins built against older SDKs (see
+/// `PublicLayoutStabilityTests`): adding a stored property would change its size.
+@MainActor
+public enum WidgetAccountRegistry {
+    public static var service: (any WidgetAccountService)?
+}
+
+extension SessionServices {
+    /// Who is signed in (name, email, photo URL), or nil on a host without account support.
+    /// A nil `account` and a nil `currentUser()` both mean "show the fallback". Computed, so the
+    /// struct's layout is unchanged.
+    @MainActor
+    public var account: (any WidgetAccountService)? { WidgetAccountRegistry.service }
 }

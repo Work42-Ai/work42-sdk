@@ -18,11 +18,12 @@
 - **Profile photos and who is signed in.** `GlassAvatar` gains an `imageURL` initializer: the photo is clipped to a
   circle inside the glass ring, loaded once per URL through the shared `GlassAvatarImageCache` (a failed URL is
   remembered and not retried), with the initials shown until it arrives or if it never does. `ConversationActor` gains
-  an `imageURL`. In Work42PluginKit, `SessionServices.account` (`WidgetAccountService.currentUser()` returning a
-  `WidgetAccountUser` with display name, email and photo URL) lets a widget show "you"; it is `nil` on hosts without it,
-  and the previous `SessionServices` initializer is kept. **Privacy:** every installed plugin can now read the signed-in
-  user's display name, email and profile photo URL. Plugins already run shell commands as the user, so this adds no new
-  capability, but it is a new, explicit data surface.
+  an `imageURL`. In Work42PluginKit, `SessionServices.account` (computed, backed by `WidgetAccountRegistry`, which the
+  host sets at startup; `WidgetAccountService.currentUser()` returns a `WidgetAccountUser` with display name, email and
+  photo URL) lets a widget show "you". It is `nil` on hosts without it. `SessionServices` gets no stored property, so its
+  layout (and every plugin built against an earlier SDK) is unchanged. **Privacy:** every installed plugin can now read
+  the signed-in user's display name, email and profile photo URL. Plugins already run shell commands as the user, so
+  this adds no new capability, but it is a new, explicit data surface.
 - **`ConversationLabels`.** `ConversationView` takes `labels: .automatic` (default: avatars and names from three actors,
   never on my lines, as in the agent chat) or `.always` (every run labeled whatever the number of actors, mine included,
   with my label and avatar on the trailing side: the meeting transcript). `ConversationRowContext` gains `labelsMe`,
