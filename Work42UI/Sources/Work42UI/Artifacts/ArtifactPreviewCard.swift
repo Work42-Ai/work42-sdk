@@ -3,15 +3,15 @@
 // THE shared artifact card: the chat transcript's inline card and the Artifacts gallery's
 // grid card are the same component in two size modes.
 //
-// It does NOT preview the artifact. A card is a colour wash: a gradient of the artifact's
-// colour, a type badge, a large faint type icon, the title and when it changed. The colour
-// and the kind come from the artifact itself (`work42 artifact set` records them), the card
-// only draws them, so it never renders a webview or a snapshot and can never churn list
-// layout. The whole card is the button that opens the artifact; there is no expand control.
+// It does NOT preview the artifact. A card is a tile: a tilted 3D object in the artifact's colour,
+// carrying the type icon, bleeds off the left edge, and the title and "Kind · age" sit beside it on
+// the plain card surface. The colour and the kind come from the artifact itself (`work42 artifact set`
+// records them), the card only draws them, so it never renders a webview or a snapshot and can never
+// churn list layout. The same tile is used in the chat transcript and, as a list, in the gallery.
 //
 // STATES
 // ──────
-//   appearance != nil — the colour wash card.
+//   appearance != nil — the tile.
 //   appearance == nil — the artifact has no content: the fail-loud "not found" card,
 //                       naming the artifact id.
 
@@ -39,6 +39,19 @@ public struct ArtifactCardAppearance: Equatable, Sendable {
             case .caution: DT.amber
             }
         }
+
+        /// A neighbouring hue the wash blends into, so each colour reads as a gradient with
+        /// some depth instead of a flat tint (blue → cyan, green → cyan, orange → amber, …).
+        public var companion: Color {
+            switch self {
+            case .accent: DT.cyan
+            case .success: DT.cyan
+            case .warning: DT.amber
+            case .danger: DT.orange
+            case .info: DT.systemAccent
+            case .caution: DT.orange
+            }
+        }
     }
 
     /// The badge text ("Diagram", "Report", …).
@@ -56,12 +69,12 @@ public struct ArtifactCardAppearance: Equatable, Sendable {
 
 // MARK: - ArtifactPreviewCard
 
-/// Shared colour-wash card for artifacts (chat inline + gallery grid).
+/// Shared tile card for artifacts (chat inline + gallery list).
 @MainActor
 public struct ArtifactPreviewCard: View {
 
-    /// The two homes of the card. Chat resolves an explicit width upstream; the grid card
-    /// fills its column. Both have a fixed height, so the card can never churn list layout.
+    /// The two homes of the card. Chat resolves an explicit width upstream; the gallery list tile
+    /// fills the list's width. Both have the same fixed height, so the card can never churn list layout.
     public enum SizeMode: Equatable {
         case chat(width: CGFloat)
         case thumbnail
@@ -75,8 +88,8 @@ public struct ArtifactPreviewCard: View {
 
         var height: CGFloat {
             switch self {
-            case .chat: 112
-            case .thumbnail: 124
+            case .chat: 100
+            case .thumbnail: 100
             }
         }
     }
@@ -87,8 +100,10 @@ public struct ArtifactPreviewCard: View {
     /// Shown as a relative "2m ago" under the title when provided.
     public let timestamp: Date?
     public let sizeMode: SizeMode
-    /// Called when the card is clicked. The argument is `artifactId`.
+    /// Called when the tile or its Open button is clicked. The argument is `artifactId`.
     public let onExpand: (String) -> Void
+    /// Called when a format is chosen in the export popover. `nil` hides the export button.
+    public let onExport: ((ArtifactExportFormat) -> Void)?
 
     public init(
         appearance: ArtifactCardAppearance?,
@@ -96,7 +111,8 @@ public struct ArtifactPreviewCard: View {
         artifactId: String,
         timestamp: Date? = nil,
         sizeMode: SizeMode,
-        onExpand: @escaping (String) -> Void
+        onExpand: @escaping (String) -> Void,
+        onExport: ((ArtifactExportFormat) -> Void)? = nil
     ) {
         self.appearance = appearance
         self.title = title
@@ -104,9 +120,11 @@ public struct ArtifactPreviewCard: View {
         self.timestamp = timestamp
         self.sizeMode = sizeMode
         self.onExpand = onExpand
+        self.onExport = onExport
     }
 
     @State private var isHovering = false
+    @State private var showExport = false
     @Environment(\.colorScheme) private var colorScheme
 
     public var body: some View {
@@ -119,62 +137,138 @@ public struct ArtifactPreviewCard: View {
 
     // MARK: - Colour wash card
 
-    /// Built from the design system: the `Card` surface, the `.sessionChip` badge tinted by
-    /// `DT.resolveChipTint` (the same resolver `HeaderLabelChip` uses), and DT spacing and type tokens.
-    /// Only the wash behind the card is specific to artifacts.
+    /// A tile: a tilted 3D object bleeding off the left edge carries the type icon, and the title and
+    /// "Kind · age" sit beside it on the plain card surface. The artifact's colour lives only on the object.
+    /// Built from the design system: its liquid-glass card surface (`glassCardSurface`) and DT spacing, type
+    /// and colour tokens. Only the object is specific to artifacts.
     @ViewBuilder
     private func washCard(_ appearance: ArtifactCardAppearance) -> some View {
-        let tint = appearance.tint.color
-        let chip = DT.resolveChipTint(tint, colorScheme: colorScheme)
-        Button {
-            onExpand(artifactId)
-        } label: {
-            Card(padding: DT.s12) {
-                VStack(alignment: .leading, spacing: DT.s4) {
-                    Text(appearance.kindLabel)
-                        .font(.system(size: DT.f10, weight: .semibold))
-                        .foregroundStyle(chip.foreground)
-                        .sessionChip(fill: chip.fill, stroke: chip.stroke)
-                    Spacer(minLength: DT.s4)
-                    Text(title)
-                        .font(.system(size: DT.f15, weight: .semibold))
-                        .foregroundStyle(DT.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    if let timestamp {
-                        Text(Self.relativeFormatter.localizedString(for: timestamp, relativeTo: Date()))
-                            .font(.system(size: DT.f11))
-                            .foregroundStyle(DT.textSecondary)
-                    }
-                }
-                .frame(maxHeight: .infinity, alignment: .topLeading)
+        let look = Look(seed: artifactId)
+        HStack(spacing: DT.s12) {
+            object(appearance, look: look)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: DT.f15, weight: .semibold))
+                    .foregroundStyle(DT.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Text(subtitle(appearance))
+                    .font(.system(size: DT.f12))
+                    .foregroundStyle(DT.textSecondary)
+                    .lineLimit(1)
             }
-            .frame(width: sizeMode.cardWidth)
-            .frame(maxWidth: sizeMode.cardWidth == nil ? .infinity : nil)
-            .frame(height: sizeMode.height)
-            .background { wash(tint: tint, symbol: appearance.symbol) }
-            .clipShape(RoundedRectangle(cornerRadius: DT.rCard, style: .continuous))
-            .contentShape(Rectangle())
+            Spacer(minLength: 0)
+            actions
+                .padding(.trailing, DT.s12)
         }
-        .buttonStyle(.plain)
+        .frame(height: sizeMode.height)
+        .frame(width: sizeMode.cardWidth)
+        .frame(maxWidth: sizeMode.cardWidth == nil ? .infinity : nil)
+        // Transparent Liquid Glass, the design system's card surface (real `.glassEffect` on macOS 26,
+        // the standard surface with a hairline before that). The object is clipped to the same shape.
+        .glassCardSurface(cornerRadius: DT.rPanel)
+        .clipShape(RoundedRectangle(cornerRadius: DT.rPanel, style: .continuous))
+        .contentShape(Rectangle())
+        // The whole tile opens the artifact; the glass buttons handle their own clicks.
+        .onTapGesture { onExpand(artifactId) }
+        .scaleEffect(isHovering ? 1.008 : 1)
+        .animation(.spring(response: 0.3, dampingFraction: 0.72), value: isHovering)
         .onHover { isHovering = $0 }
         .help("Open \(title)")
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(appearance.kindLabel): \(title)")
-        .accessibilityHint("Opens the artifact")
     }
 
-    /// The artifact's colour as a soft diagonal wash, with its type icon large and faint in the corner.
-    private func wash(tint: Color, symbol: String) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            LinearGradient(
-                colors: [tint.opacity(0.30), tint.opacity(0.10), .clear],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-            Image(systemName: symbol)
-                .font(.system(size: 56, weight: .light))
-                .foregroundStyle(tint.opacity(isHovering ? 0.30 : 0.20))
-                .padding(.trailing, DT.s12)
-                .padding(.bottom, DT.s4)
+    /// The tile's controls, both on the design system's liquid glass: an export button (when the host
+    /// supports exporting) that opens the format popover, and Open.
+    private var actions: some View {
+        HStack(spacing: DT.s8) {
+            if let onExport {
+                Button {
+                    showExport = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: DT.f13, weight: .medium))
+                }
+                .glassIconButton()
+                .help("Export \(title)")
+                .accessibilityLabel("Export")
+                .popover(isPresented: $showExport, arrowEdge: .bottom) {
+                    ArtifactExportPopover(
+                        title: title,
+                        onSelect: { format in
+                            showExport = false
+                            onExport(format)
+                        },
+                        onClose: { showExport = false }
+                    )
+                }
+            }
+            Button {
+                onExpand(artifactId)
+            } label: {
+                Text("Open")
+                    .font(.system(size: DT.f12, weight: .semibold))
+            }
+            .glassPlainCapsule()
+            .help("Open \(title)")
+        }
+    }
+
+    /// "Diagram · 2m ago" (or just the kind when there is no timestamp).
+    private func subtitle(_ appearance: ArtifactCardAppearance) -> String {
+        guard let timestamp else { return appearance.kindLabel }
+        return "\(appearance.kindLabel) · \(Self.relativeFormatter.localizedString(for: timestamp, relativeTo: Date()))"
+    }
+
+    /// The tilted object: a glossy rounded slab in the artifact colour (blending into its companion hue)
+    /// carrying the type icon, with the icon's own soft shadow for depth. It bleeds off the bottom-left
+    /// of the card, tips a different way on each card, and lifts on hover.
+    private func object(_ appearance: ArtifactCardAppearance, look: Look) -> some View {
+        let tint = appearance.tint
+        let corner: CGFloat = 20
+        return ZStack {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(LinearGradient(colors: [tint.color, tint.companion], startPoint: .topLeading, endPoint: .bottomTrailing))
+            // Deepen the hue so it reads as a rich, muted shade rather than a bright one.
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(Color.black.opacity(colorScheme == .dark ? 0.30 : 0.16))
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(LinearGradient(colors: [Color.white.opacity(0.26), Color.white.opacity(0.04), .clear], startPoint: .top, endPoint: .bottom))
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
+            ZStack {
+                Image(systemName: appearance.symbol)
+                    .symbolVariant(.fill)
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.28))
+                    .blur(radius: 2)
+                    .offset(y: 2)
+                Image(systemName: appearance.symbol)
+                    .symbolVariant(.fill)
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+            .padding(.bottom, 16)
+        }
+        .frame(width: 70, height: 104)
+        .shadow(color: Color.black.opacity(0.30), radius: 8, y: 5)
+        .rotation3DEffect(.degrees(look.turn + (isHovering ? 4 : 0)), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+        .rotationEffect(.degrees(look.tilt))
+        .offset(x: 6, y: isHovering ? 8 : 14)
+        .frame(width: 100, height: sizeMode.height, alignment: .topLeading)
+        .clipped()
+    }
+
+    /// Per-artifact variety, derived from the id so it is stable across launches.
+    private struct Look {
+        let turn: Double
+        let tilt: Double
+
+        init(seed: String) {
+            let n = seed.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
+            turn = [-16, 14, -12, 16][n % 4]
+            tilt = [-8, 7, -5, 8][(n / 4) % 4]
         }
     }
 
