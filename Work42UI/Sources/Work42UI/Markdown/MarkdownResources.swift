@@ -27,6 +27,7 @@ import UniformTypeIdentifiers
 /// Serves `w42res://` resources for the markdown WebView:
 ///   • `w42res://media/img?p=<percent-encoded-absolute-path>` → the file's bytes
 ///   • `w42res://asset/mermaid.min.js`                        → the bundled lib
+///   • `w42res://sf/<name>.png`                               → an SF Symbol, drawn by the app
 ///
 /// A plain (non-isolated) class so it satisfies WebKit's non-isolated
 /// `WKURLSchemeHandler` requirements cleanly. The mermaid library bytes are
@@ -37,10 +38,16 @@ public final class MarkdownResourceSchemeHandler: NSObject, WKURLSchemeHandler {
 
     private let mermaidLibrary: Data?
     private let highlightLibrary: Data?
+    /// Renders an SF Symbol to PNG data (`SFSymbolCache.png(for:)`); nil serves no symbols.
+    private let symbolPNG: (@Sendable (String) -> Data?)?
 
-    public init(mermaidLibrary: Data?, highlightLibrary: Data? = nil) {
+    public init(
+        mermaidLibrary: Data?, highlightLibrary: Data? = nil,
+        symbolPNG: (@Sendable (String) -> Data?)? = nil
+    ) {
         self.mermaidLibrary = mermaidLibrary
         self.highlightLibrary = highlightLibrary
+        self.symbolPNG = symbolPNG
         super.init()
     }
 
@@ -60,6 +67,16 @@ public final class MarkdownResourceSchemeHandler: NSObject, WKURLSchemeHandler {
                 task.didFailWithError(Self.notFound); return
             }
             Self.respond(task, url: url, data: data, mime: "application/javascript")
+
+        case "sf":
+            // `w42res://sf/<name>.png`: the diagram and mockup widgets draw their icons as CSS masks
+            // of these PNGs. A mask image is fetched in CORS mode, so the response says it may be used.
+            let file = String(url.path.dropFirst())
+            guard file.hasSuffix(".png"),
+                  let data = symbolPNG?(String(file.dropLast(4))) else {
+                task.didFailWithError(Self.notFound); return
+            }
+            Self.respond(task, url: url, data: data, mime: "image/png", allowAnyOrigin: true)
 
         case "media":
             guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -81,11 +98,24 @@ public final class MarkdownResourceSchemeHandler: NSObject, WKURLSchemeHandler {
 
     private static let notFound = NSError(domain: "MarkdownResource", code: 404)
 
-    private static func respond(_ task: WKURLSchemeTask, url: URL, data: Data, mime: String) {
-        let response = URLResponse(
-            url: url, mimeType: mime,
-            expectedContentLength: data.count, textEncodingName: nil
-        )
+    private static func respond(
+        _ task: WKURLSchemeTask, url: URL, data: Data, mime: String, allowAnyOrigin: Bool = false
+    ) {
+        let response: URLResponse
+        if allowAnyOrigin,
+           let http = HTTPURLResponse(
+               url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+               headerFields: [
+                   "Content-Type": mime, "Content-Length": String(data.count),
+                   "Access-Control-Allow-Origin": "*",
+               ]) {
+            response = http
+        } else {
+            response = URLResponse(
+                url: url, mimeType: mime,
+                expectedContentLength: data.count, textEncodingName: nil
+            )
+        }
         task.didReceive(response)
         task.didReceive(data)
         task.didFinish()
@@ -111,6 +141,10 @@ public enum MarkdownImageRewriter {
     /// The `w42res://asset/highlight.min.js` URL the markdown template loads the
     /// bundled highlight.js library from (served by `MarkdownResourceSchemeHandler`).
     public static let highlightScriptURL = "\(MarkdownResourceSchemeHandler.scheme)://asset/highlight.min.js"
+
+    /// The base the kit widgets build SF Symbol URLs from in a markdown document (artifact pages
+    /// use the relative `_w42/sf/`). Served by `MarkdownResourceSchemeHandler`.
+    public static let symbolBaseURL = "\(MarkdownResourceSchemeHandler.scheme)://sf/"
 
     /// Rewrite LOCAL `<img>` srcs in `html` to the `w42res://media` scheme so
     /// the scheme handler can serve them (WebKit blocks direct file loads under

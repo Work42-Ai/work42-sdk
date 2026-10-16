@@ -1,0 +1,23 @@
+/* ============================================================
+   Work42 kit entry — the ONE file the compiler imports.
+
+   Usage (after `@import "tailwindcss" source(none);`):
+     @import "<bundle>/kit/w42-kit.css";
+
+   Order matters: Preline's theme and plugin variants first, then the
+   Work42 theme (so its :root/.dark overrides win), then the recipes.
+   ============================================================ */
+@import "./preline/theme.css";
+@import "./preline/variants/dropdown.css";
+@import "./preline/variants/tooltip.css";
+@import "./preline/variants/tabs.css";
+@import "./preline/variants/overlay.css";
+@import "./preline/variants/scrollspy.css";
+@import "./preline/variants/select.css";
+@import "./preline/variants/input-number.css";
+@import "./preline/variants/remove-element.css";
+@import "./preline/variants/accordion.css";
+@import "./preline/variants/collapse.css";
+@import "./w42-theme.css";
+@import "./w42-recipes.css";
+@import "./w42-widgets.css";

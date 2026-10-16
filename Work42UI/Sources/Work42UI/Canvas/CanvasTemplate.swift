@@ -15,7 +15,7 @@
 //
 // `compose(content:themeCSS:)` is `nonisolated` pure string work: it
 // takes the already-generated theme CSS as input (so it never has to call
-// the `@MainActor CanvasTheme.css()` itself) and can be invoked freely
+// the `@MainActor CanvasTheme.legacyCSS()` itself) and can be invoked freely
 // from the canvas server off the main actor.
 
 import Foundation
@@ -53,7 +53,7 @@ public enum CanvasTemplate {
     /// `Bundle.module` is `@MainActor`-isolated under this module's default
     /// isolation, so the read happens on the main actor; the canvas server
     /// calls this once at start and caches the bytes for its off-main
-    /// request path (mirroring how it caches `CanvasTheme.css()`).
+    /// request path (mirroring how it caches `CanvasTheme.legacyCSS()`).
     @MainActor
     public static func mermaidLibrary() -> Data? {
         guard let url = Bundle.module.url(
@@ -80,9 +80,8 @@ public enum CanvasTemplate {
 
     @MainActor
     public static func componentLibraryCSS() -> String {
-        guard let url = Bundle.module.url(
-            forResource: "w42-components", withExtension: "css"
-        ), let css = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        guard let data = ArtifactShellAssets.kitFileData("legacy/w42-components-v1.css"),
+              let css = String(data: data, encoding: .utf8) else { return "" }
         return css
     }
 
@@ -90,9 +89,8 @@ public enum CanvasTemplate {
     /// inline it (markdown documents) instead of loading `_w42/w42-components.js`.
     @MainActor
     public static func componentLibraryJS() -> String {
-        guard let url = Bundle.module.url(
-            forResource: "w42-components", withExtension: "js"
-        ), let js = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        guard let data = ArtifactShellAssets.kitFileData("legacy/w42-components-v1.js"),
+              let js = String(data: data, encoding: .utf8) else { return "" }
         return js
     }
 
@@ -1152,7 +1150,7 @@ public enum CanvasTemplate {
     """
 
     /// CSS for the inline error overlay banner. Theme-aware: it leans on
-    /// the `--w42-*` custom properties emitted by `CanvasTheme.css()`
+    /// the `--w42-*` custom properties emitted by `CanvasTheme.legacyCSS()`
     /// (e.g. `--w42-red`, `--w42-surface`), with hard fallbacks so it
     /// still renders if the theme stylesheet failed to load.
     ///
@@ -1563,8 +1561,54 @@ public enum CanvasTemplate {
     })();
     """
 
+    /// The kit page's appearance + theme bridge, injected in `<head>` BEFORE first
+    /// paint (so a dark OS never flashes light). It does two things:
+    ///
+    /// 1. Sets/clears ONLY the `dark` class on `<html>` from
+    ///    `prefers-color-scheme` and follows live changes. `CanvasTheme.tokensCSS()`
+    ///    keys the dark token values on `.dark`, and the kit's Tailwind `dark:`
+    ///    variant is `(&:where(.dark, .dark *))`. Other classes on `<html>` (a
+    ///    full-document artifact may set its own) are left alone.
+    /// 2. Defines `window.__w42.theme.apply(tokens)`, the live re-theme entry point
+    ///    `ThemeReactiveLayer` calls on an accent/theme change: it writes the pushed
+    ///    `--w42-*` values onto `:root` and re-runs mermaid if present. (Same contract
+    ///    the legacy `w42-components.js` provided; kit pages do not load that file.)
+    public nonisolated static let appearanceScript = """
+    <script>
+    (function () {
+      var root = document.documentElement;
+      var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+      function sync() { root.classList.toggle("dark", !!(mq && mq.matches)); }
+      sync();
+      if (mq) {
+        if (mq.addEventListener) { mq.addEventListener("change", sync); }
+        else if (mq.addListener) { mq.addListener(sync); }
+      }
+      window.__w42 = window.__w42 || {};
+      window.__w42.theme = window.__w42.theme || {
+        apply: function (tokens) {
+          if (!tokens) { return; }
+          try {
+            for (var k in tokens) {
+              if (!Object.prototype.hasOwnProperty.call(tokens, k)) { continue; }
+              var name = (k.indexOf("--") === 0) ? k : ("--w42-" + k);
+              root.style.setProperty(name, String(tokens[k]));
+            }
+          } catch (e) { if (window.console && console.error) { console.error("w42 theme.apply:", e); } }
+          try {
+            if (window.__w42.mermaid && typeof window.__w42.mermaid.rerender === "function") {
+              window.__w42.mermaid.rerender();
+            }
+          } catch (e2) {}
+        }
+      };
+    })();
+    </script>
+    """
+
     /// Composes a complete, theme-matched HTML document from an agent
-    /// content fragment.
+    /// content fragment, in the LEGACY Web Kit (artifacts saved before the Preline
+    /// kit, i.e. `meta.json` without `kit`). New artifacts use `composeKit`.
     ///
     /// The agent supplies only the markup it wants shown; this wraps it in
     /// the document shell (`<head>` with charset/viewport/`color-scheme` +
@@ -1584,9 +1628,9 @@ public enum CanvasTemplate {
     /// - Parameters:
     ///   - content: the agent's HTML fragment (rendered as markup as-is).
     ///   - themeCSS: the theme stylesheet to inline, normally the output
-    ///     of `CanvasTheme.css()`.
+    ///     of `CanvasTheme.legacyCSS()`.
     /// - Returns: a complete `<!doctype html>` document string.
-    public nonisolated static func compose(content: String, themeCSS: String) -> String {
+    public nonisolated static func composeLegacy(content: String, themeCSS: String) -> String {
         return """
         <!doctype html>
         <html lang="en">
@@ -1598,7 +1642,7 @@ public enum CanvasTemplate {
         <style>
         \(themeCSS)
         </style>
-        <link rel="stylesheet" href="_w42/w42-components.css">
+        <link rel="stylesheet" href="\(ArtifactShellAssets.legacyCSSAssetPath)">
         <style>
         \(proseCSS)
         </style>
@@ -1622,7 +1666,7 @@ public enum CanvasTemplate {
         <script>
         \(mermaidJS())
         </script>
-        <script src="_w42/w42-components.js"></script>
+        <script src="\(ArtifactShellAssets.legacyJSAssetPath)"></script>
         <script>
         \(highlightJS())
         </script>
@@ -1632,5 +1676,212 @@ public enum CanvasTemplate {
         </body>
         </html>
         """
+    }
+
+    // MARK: - Kit pages (Preline + Work42 theme)
+
+    /// Optional kit runtimes a page may need (`KitCompiler.detectRuntime`).
+    public nonisolated static let kitRuntimePreline = "preline"
+    public nonisolated static let kitRuntimeW42 = "w42"
+
+    /// What a kit page puts in `<head>`: the token stylesheet, the appearance
+    /// script (so the `dark` class is set before first paint), the compiled
+    /// `kit.css` (or, when the per-artifact compile failed or has not run, the
+    /// precompiled `w42-kit-full.css`), and the error overlay's CSS. No element
+    /// rules: the kit (Tailwind + Preline) owns every element style.
+    public nonisolated static func kitHead(themeCSS: String, hasKitCSS: Bool) -> String {
+        let kit = hasKitCSS ? "kit.css" : "\(ArtifactShellAssets.kitAssetPrefix)w42-kit-full.css"
+        return """
+        <style>
+        \(themeCSS)
+        </style>
+        \(appearanceScript)
+        <link rel="stylesheet" href="\(kit)">
+        <style>
+        \(overlayCSS)
+        </style>
+        <style>
+        \(highlightCSS)
+        </style>
+
+        """
+    }
+
+    /// What a kit page puts before `</body>`: the error overlay, mermaid and
+    /// highlight auto-renderers (both no-ops when the page has no diagram or code
+    /// block), then the optional runtimes the artifact needs.
+    public nonisolated static func kitBodyEnd(runtime: [String]) -> String {
+        var out = """
+        <script>
+        \(overlayJS)
+        </script>
+        <script>
+        \(mermaidJS())
+        </script>
+        <script>
+        \(highlightJS())
+        </script>
+
+        """
+        if runtime.contains(kitRuntimePreline) {
+            out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)preline/preline.js\"></script>\n"
+        }
+        if runtime.contains(kitRuntimeW42) {
+            // The diagram bridge (cards for every rendered diagram) and the mockup / toast runtime.
+            out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)w42-diagram.js\"></script>\n"
+            out += "<script src=\"\(ArtifactShellAssets.kitAssetPrefix)w42-kit.js\"></script>\n"
+        }
+        return out
+    }
+
+    /// The shell's own page rules for a FRAGMENT artifact (a full document owns its
+    /// own). Plain CSS inside `@layer base` — Tailwind only compiles the classes in
+    /// the artifact's `index.html`, so the shell cannot rely on utility classes —
+    /// which keeps every utility the artifact uses able to override it.
+    nonisolated static let kitShellCSS = """
+    @layer theme, base, components, utilities;
+    @layer base {
+      html { background: var(--w42-backdrop); }
+      body {
+        margin: 0;
+        background: var(--w42-backdrop);
+        color: var(--w42-text-primary);
+        font-family: var(--w42-font-family);
+        font-size: var(--w42-f13);
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
+        -webkit-text-size-adjust: 100%;
+      }
+      #w42-canvas-content { padding: var(--w42-s16); }
+    }
+    """
+
+    /// Composes a kit page.
+    ///
+    /// - Parameters:
+    ///   - content: the artifact's `index.html` — a fragment, or a whole document when `full`.
+    ///   - themeCSS: `CanvasTheme.tokensCSS()`.
+    ///   - runtime: the optional runtimes the artifact needs (`meta.kitRuntime`).
+    ///   - full: serve `content` as the document and splice the kit pieces into it.
+    ///   - hasKitCSS: whether the artifact has its compiled `kit.css`.
+    public nonisolated static func composeKit(
+        content: String, themeCSS: String, runtime: [String], full: Bool, hasKitCSS: Bool
+    ) -> String {
+        let head = kitHead(themeCSS: themeCSS, hasKitCSS: hasKitCSS)
+        let bodyEnd = kitBodyEnd(runtime: runtime)
+        if full {
+            return injectIntoDocument(content, head: head, bodyEnd: bodyEnd)
+        }
+        return """
+        <!doctype html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="color-scheme" content="light dark">
+        <title>Canvas</title>
+        <style>
+        \(kitShellCSS)
+        </style>
+        \(head)</head>
+        <body>
+        <main id="w42-canvas-content">
+        \(content)
+        </main>
+        \(bodyEnd)</body>
+        </html>
+        """
+    }
+
+    // MARK: - Markdown prose (kit)
+
+    /// Typography for a markdown document on the kit. The kit's preflight strips every element
+    /// default, so this restores the whole set — headings, links, lists, code, quotes, tables —
+    /// on the Work42 type scale (`--w42-f*`) and label colours, scoped to `.w42-prose`.
+    /// It sits in `@layer components`: above the preflight, below utilities, so a utility class on
+    /// raw HTML inside a document (`text-sm`, `rounded-card`) still overrides it.
+    public nonisolated static let kitProseCSS = """
+    @layer components {
+      .w42-prose {
+        font-size: var(--w42-f13); line-height: 1.55; color: var(--w42-text-primary);
+        word-wrap: break-word; overflow-wrap: anywhere;
+      }
+      .w42-prose > :first-child { margin-top: 0; }
+      .w42-prose h1, .w42-prose h2, .w42-prose h3, .w42-prose h4, .w42-prose h5, .w42-prose h6 {
+        margin: var(--w42-s16) 0 var(--w42-s4); line-height: 1.25; font-weight: 600; color: var(--w42-text-primary);
+      }
+      .w42-prose h1 { font-size: var(--w42-f22); font-weight: 700; letter-spacing: -0.02em; margin-bottom: var(--w42-s8); }
+      .w42-prose h2 { font-size: var(--w42-f17); letter-spacing: -0.01em; }
+      .w42-prose h3 { font-size: var(--w42-f15); margin-top: var(--w42-s12); }
+      .w42-prose h4 { font-size: var(--w42-f13); margin-top: var(--w42-s8); margin-bottom: 0; }
+      .w42-prose h5, .w42-prose h6 { font-size: var(--w42-f12); margin-top: var(--w42-s8); margin-bottom: 0; color: var(--w42-text-secondary); }
+      .w42-prose p { margin: 0 0 var(--w42-s12); }
+      .w42-prose strong, .w42-prose b { font-weight: 600; }
+      .w42-prose em, .w42-prose i { font-style: italic; }
+      .w42-prose a { color: var(--w42-primary); text-decoration: none; }
+      .w42-prose a:hover { text-decoration: underline; }
+      .w42-prose ul, .w42-prose ol { margin: 0 0 var(--w42-s12); padding-left: 1.6em; }
+      .w42-prose ul { list-style: disc; }
+      .w42-prose ol { list-style: decimal; }
+      .w42-prose ul ul, .w42-prose ol ul { list-style: circle; }
+      .w42-prose li { margin: var(--w42-s4) 0; }
+      .w42-prose li > ul, .w42-prose li > ol { margin-bottom: 0; }
+      .w42-prose li.task-list-item { list-style: none; margin-left: -1.3em; }
+      .w42-prose li.task-list-item input { margin-right: 0.5em; }
+      .w42-prose img { max-width: 100%; height: auto; }
+      .w42-prose code, .w42-prose kbd, .w42-prose samp { font-family: var(--w42-font-mono); font-size: var(--w42-f12); }
+      .w42-prose :not(pre) > code {
+        padding: 0.1em 0.35em; border-radius: 4px; background: var(--w42-chip-fill);
+      }
+      .w42-prose kbd {
+        padding: 1px 5px; border-radius: 4px; font-size: var(--w42-f10); font-weight: 500;
+        color: var(--w42-text-secondary); background: var(--w42-chip-fill); box-shadow: inset 0 0 0 0.5px var(--w42-separator);
+      }
+      .w42-prose pre {
+        margin: 0 0 var(--w42-s12); padding: var(--w42-s12) var(--w42-s16); overflow: auto;
+        border-radius: var(--w42-r-card); background: var(--w42-chip-fill); box-shadow: inset 0 0 0 0.5px var(--w42-separator);
+        font-size: var(--w42-f12); line-height: 1.5;
+      }
+      .w42-prose pre code { padding: 0; background: none; font-size: inherit; }
+      .w42-prose blockquote {
+        margin: 0 0 var(--w42-s12); padding: 0 0 0 var(--w42-s12);
+        border-left: 3px solid var(--w42-separator); color: var(--w42-text-secondary);
+      }
+      .w42-prose blockquote > :last-child { margin-bottom: 0; }
+      .w42-prose hr { margin: var(--w42-s16) 0; border: 0; border-top: 0.5px solid var(--w42-separator); }
+      .w42-prose table {
+        display: block; max-width: 100%; overflow-x: auto; margin: 0 0 var(--w42-s12);
+        border-collapse: collapse; font-size: var(--w42-f12);
+      }
+      .w42-prose th, .w42-prose td { padding: 6px 12px; text-align: left; border-bottom: 0.5px solid var(--w42-separator); }
+      .w42-prose th { font-weight: 500; color: var(--w42-text-secondary); }
+      .w42-prose tr:last-child td { border-bottom: 0; }
+    }
+    """
+
+    // MARK: - Document splice
+
+    /// Splices `head` before the first `</head>` and `bodyEnd` before the first
+    /// `</body>` (case-insensitive) of an agent-authored document, so a full-document
+    /// artifact still lands on the app theme and surfaces JS errors. A missing tag
+    /// gets its fragment appended at the end (browsers tolerate trailing
+    /// `<style>` / `<script>`).
+    public nonisolated static func injectIntoDocument(_ document: String, head: String, bodyEnd: String) -> String {
+        var result = insert(head, before: "</head>", in: document)
+        result = insert(bodyEnd, before: "</body>", in: result)
+        if result.range(of: "</head>", options: .caseInsensitive) == nil && !result.contains(head) {
+            result += "\n" + head
+        }
+        if result.range(of: "</body>", options: .caseInsensitive) == nil && !result.contains(bodyEnd) {
+            result += "\n" + bodyEnd
+        }
+        return result
+    }
+
+    private nonisolated static func insert(_ fragment: String, before tag: String, in source: String) -> String {
+        guard let range = source.range(of: tag, options: .caseInsensitive) else { return source }
+        var result = source
+        result.replaceSubrange(range, with: fragment + String(source[range]))
+        return result
     }
 }

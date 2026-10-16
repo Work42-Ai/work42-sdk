@@ -68,7 +68,7 @@ struct LiveDiagramOverlay: ViewModifier {
 /// — so there is no cycle. Registered at build time; torn down with the webview.
 @MainActor
 public final class DiagramMessageProxy: NSObject, WKScriptMessageHandler {
-    /// Must match `HANDLER` in `CanvasTemplate.diagramControlsJS`.
+    /// Must match `HANDLER` in `kit/w42-diagram.js` (and the legacy `CanvasTemplate.diagramControlsJS`).
     public static let name = "w42Diagram"
 
     /// Fires with the diagram's id when its Expand button is pressed.
@@ -105,9 +105,9 @@ final class DiagramCanvas {
         self.webView = Work42WebView.make(configuration: config, role: .interactive(source: nil))
     }
 
-    func load(svg: String, themeCSS: String) {
+    func load(svg: String, tokensCSS: String) {
         webView.loadHTMLString(
-            DiagramExpandDialog.shell(svg: svg, themeCSS: themeCSS), baseURL: nil)
+            DiagramExpandDialog.shell(svg: svg, tokensCSS: tokensCSS), baseURL: nil)
     }
 }
 
@@ -133,7 +133,7 @@ struct DiagramExpandDialog: View {
         .frame(minWidth: 800, idealWidth: 1100, minHeight: 560, idealHeight: 800)
         .onAppear {
             (canvas.webView as? PolicyWebView)?.linkSource = linkSource
-            canvas.load(svg: svg, themeCSS: CanvasTheme.css())
+            canvas.load(svg: svg, tokensCSS: CanvasTheme.tokensCSS())
         }
     }
 
@@ -177,37 +177,41 @@ struct DiagramExpandDialog: View {
                                           completionHandler: nil)
     }
 
-    /// The dialog document: the diagram fills the WHOLE surface (the card header
-    /// is hidden — the dialog has its own native header). !important overrides
-    /// the bridge's inline sizing.
-    static func shell(svg: String, themeCSS: String) -> String {
-        """
+    /// The dialog document: the diagram fills the WHOLE surface (the card header is hidden — the
+    /// dialog has its own native header). It loads the kit's token stylesheet, the widget CSS
+    /// (the mermaid refinements) and the SAME diagram bridge the artifact pages use, so
+    /// `__w42Diagram.zoomAll` / `resetAll` (the native header's buttons) work unchanged.
+    /// !important overrides the bridge's inline sizing.
+    @MainActor
+    static func shell(svg: String, tokensCSS: String) -> String {
+        let widgetsCSS = ArtifactShellAssets.kitFileData("w42-widgets.css").flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        let bridge = ArtifactShellAssets.kitFileData("w42-diagram.js").flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        return """
         <!doctype html><html lang="en"><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="color-scheme" content="light dark">
         <style>
-        \(themeCSS)
-        \(CanvasTemplate.diagramControlsCSS)
+        \(tokensCSS)
+        </style>
+        \(CanvasTemplate.appearanceScript)
+        <style>
+        \(widgetsCSS)
         html, body { margin: 0; height: 100%; }
         body {
           display: block; padding: 16px; box-sizing: border-box;
           background: var(--w42-backdrop, transparent);
         }
-        .w42-diagram-wrap { width: 100%; height: 100%; }
-        .w42-diagram-wrap .w42-diagram-card {
-          border: none !important; margin: 0 !important;
-          background: transparent !important; height: 100% !important;
+        .wk-dwrap { width: 100%; height: 100%; }
+        .wk-dwrap .wk-dcard {
+          border: none !important; margin: 0 !important; box-shadow: none !important;
+          background: transparent !important; height: 100% !important; width: 100% !important;
         }
-        .w42-diagram-wrap .w42-diagram-header { display: none !important; }
-        .w42-diagram-wrap .w42-diagram-slot {
-          width: 100% !important; height: 100% !important; padding: 0 !important;
-        }
-        .w42-diagram-wrap .w42-diagram-slot > svg.w42-diagram {
-          width: 100% !important; height: 100% !important; max-width: none !important;
-        }
+        .wk-dwrap .wk-dhead { display: none !important; }
+        .wk-dwrap .wk-dslot { width: 100% !important; height: 100% !important; padding: 0 !important; background: none !important; }
+        .wk-dwrap .wk-dslot > svg { width: 100% !important; height: 100% !important; max-width: none !important; padding: 0 !important; }
         </style></head>
-        <body><div class="w42-diagram-wrap w42-mermaid">\(svg)</div>
-        <script>\(CanvasTemplate.diagramControlsJS)</script></body></html>
+        <body><div class="wk-dwrap">\(svg)</div>
+        <script>\(bridge)</script></body></html>
         """
     }
 }

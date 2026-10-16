@@ -402,14 +402,10 @@ public struct BrowserChromeRow: View {
                     .help("Reset zoom")
                 }
 
-                // Loading affordance (lanky-pine.5 / AC10). A compact spinner shown
-                // while `webStatus == .loading`.
+                // Loading affordance (lanky-pine.5 / AC10). The compact glass logo loader
+                // shown while `webStatus == .loading`.
                 if webStatus == .loading {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .scaleEffect(0.55)
-                        .frame(width: 20, height: 20)
-                        .frame(width: 26, height: 26)
+                    LoadingIndicator(size: .small)
                 }
             }
             .frame(height: Self.controlGroupHeight)

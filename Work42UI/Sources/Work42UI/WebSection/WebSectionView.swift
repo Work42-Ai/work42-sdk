@@ -1982,8 +1982,8 @@ extension WebSectionView {
 /// the cache owner's job — see `WebSectionLiveView.teardown()`.
 ///
 /// Overlays (lanky-pine.3 / AC10, AC11):
-///   - While `live.status == .loading`: a `ProgressView` spinner is
-///     centered over the webview.
+///   - While `live.status == .loading`: the glass logo loader (`LoadingIndicator`)
+///     is centered over the webview.
 ///   - While `live.status == .failed(let desc)`: an error view with a
 ///     heading, the failure description, and a **Retry** button that calls
 ///     `live.reload()` (which resets status to `.loading` on the next
@@ -2048,9 +2048,9 @@ public struct CachedWebSectionView: View {
             // Semi-transparent background so the webview (which may be
             // partially rendered) doesn't show through distractingly.
             Color(nsColor: .windowBackgroundColor).opacity(0.85)
-            // The 42 brand mark loader (not a generic spinner).
-            Loader42()
-                .frame(width: 48, height: 48)
+            // The glass logo loader: the animated 42 mark on the design system's Liquid Glass capsule
+            // (not a generic spinner), the same indicator every web-based surface uses.
+            LoadingIndicator()
         }
     }
 
@@ -2110,8 +2110,7 @@ public struct CachedWebSectionView: View {
         ZStack {
             Color(nsColor: .windowBackgroundColor).opacity(0.92)
             VStack(spacing: 14) {
-                Loader42()
-                    .frame(width: 40, height: 40)
+                LoadingIndicator()
 
                 Text("This page is taking too long")
                     .font(.system(size: 14, weight: .semibold))

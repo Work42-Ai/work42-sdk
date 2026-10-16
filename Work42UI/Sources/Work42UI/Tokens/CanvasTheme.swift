@@ -5,14 +5,15 @@
 // that an agent which writes plain HTML already lands on the app's
 // visual language, the server injects the stylesheet this file emits.
 //
-// `CanvasTheme.css()` is a pure, deterministic generator: it reads the
+// `CanvasTheme.legacyCSS()` / `tokensCSS()` are pure, deterministic generators: it reads the
 // `DT` design tokens (Sources/Work42UI/Tokens/DesignTokens.swift),
 // resolves every adaptive color under BOTH a light (`.aqua`) and a dark
 // (`.darkAqua`) appearance, and emits:
 //
 //   * a `:root { … }` block of `--w42-*` custom properties (the LIGHT
 //     values) so agent CSS can reference `var(--w42-primary)` etc.
-//   * a base reset so unstyled agent content already looks on-brand,
+//   * a base reset so unstyled agent content already looks on-brand
+//     (`legacyCSS()` only; the kit's `tokensCSS()` emits tokens alone),
 //   * a `@media (prefers-color-scheme: dark) { :root { … } }` block that
 //     overrides the color tokens with their DARK values.
 //
@@ -24,7 +25,7 @@
 //
 // Isolation: color resolution touches NSColor / NSAppearance (AppKit,
 // main-actor), and the system accent is read live at generation time.
-// `css()` is therefore a `@MainActor static func`. Its only consumers —
+// They are therefore `@MainActor static func`s. Its only consumers —
 // the canvas server + template composition — run app-side on the main
 // actor, so this is the natural and correct isolation.
 
@@ -43,10 +44,36 @@ public enum CanvasTheme {
     /// dark)`.
     ///
     /// The theme-dependent color tokens (name → DT Color). Order is stable so
-    /// the CSS output stays deterministic. Shared by `css()` (bakes both
+    /// the CSS output stays deterministic. Shared by the CSS generators (bake both
     /// appearances) and `currentColorTokens()` (the live push).
     @MainActor
     static var colorTokenList: [(name: String, color: Color)] {
+        colorTokenList(legacy: false)
+    }
+
+    /// The foreground for a SOLID accent fill on the web (`--w42-on-accent`).
+    ///
+    /// Apple draws white on filled accent controls, and the Work42 kit's prominent
+    /// buttons, menu highlights and selected rows follow that. `DT.onAccent` is a
+    /// different rule — pure max-WCAG-contrast, which picks BLACK on the default
+    /// system blue (5.2:1 vs 4.0:1) — and it drives native chrome, so the web token
+    /// does not use it. White, except on a very light accent (relative luminance
+    /// above 0.6, e.g. yellow) where white would vanish. Appearance only selects
+    /// WHICH accent (light/dark hex pair), as in `DT.onAccent`.
+    @MainActor
+    static var onAccentFilled: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+            let luminance = DT.relativeLuminance(of: DT.resolvedAccent(isDark: isDark))
+            return luminance > 0.6 ? .black : .white
+        })
+    }
+
+    /// `legacy` keeps `--w42-on-accent` on `DT.onAccent`, so the frozen legacy
+    /// stylesheet (`legacyCSS()`) stays byte-identical to what it emitted before
+    /// the kit existed.
+    @MainActor
+    static func colorTokenList(legacy: Bool) -> [(name: String, color: Color)] {
         [
             ("backdrop",        DT.backdrop),
             ("surface",         DT.surface),
@@ -68,7 +95,7 @@ public enum CanvasTheme {
             // Accent-hue text for tint-on-tint surfaces, and the readable
             // foreground for solid accent fills (replaces a hard-coded white).
             ("accent-fg",       DT.accentForeground),
-            ("on-accent",       DT.onAccent),
+            ("on-accent",       legacy ? DT.onAccent : onAccentFilled),
         ]
     }
 
@@ -85,7 +112,7 @@ public enum CanvasTheme {
     /// Glass and Material groups). They mirror the Apple macOS 26/27 kit
     /// values the Figma components are built from, so they are literals here
     /// by design: there is no native `DT` counterpart to read. Order is stable
-    /// so `css()` stays deterministic.
+    /// so the generated CSS stays deterministic.
     static let kitColorTokens: [ColorToken] = [
         // Labels (kit Labels/Primary·Secondary·Tertiary)
         ColorToken(name: "label-primary",   light: "#000000d9", dark: "#ffffffd9"),
@@ -126,11 +153,13 @@ public enum CanvasTheme {
 
     /// Every color token (adaptive DT tokens, chip foregrounds, Web Kit
     /// literals) with its light and dark hex, in emission order. The single
-    /// source for `css()` (bakes both) and `currentColorTokens()` (the live
+    /// source for the CSS generators (bake both) and `currentColorTokens()` (the live
     /// push), so the two can never drift.
     @MainActor
-    static func resolvedColorTokens(light: NSAppearance, dark: NSAppearance) -> [ColorToken] {
-        var out: [ColorToken] = colorTokenList.map {
+    static func resolvedColorTokens(
+        light: NSAppearance, dark: NSAppearance, legacy: Bool = false
+    ) -> [ColorToken] {
+        var out: [ColorToken] = colorTokenList(legacy: legacy).map {
             ColorToken(name: $0.name,
                        light: hex($0.color, under: light),
                        dark: hex($0.color, under: dark))
@@ -193,14 +222,18 @@ public enum CanvasTheme {
         return out
     }
 
+    /// The `--w42-*` declarations shared by both stylesheets: `root` is the body of
+    /// the light `:root` rule (colours + appearance-independent tokens), `darkRoot`
+    /// the dark colour overrides (4-space indent, ready to nest in a media query).
+    /// `legacy` selects the pre-kit `--w42-on-accent` (see `colorTokenList(legacy:)`).
     @MainActor
-    public static func css() -> String {
+    private static func tokenBlocks(legacy: Bool) -> (root: String, darkRoot: String) {
         let light = NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing()
         let dark = NSAppearance(named: .darkAqua) ?? light
 
         // Color tokens: light + dark hex per token (shared with the live
         // theme push in `currentColorTokens()`, so the two stay in lock-step).
-        let colorTokens = Self.resolvedColorTokens(light: light, dark: dark)
+        let colorTokens = Self.resolvedColorTokens(light: light, dark: dark, legacy: legacy)
 
         // Non-color tokens are appearance-independent — emitted once in
         // `:root`. Spacing / radii / font-size values are CSS px.
@@ -290,7 +323,45 @@ public enum CanvasTheme {
             darkRoot += "    --w42-\(entry.name): \(entry.hex);\n"
         }
 
+        return (root, darkRoot)
+    }
 
+    /// The kit's token stylesheet: ONLY `--w42-*` custom properties — light on
+    /// `:root`, dark on `.dark` (the class `CanvasTemplate.appearanceScript` sets
+    /// from the OS appearance) — and NO element rules. The kit (Preline + Tailwind,
+    /// see `Resources/kit`) owns every element style, so nothing here can outrank
+    /// its layered CSS. `--w42-on-accent` is the web foreground for solid accent
+    /// fills (`onAccentFilled`).
+    @MainActor
+    public static func tokensCSS() -> String {
+        let (root, darkRoot) = tokenBlocks(legacy: false)
+        let dark = darkRoot.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.hasPrefix("  ") ? String($0.dropFirst(2)) : String($0) }
+            .joined(separator: "\n")
+        return """
+        /* Work42 kit tokens — generated from DT design tokens. Do not edit by hand. */
+
+        :root {
+        \(root.trimmingTrailingNewline())
+
+          color-scheme: light;
+        }
+
+        .dark {
+        \(dark.trimmingTrailingNewline())
+
+          color-scheme: dark;
+        }
+        """
+    }
+
+    /// The pre-kit canvas stylesheet (tokens under `@media (prefers-color-scheme:
+    /// dark)` plus a base reset for bare HTML), frozen for artifacts saved before
+    /// the kit and for surfaces not yet moved to it. Output is unchanged from the
+    /// former `css()`.
+    @MainActor
+    public static func legacyCSS() -> String {
+        let (root, darkRoot) = tokenBlocks(legacy: true)
         return """
         /* Work42 canvas theme — generated from DT design tokens. Do not edit by hand. */
 
