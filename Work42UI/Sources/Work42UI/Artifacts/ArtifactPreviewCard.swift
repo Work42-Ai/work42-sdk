@@ -1,57 +1,70 @@
-// ArtifactPreviewCard.swift — the shared artifact preview card.
+// ArtifactPreviewCard.swift — the shared artifact card.
 //
-// THE shared artifact card: the chat transcript's inline card and the
-// Artifacts gallery's thumbnail are the same component in two size modes.
+// THE shared artifact card: the chat transcript's inline card and the Artifacts gallery's
+// grid card are the same component in two size modes.
 //
-// LIVE HTML (feat/artifacts-native-artifacts-and-diagrams-controls .4)
-// ────────────────────────────────────────────────────────────────────
-// The preview is a LIVE webview of the real artifact — not a static PNG
-// snapshot. The earlier snapshot pipeline (ArtifactSnapshotRenderer +
-// ArtifactPreviewCache) existed to avoid a chat layout-hang from many
-// auto-height webviews; that churn is solved two ways here:
-//   1. The webview is framed to a FIXED preview height (clipped miniature),
-//      so it never drives list layout (no auto-height growth).
-//   2. AutoHeightWebView's height model is isolated to this card subtree; the
-//      chat-list/gallery body never observes it.
-// A `reloadToken` (content hash) makes the card react live to the agent
-// rewriting the artifact — an in-place reload, no flash, no recreate.
+// It does NOT preview the artifact. A card is a colour wash: a gradient of the artifact's
+// colour, a type badge, a large faint type icon, the title and when it changed. The colour
+// and the kind come from the artifact itself (`work42 artifact set` records them), the card
+// only draws them, so it never renders a webview or a snapshot and can never churn list
+// layout. The whole card is the button that opens the artifact; there is no expand control.
 //
 // STATES
 // ──────
-//   .live(URL)   — the artifact's loopback URL; rendered live + clipped.
-//   .unresolved  — the artifact server isn't running / URL unresolved: the
-//                  fail-loud "not available" card, naming the artifact id.
+//   appearance != nil — the colour wash card.
+//   appearance == nil — the artifact has no content: the fail-loud "not found" card,
+//                       naming the artifact id.
 
 import AppKit
 import SwiftUI
 
+// MARK: - Appearance
+
+/// What an artifact card wears. Plain values so the SDK stays free of app types: the host
+/// maps its own artifact metadata onto this.
+public struct ArtifactCardAppearance: Equatable, Sendable {
+
+    /// The semantic colours a card can wear (the design kit's names).
+    public enum Tint: String, CaseIterable, Sendable {
+        case accent, success, warning, danger, info, caution
+
+        /// The live token colour: it follows light/dark and, for `accent`, the system accent.
+        public var color: Color {
+            switch self {
+            case .accent: DT.systemAccent
+            case .success: DT.done
+            case .warning: DT.orange
+            case .danger: DT.red
+            case .info: DT.cyan
+            case .caution: DT.amber
+            }
+        }
+    }
+
+    /// The badge text ("Diagram", "Report", …).
+    public var kindLabel: String
+    /// The SF Symbol drawn large and faint on the card.
+    public var symbol: String
+    public var tint: Tint
+
+    public init(kindLabel: String, symbol: String, tint: Tint) {
+        self.kindLabel = kindLabel
+        self.symbol = symbol
+        self.tint = tint
+    }
+}
+
 // MARK: - ArtifactPreviewCard
 
-/// Shared live-preview card for artifacts (chat inline + gallery thumbnail).
+/// Shared colour-wash card for artifacts (chat inline + gallery grid).
 @MainActor
 public struct ArtifactPreviewCard: View {
 
-    /// What the preview area shows (resolved upstream).
-    public enum PreviewState: Equatable {
-        /// A rendered PNG snapshot on disk — shown full-width, high quality.
-        /// This is the preferred preview: a static, crisp image (no live churn).
-        case image(URL)
-        /// The artifact's loopback URL — rendered live, clipped to the card.
-        /// Used as an immediate fallback while the snapshot is still rendering.
-        case live(URL)
-        /// The server isn't running / URL unresolved — fail-loud card.
-        case unresolved
-    }
-
-    /// The two homes of the card. Chat resolves an explicit width upstream
-    /// (16:9 preview, 4:3 below the narrow threshold). Thumbnail (gallery)
-    /// fills its grid column with a 16:9 preview. Every state renders the same
-    /// fixed footprint, so the card can never churn list layout.
+    /// The two homes of the card. Chat resolves an explicit width upstream; the grid card
+    /// fills its column. Both have a fixed height, so the card can never churn list layout.
     public enum SizeMode: Equatable {
         case chat(width: CGFloat)
         case thumbnail
-
-        public static let narrowThreshold: CGFloat = 360
 
         var cardWidth: CGFloat? {
             switch self {
@@ -60,178 +73,126 @@ public struct ArtifactPreviewCard: View {
             }
         }
 
-        var previewHeight: CGFloat? {
+        var height: CGFloat {
             switch self {
-            case .chat(let width):
-                width < Self.narrowThreshold ? width * 3 / 4 : width * 9 / 16
-            case .thumbnail:
-                nil
+            case .chat: 112
+            case .thumbnail: 124
             }
         }
     }
 
-    public let state: PreviewState
+    public let appearance: ArtifactCardAppearance?
     public let title: String
     public let artifactId: String
-    /// Opaque token that changes when the artifact content changes (content
-    /// hash / mtime). Threaded to the live webview so the card reacts in place.
-    public let reloadToken: String
-    /// Shown as a relative "2m ago" in the header when provided (chat mode).
+    /// Shown as a relative "2m ago" under the title when provided.
     public let timestamp: Date?
     public let sizeMode: SizeMode
-    /// Called on ⤢ or a preview click. The argument is `artifactId`.
+    /// Called when the card is clicked. The argument is `artifactId`.
     public let onExpand: (String) -> Void
 
     public init(
-        state: PreviewState,
+        appearance: ArtifactCardAppearance?,
         title: String,
         artifactId: String,
-        reloadToken: String = "",
         timestamp: Date? = nil,
         sizeMode: SizeMode,
         onExpand: @escaping (String) -> Void
     ) {
-        self.state = state
+        self.appearance = appearance
         self.title = title
         self.artifactId = artifactId
-        self.reloadToken = reloadToken
         self.timestamp = timestamp
         self.sizeMode = sizeMode
         self.onExpand = onExpand
     }
 
-    /// Isolated to this card subtree — the live webview posts heights here; we
-    /// ignore them for sizing (fixed clipped frame) but AutoHeightWebView needs
-    /// a model, and the isolation keeps the outer body from re-rendering.
-    @StateObject private var heightModel = AutoHeightModel()
+    @State private var isHovering = false
+    @Environment(\.colorScheme) private var colorScheme
 
     public var body: some View {
-        switch state {
-        case .unresolved:
-            unresolvedCard
-        case .image(let url):
-            imageCard(url: url)
-        case .live(let url):
-            liveCard(url: url)
-        }
-    }
-
-    // MARK: - Image (snapshot) card — the preferred preview
-
-    @ViewBuilder
-    private func imageCard(url: URL) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            cardHeader
-            Divider().opacity(0.25)
-            Button {
-                onExpand(artifactId)
-            } label: {
-                snapshotImage(url: url)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Open \(title) full-surface")
-        }
-        .frame(width: sizeMode.cardWidth)
-        .background(DT.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DT.rCard, style: .continuous))
-        .overlay(cardBorder)
-    }
-
-    /// The cached PNG (high interpolation). `reloadToken` is part of the SwiftUI
-    /// identity so changed content swaps in the fresh snapshot.
-    ///  • chat: full-width at natural aspect — the renderer captures
-    ///    content-height, so fit-to-width shows the whole preview, no crop.
-    ///  • thumbnail: fills a fixed 16:9 box, top-aligned + clipped, so every
-    ///    gallery card is the SAME height in the grid.
-    /// Decoded-PNG cache keyed by (path, content token). `NSImage(contentsOf:)`
-    /// re-reads + re-decodes the file on EVERY SwiftUI body pass (constant
-    /// during chat streaming); this decodes once per content generation and
-    /// serves cache hits thereafter. NSCache evicts under memory pressure.
-    private static let imageCache = NSCache<NSString, NSImage>()
-
-    private func cachedImage(_ url: URL) -> NSImage? {
-        // reloadToken is the content hash — it changes exactly when the snapshot
-        // content changes, so it's a safe, stat-free cache key.
-        let key = "\(url.path)|\(reloadToken)" as NSString
-        if let hit = Self.imageCache.object(forKey: key) { return hit }
-        guard let img = NSImage(contentsOf: url) else { return nil }
-        Self.imageCache.setObject(img, forKey: key)
-        return img
-    }
-
-    @ViewBuilder
-    private func snapshotImage(url: URL) -> some View {
-        if let img = cachedImage(url) {
-            let base = Image(nsImage: img).resizable().interpolation(.high)
-            switch sizeMode {
-            case .chat:
-                base
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .id(reloadToken)
-            case .thumbnail:
-                Color.clear
-                    .modifier(PreviewFrame(sizeMode: sizeMode))
-                    .overlay(alignment: .top) {
-                        base.aspectRatio(contentMode: .fill)
-                    }
-                    .clipped()
-                    .id(reloadToken)
-            }
+        if let appearance {
+            washCard(appearance)
         } else {
-            DT.backdrop
-                .frame(maxWidth: .infinity)
-                .modifier(PreviewFrame(sizeMode: sizeMode))
+            missingCard
         }
     }
 
-    // MARK: - Live card
+    // MARK: - Colour wash card
 
+    /// Built from the design system: the `Card` surface, the `.sessionChip` badge tinted by
+    /// `DT.resolveChipTint` (the same resolver `HeaderLabelChip` uses), and DT spacing and type tokens.
+    /// Only the wash behind the card is specific to artifacts.
     @ViewBuilder
-    private func liveCard(url: URL) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            cardHeader
-            Divider().opacity(0.25)
-            Button {
-                onExpand(artifactId)
-            } label: {
-                // Live artifact, clipped to the fixed preview frame. Wheel
-                // events pass through (OverscrollPassthroughWebView), and
-                // the card click opens the full surface.
-                AutoHeightWebView(url: url, model: heightModel, reloadToken: reloadToken)
-                    .frame(maxWidth: .infinity, alignment: .top)
-                    .allowsHitTesting(false)
-                    .frame(maxWidth: .infinity)
-                    .modifier(PreviewFrame(sizeMode: sizeMode))
-                    .clipped()
-                    .contentShape(Rectangle())
+    private func washCard(_ appearance: ArtifactCardAppearance) -> some View {
+        let tint = appearance.tint.color
+        let chip = DT.resolveChipTint(tint, colorScheme: colorScheme)
+        Button {
+            onExpand(artifactId)
+        } label: {
+            Card(padding: DT.s12) {
+                VStack(alignment: .leading, spacing: DT.s4) {
+                    Text(appearance.kindLabel)
+                        .font(.system(size: DT.f10, weight: .semibold))
+                        .foregroundStyle(chip.foreground)
+                        .sessionChip(fill: chip.fill, stroke: chip.stroke)
+                    Spacer(minLength: DT.s4)
+                    Text(title)
+                        .font(.system(size: DT.f15, weight: .semibold))
+                        .foregroundStyle(DT.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if let timestamp {
+                        Text(Self.relativeFormatter.localizedString(for: timestamp, relativeTo: Date()))
+                            .font(.system(size: DT.f11))
+                            .foregroundStyle(DT.textSecondary)
+                    }
+                }
+                .frame(maxHeight: .infinity, alignment: .topLeading)
             }
-            .buttonStyle(.plain)
-            .help("Open \(title) full-surface")
+            .frame(width: sizeMode.cardWidth)
+            .frame(maxWidth: sizeMode.cardWidth == nil ? .infinity : nil)
+            .frame(height: sizeMode.height)
+            .background { wash(tint: tint, symbol: appearance.symbol) }
+            .clipShape(RoundedRectangle(cornerRadius: DT.rCard, style: .continuous))
+            .contentShape(Rectangle())
         }
-        .frame(width: sizeMode.cardWidth)
-        .background(DT.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DT.rCard, style: .continuous))
-        .overlay(cardBorder)
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("Open \(title)")
+        .accessibilityLabel("\(appearance.kindLabel): \(title)")
+        .accessibilityHint("Opens the artifact")
+    }
+
+    /// The artifact's colour as a soft diagonal wash, with its type icon large and faint in the corner.
+    private func wash(tint: Color, symbol: String) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            LinearGradient(
+                colors: [tint.opacity(0.30), tint.opacity(0.10), .clear],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+            Image(systemName: symbol)
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(tint.opacity(isHovering ? 0.30 : 0.20))
+                .padding(.trailing, DT.s12)
+                .padding(.bottom, DT.s4)
+        }
     }
 
     // MARK: - Fail-loud state
 
-    /// The artifact server is not running or the URL could not be resolved.
-    /// Names the missing artifact id explicitly — never a silent drop.
+    /// The artifact has no content. Names the missing artifact id explicitly, never a silent drop.
     @ViewBuilder
-    private var unresolvedCard: some View {
+    private var missingCard: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: DT.f12))
                 .foregroundStyle(DT.amber)
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Artifact not available: \(artifactId)")
+                Text("Artifact not found: \(artifactId)")
                     .font(.system(size: DT.f12, weight: .semibold))
                     .foregroundStyle(DT.textPrimary)
-                Text("The artifact server is not running. Start Work 42 or run 'work42 artifact url \(artifactId)' to load it.")
+                Text("It has no content yet. Run 'work42 artifact set \(artifactId)' to create it.")
                     .font(.system(size: DT.f11))
                     .foregroundStyle(DT.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -251,66 +212,9 @@ public struct ArtifactPreviewCard: View {
         )
     }
 
-    // MARK: - Shared subviews
-
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter
     }()
-
-    private var cardHeader: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(systemName: "doc.richtext")
-                .font(.system(size: DT.f11, weight: .medium))
-                .foregroundStyle(.secondary)
-            Text(title)
-                .font(.system(size: DT.f12, weight: .semibold))
-                .foregroundStyle(DT.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 0)
-            if let timestamp, case .chat = sizeMode {
-                Text(Self.relativeFormatter.localizedString(for: timestamp, relativeTo: Date()))
-                    .font(.system(size: DT.f10))
-                    .foregroundStyle(DT.textTertiary)
-            }
-            expandButton
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.primary.opacity(0.03))
-    }
-
-    private var expandButton: some View {
-        Button {
-            onExpand(artifactId)
-        } label: {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: DT.f11, weight: .medium))
-        }
-        .glassIconButton()
-        .help("Open \(title) full-surface")
-    }
-
-    private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: DT.rCard, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
-    }
-}
-
-// MARK: - Preview frame
-
-/// Per-mode preview sizing: chat = explicit height from the width contract;
-/// thumbnail = 16:9 of whatever width the grid column grants.
-private struct PreviewFrame: ViewModifier {
-    let sizeMode: ArtifactPreviewCard.SizeMode
-
-    func body(content: Content) -> some View {
-        if let height = sizeMode.previewHeight {
-            content.frame(height: height)
-        } else {
-            content.aspectRatio(16 / 9, contentMode: .fit)
-        }
-    }
 }
