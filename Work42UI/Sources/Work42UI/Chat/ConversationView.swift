@@ -119,6 +119,7 @@ public struct ConversationBubble<Content: View>: View {
                         caption(actor, nameFirst: true).padding(.horizontal, 6).padding(.top, 2)
                     }
                     ChatBubble(side: .leading, style: .neutral, content: content)
+                        .transformEnvironment(\.chatBubbleContainerWidth) { $0 = $0 > 0 ? max(1, $0 - avatarSize - 8) : 0 }
                 }
             }
         } else {
@@ -136,6 +137,7 @@ public struct ConversationBubble<Content: View>: View {
                     caption(actor, nameFirst: false).padding(.horizontal, 6).padding(.top, 2)
                 }
                 ChatBubble(side: .trailing, style: .accent, content: content)
+                    .transformEnvironment(\.chatBubbleContainerWidth) { $0 = $0 > 0 ? max(1, $0 - avatarSize - 8) : 0 }
             }
             if context.showsLabel {
                 GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize, imageURL: actor.imageURL)
@@ -480,6 +482,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     @State private var isPinnedToBottom = true
     @State private var isLiveScrolling = false
     @State private var viewportHeight: CGFloat = 0
+    @State private var viewportWidth: CGFloat = 0
     @State private var lastItemCount = 0
     /// Item count when the user last was at the bottom; the pill shows `count - seenCount`.
     @State private var seenCount = 0
@@ -616,6 +619,9 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                             }
                         )
                 }
+                // The row width every bubble may use, measured once here (the content padding is 18 a
+                // side), so bubbles do not each measure and re-layout on every append.
+                .environment(\.chatBubbleContainerWidth, max(0, viewportWidth - 36))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 18)
             }
@@ -624,8 +630,12 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             .background(
                 GeometryReader { viewport in
                     Color.clear
-                        .onAppear { viewportHeight = viewport.size.height }
+                        .onAppear {
+                            viewportHeight = viewport.size.height
+                            viewportWidth = viewport.size.width
+                        }
                         .onChange(of: viewport.size.height) { _, h in viewportHeight = h }
+                        .onChange(of: viewport.size.width) { _, w in viewportWidth = w }
                 }
             )
             .background(
