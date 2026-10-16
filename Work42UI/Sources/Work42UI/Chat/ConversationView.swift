@@ -188,11 +188,16 @@ private struct ConversationTopOffsetKey: PreferenceKey {
     }
 }
 
-/// Bridges `NSScrollView`'s live-scroll notifications into SwiftUI: the authoritative "the user
-/// is performing a scroll gesture" signal. A pixel distance can shift for reasons that are not the
-/// user (a row inserted, an animation settling, our own `scrollTo`); only a real gesture posts
-/// these, and a programmatic scroll never does. Every historical "jumps off the bottom" bug in
-/// the chat traced back to using distance as a proxy for intent.
+/// Tells the view when the USER is scrolling, as opposed to our own `scrollTo` or content changes
+/// shifting the distance: only a real gesture may unpin the view or arm the older-page load.
+///
+/// Two sources, because macOS posts live-scroll notifications only for gestures with phases
+/// (trackpad, Magic Mouse, dragging the scrollbar thumb) and NOT for a plain mouse wheel:
+///   • `NSScrollView`'s will-start / did-end live-scroll notifications, for those gestures;
+///   • a local `NSEvent` monitor for wheel events that land inside this scroll view, for a mouse
+///     wheel (a burst of wheel events counts as one scroll that ends 0.25s after the last).
+/// A programmatic scroll posts neither, so "only the user can unpin" still holds. Every historical
+/// "jumps off the bottom" bug in the chat traced back to using distance as a proxy for intent.
 private struct ConversationLiveScrollProbe: NSViewRepresentable {
     let onLiveScrollChange: (Bool) -> Void
 
@@ -208,17 +213,29 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
 
     private final class ProbeView: NSView {
         var onLiveScrollChange: ((Bool) -> Void)?
-        // `deinit` is nonisolated, so the observer tokens are `nonisolated(unsafe)`:
-        // `removeObserver` is thread-safe and the tokens are opaque and never mutated concurrently.
+        // `deinit` is nonisolated, so these tokens are `nonisolated(unsafe)`: removal is thread-safe
+        // and they are opaque and never mutated concurrently.
         nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
+        nonisolated(unsafe) private var wheelMonitor: Any?
         private weak var foundScrollView: NSScrollView?
+        private var wheelActive = false
+        private var wheelEnd: DispatchWorkItem?
+
+        /// How long after the last wheel event the scroll is considered over.
+        private static let wheelIdle: TimeInterval = 0.25
 
         // Observe only: never take part in hit testing.
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            guard window != nil, foundScrollView == nil else { return }
+            guard window != nil else {
+                // Left its window: stop watching, so a torn-down view never keeps a monitor alive.
+                removeWheelMonitor()
+                endWheel()
+                return
+            }
+            guard foundScrollView == nil else { return }
             var candidate = superview
             while let v = candidate, !(v is NSScrollView) { candidate = v.superview }
             guard let scrollView = candidate as? NSScrollView else { return }
@@ -236,11 +253,47 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
                     MainActor.assumeIsolated { self?.onLiveScrollChange?(false) }
                 },
             ]
+            wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                MainActor.assumeIsolated { self?.handleWheel(event) }
+                return event
+            }
+        }
+
+        private func handleWheel(_ event: NSEvent) {
+            guard let scrollView = foundScrollView, event.window === window else { return }
+            // Phased events (trackpad, Magic Mouse) already post live-scroll notifications.
+            guard event.phase.isEmpty, event.momentumPhase.isEmpty else { return }
+            // Only a wheel over THIS scroll view: scrolling another tile must not unpin this one.
+            guard scrollView.bounds.contains(scrollView.convert(event.locationInWindow, from: nil)) else { return }
+            if !wheelActive {
+                wheelActive = true
+                onLiveScrollChange?(true)
+            }
+            wheelEnd?.cancel()
+            let end = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated { self?.endWheel() }
+            }
+            wheelEnd = end
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.wheelIdle, execute: end)
+        }
+
+        private func endWheel() {
+            wheelEnd?.cancel()
+            wheelEnd = nil
+            guard wheelActive else { return }
+            wheelActive = false
+            onLiveScrollChange?(false)
+        }
+
+        private func removeWheelMonitor() {
+            if let wheelMonitor { NSEvent.removeMonitor(wheelMonitor) }
+            wheelMonitor = nil
         }
 
         deinit {
             let center = NotificationCenter.default
             observers.forEach { center.removeObserver($0) }
+            if let wheelMonitor { NSEvent.removeMonitor(wheelMonitor) }
         }
     }
 }
