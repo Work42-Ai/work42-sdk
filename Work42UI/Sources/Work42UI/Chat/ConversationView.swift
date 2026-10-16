@@ -55,18 +55,26 @@ public struct ConversationRowContext: Sendable {
     /// True when the item is the first of a run from the same actor.
     public let isRunStart: Bool
     public let date: Date?
+    /// True when my own runs are labeled too (`ConversationLabels.always`).
+    public let labelsMe: Bool
 
     public init(actor: ConversationActor?, labeled: Bool, isRunStart: Bool, date: Date?) {
+        self.init(actor: actor, labeled: labeled, isRunStart: isRunStart, date: date, labelsMe: false)
+    }
+
+    public init(actor: ConversationActor?, labeled: Bool, isRunStart: Bool, date: Date?, labelsMe: Bool) {
         self.actor = actor
         self.labeled = labeled
         self.isRunStart = isRunStart
         self.date = date
+        self.labelsMe = labelsMe
     }
 
-    /// Avatar, name and time belong above this item: labeled mode, first of a run, not me.
+    /// Avatar, name and time belong with this item: labeled mode and first of a run, and either not
+    /// me or my runs are labeled too.
     public var showsLabel: Bool {
         guard labeled, isRunStart, let actor else { return false }
-        return !actor.isMe
+        return !actor.isMe || labelsMe
     }
 }
 
@@ -93,8 +101,12 @@ public struct ConversationBubble<Content: View>: View {
     private static var timeFormatter: DateFormatter { conversationTimeFormatter }
 
     public var body: some View {
-        if context.actor?.isMe == true {
-            ChatBubble(side: .trailing, style: .accent, content: content)
+        if let actor = context.actor, actor.isMe {
+            if context.labeled && context.labelsMe {
+                mineLabeled(actor)
+            } else {
+                ChatBubble(side: .trailing, style: .accent, content: content)
+            }
         } else if context.labeled, let actor = context.actor {
             HStack(alignment: .top, spacing: 8) {
                 if context.showsLabel {
@@ -104,24 +116,49 @@ public struct ConversationBubble<Content: View>: View {
                 }
                 VStack(alignment: .leading, spacing: 0) {
                     if context.showsLabel {
-                        HStack(spacing: 6) {
-                            Text(actor.name)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(actor.color)
-                            if let date = context.date {
-                                Text(date, formatter: Self.timeFormatter)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(Color.secondary)
-                            }
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.top, 2)
+                        caption(actor, nameFirst: true).padding(.horizontal, 6).padding(.top, 2)
                     }
                     ChatBubble(side: .leading, style: .neutral, content: content)
                 }
             }
         } else {
             ChatBubble(side: .leading, style: .neutral, content: content)
+        }
+    }
+
+    /// My run in a conversation that labels everyone: the time and my name above the bubble, my
+    /// avatar to its right; continuation lines keep a same-width gap so they line up.
+    private func mineLabeled(_ actor: ConversationActor) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 0) {
+                if context.showsLabel {
+                    caption(actor, nameFirst: false).padding(.horizontal, 6).padding(.top, 2)
+                }
+                ChatBubble(side: .trailing, style: .accent, content: content)
+            }
+            if context.showsLabel {
+                GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize, imageURL: actor.imageURL)
+            } else {
+                Color.clear.frame(width: avatarSize, height: 1)
+            }
+        }
+    }
+
+    /// Name and time, in reading order for the side: name then time on the leading side, time then
+    /// name on the trailing side.
+    private func caption(_ actor: ConversationActor, nameFirst: Bool) -> some View {
+        let name = Text(actor.name)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(actor.color)
+        return HStack(spacing: 6) {
+            if nameFirst { name }
+            if let date = context.date {
+                Text(date, formatter: Self.timeFormatter)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.secondary)
+            }
+            if !nameFirst { name }
         }
     }
 }
@@ -310,6 +347,18 @@ private final class ConversationScrollMetrics {
     var userHasScrolled = false
 }
 
+// MARK: - Labels
+
+/// When a conversation shows avatars, names and times.
+public enum ConversationLabels: Sendable {
+    /// Labeled once there are three or more distinct actors (counted over the whole conversation),
+    /// and never labeling me: the agent chat.
+    case automatic
+    /// Every run is labeled whatever the number of actors, mine included: the meeting transcript,
+    /// where who spoke is the point.
+    case always
+}
+
 // MARK: - ConversationView
 
 /// A bottom-anchored, windowed, auto-loading conversation list.
@@ -332,6 +381,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     let scrollToBottomTrigger: Int
     let rowSpacing: CGFloat
     let runSpacing: CGFloat?
+    let labels: ConversationLabels
     let dividerLabel: (Date) -> String
     let actor: (Item) -> ConversationActor?
     let date: (Item) -> Date?
@@ -346,6 +396,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     ///     message, a turn finished). It also trims the window back to one page.
     ///   - rowSpacing: Space between rows.
     ///   - runSpacing: Tighter space between consecutive items of one actor; nil keeps `rowSpacing`.
+    ///   - labels: `.automatic` (labels from three actors, never mine) or `.always` (every run, mine too).
     ///   - dividerLabel: The text of a time divider.
     ///   - actor: The item's actor, or nil for items that are no one's (they neither count towards
     ///     labeled mode nor break a run).
@@ -359,6 +410,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         scrollToBottomTrigger: Int = 0,
         rowSpacing: CGFloat = 12,
         runSpacing: CGFloat? = nil,
+        labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.relativeLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
@@ -371,6 +423,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         self.scrollToBottomTrigger = scrollToBottomTrigger
         self.rowSpacing = rowSpacing
         self.runSpacing = runSpacing
+        self.labels = labels
         self.dividerLabel = dividerLabel
         self.actor = actor
         self.date = date
@@ -412,14 +465,23 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     }
 
     private func layout(windowStart: Int) -> Layout {
-        // Labeled mode counts actors over the WHOLE conversation: it must not flip while the user
-        // scrolls through history, and a late third speaker labels the earlier items too.
+        let always = labels == .always
+        // Automatic labeled mode counts actors over the WHOLE conversation: it must not flip while
+        // the user scrolls through history, and a late third speaker labels the earlier items too.
+        // `.always` needs no count, so it only visits the window (the cost that matters on a
+        // transcript of thousands of lines, redrawn on every appended line).
         var all: [ConversationEntry<Item.ID>] = []
         var actors: [Item.ID: ConversationActor] = [:]
-        for (index, item) in items.enumerated() {
-            guard let a = actor(item) else { continue }
-            all.append(ConversationEntry(id: item.id, actorID: a.id, isMe: a.isMe, date: nil))
-            if index >= windowStart { actors[item.id] = a }
+        if always {
+            for item in items[windowStart...] {
+                if let a = actor(item) { actors[item.id] = a }
+            }
+        } else {
+            for (index, item) in items.enumerated() {
+                guard let a = actor(item) else { continue }
+                all.append(ConversationEntry(id: item.id, actorID: a.id, isMe: a.isMe, date: nil))
+                if index >= windowStart { actors[item.id] = a }
+            }
         }
         // Runs and dividers are only needed for the window, plus one item before it so the first
         // rendered row knows whether it continues a run.
@@ -433,7 +495,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             windowDated.append(ConversationEntry(id: item.id, actorID: "", isMe: false, date: date(item)))
         }
         return Layout(
-            labeled: ConversationLayout.labeledMode(entries: all),
+            labeled: always || ConversationLayout.labeledMode(entries: all),
             runStarts: ConversationLayout.runStarts(entries: windowActors),
             dividers: ConversationLayout.dividerBefore(entries: windowDated),
             actors: actors
@@ -491,7 +553,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                                 .padding(.top, isFirst ? 0 : rowSpacing)
                         }
                         row(item, ConversationRowContext(
-                            actor: actor, labeled: layout.labeled, isRunStart: isRunStart, date: date(item)
+                            actor: actor, labeled: layout.labeled, isRunStart: isRunStart, date: date(item),
+                            labelsMe: labels == .always
                         ))
                         .id(item.id)
                         .padding(.top, isFirst ? 0 : spacing(before: isRunStart, hasDivider: layout.dividers.contains(item.id)))
@@ -708,6 +771,7 @@ extension ConversationView where Footer == EmptyView {
         scrollToBottomTrigger: Int = 0,
         rowSpacing: CGFloat = 12,
         runSpacing: CGFloat? = nil,
+        labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.relativeLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
@@ -716,7 +780,7 @@ extension ConversationView where Footer == EmptyView {
         self.init(
             items: items, pageSize: pageSize, resetKey: resetKey,
             scrollToBottomTrigger: scrollToBottomTrigger, rowSpacing: rowSpacing, runSpacing: runSpacing,
-            dividerLabel: dividerLabel, actor: actor, date: date, row: row, footer: { EmptyView() }
+            labels: labels, dividerLabel: dividerLabel, actor: actor, date: date, row: row, footer: { EmptyView() }
         )
     }
 }
@@ -729,7 +793,7 @@ private struct PreviewLine: Identifiable {
     let text: String
 }
 
-private func previewConversation(speakers: Int) -> some View {
+private func previewConversation(speakers: Int, labels: ConversationLabels = .automatic) -> some View {
     let people: [ConversationActor] = [
         ConversationActor(id: "me", name: "You", initials: "Y", color: .blue, isMe: true),
         ConversationActor(id: "ana", name: "Ana L\u{00F3}pez", initials: "AL", color: Color(red: 0.86, green: 0.15, blue: 0.47), isMe: false),
@@ -742,7 +806,7 @@ private func previewConversation(speakers: Int) -> some View {
     }
     let start = Date().addingTimeInterval(-3600)
     return ConversationView(
-        items: lines, pageSize: 40, runSpacing: 4,
+        items: lines, pageSize: 40, runSpacing: 4, labels: labels,
         dividerLabel: ConversationDateDivider.clockLabel(for:),
         actor: { people[$0.who] },
         date: { start.addingTimeInterval(Double($0.id) * (($0.id % 40 == 0) ? 400 : 8)) }
@@ -754,3 +818,4 @@ private func previewConversation(speakers: Int) -> some View {
 
 #Preview("2 actors") { previewConversation(speakers: 2) }
 #Preview("3 actors") { previewConversation(speakers: 4) }
+#Preview("transcript 1:1, everyone labeled") { previewConversation(speakers: 2, labels: .always) }

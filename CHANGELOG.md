@@ -23,6 +23,13 @@
   and the previous `SessionServices` initializer is kept. **Privacy:** every installed plugin can now read the signed-in
   user's display name, email and profile photo URL. Plugins already run shell commands as the user, so this adds no new
   capability, but it is a new, explicit data surface.
+- **`ConversationLabels`.** `ConversationView` takes `labels: .automatic` (default: avatars and names from three actors,
+  never on my lines, as in the agent chat) or `.always` (every run labeled whatever the number of actors, mine included,
+  with my label and avatar on the trailing side: the meeting transcript). `ConversationRowContext` gains `labelsMe`,
+  with its previous initializer kept.
+- **A mouse wheel now counts as the user scrolling.** The scroll probe also watches wheel events that land inside its
+  scroll view (trackpad and scrollbar gestures keep using the live-scroll notifications), so a wheel scroll can unpin the
+  view and load older pages.
 
 ## 2.5.0
 
