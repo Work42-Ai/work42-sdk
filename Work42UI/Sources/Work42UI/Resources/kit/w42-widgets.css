@@ -16,7 +16,7 @@
   w42-diagram, w42-mockup, w42-flutter-mockup { display: block; }
 
   /* ---- The card (diagram + mockup + error) ---- */
-  .wk-dcard {
+  .wk-dcard, .wk-ccard {
     display: block; width: 100%; margin: 16px 0; box-sizing: border-box; overflow: hidden;
     border-radius: var(--w42-r-panel);
     background: var(--w42-surface);
@@ -26,13 +26,13 @@
   /* A diagram card hugs the graph's natural width, centred; the bridge sets the pixel width. */
   .wk-dcard.is-diagram { width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; }
 
-  .wk-dhead {
+  .wk-dhead, .wk-chead {
     display: flex; align-items: center; gap: 11px;
     min-height: 53px; padding: 9px 11px 9px 13px; box-sizing: border-box;
     border-bottom: 0.5px solid var(--w42-separator);
     -webkit-user-select: none; user-select: none;
   }
-  .wk-dicon {
+  .wk-dicon, .wk-cicon {
     flex: none; width: 31px; height: 31px; display: grid; place-items: center;
     border-radius: 9px; font-size: 16.5px;
     color: var(--w42-chip-fg-accent);
@@ -41,7 +41,7 @@
   .wk-dicon.is-success { color: var(--w42-chip-fg-success); background: color-mix(in srgb, var(--w42-green) 15%, transparent); }
   .wk-dicon.is-danger { color: var(--w42-chip-fg-failure); background: color-mix(in srgb, var(--w42-red) 14%, transparent); }
   .wk-dtext { flex: 1 1 auto; min-width: 0; line-height: 1.25; }
-  .wk-dtitle {
+  .wk-dtitle, .wk-ctitle {
     font-size: var(--w42-f13); font-weight: 600; color: var(--w42-text-primary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
@@ -184,6 +184,25 @@
     .wk-l42-mask { mask: none !important; -webkit-mask: none !important; }
     .wk-l42-shade { display: none; }
   }
+
+  /* ---- Code card (w42-kit.js upgrades a plain <pre><code>): shares the diagram card's frame, header
+     and tile, so the two read as a pair. The body is padded and scrolls sideways, never clips. ---- */
+  .wk-ccard .wk-ctitle { flex: 1 1 auto; min-width: 0; }
+  .wk-clang {
+    flex: none; padding: 2px 9px; border-radius: var(--w42-r-pill);
+    font-size: var(--w42-f10); font-weight: 600; line-height: 1.5;
+    color: var(--w42-chip-fg-accent);
+    background: color-mix(in srgb, var(--w42-accent) 12%, transparent);
+  }
+  .wk-cbody {
+    display: block; margin: 0; padding: 13px 15.5px; box-sizing: border-box; overflow-x: auto;
+    font-family: var(--w42-font-mono); font-size: var(--w42-f10); line-height: 1.65; tab-size: 2;
+    color: var(--w42-syntax-text); background: transparent; white-space: pre;
+  }
+  .wk-cbody code { font: inherit; background: none; padding: 0; border: 0; color: inherit; }
+  /* A code block the author put inside their own flush card (overflow-clip, a header above it) is padded
+     and scrolls the same way, without being turned into a second card. Zero specificity: p-0 / m-0 win. */
+  :where(.wk-card.overflow-clip pre) { margin: 0; padding: 13px 15.5px; overflow-x: auto; }
 
   /* ---- Default rhythm: padding in cards, space between blocks, list markers ----
      Tailwind's reset zeroes margins and list markers, so without these an artifact has no spacing
