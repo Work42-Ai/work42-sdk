@@ -66,6 +66,11 @@
   --shadow-window: 0 0 0 0.5px rgb(0 0 0 / .12), 0 10px 30px rgb(0 0 0 / .08), 0 30px 80px -20px rgb(0 0 0 / .22);
 }
 
+/* ---- Artifacts render at 110%: one literal root size (110% of 16px), so Tailwind's rem
+   spacing (p-4, gap-3, ...) follows. The type, control and radius tokens carry their 110%
+   values directly (CanvasTheme.tokensCSS); nothing is multiplied at runtime. ---- */
+html { font-size: 17.6px; }
+
 /* ---- Preline semantic variables → injected tokens ---- */
 :root, .dark {
   /* Accent ramp derived from the live system accent */
