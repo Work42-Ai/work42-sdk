@@ -5,6 +5,7 @@
    <w42-mockup title="…" url="https://…" device="iphone-16-pro|iphone-15|pixel-7|ipad-11|web">
    <w42-flutter-mockup title="…" app="path/to/flutter/app" device="…">
    w42Toast("Saved", { tone: "success|danger|warning|info", duration: 4000 })
+   <pre data-title="…"><code class="language-x"> → a code card (tile, title, language badge, copy)
 
    Markup is built from the kit recipes (wk-*, styled by w42-recipes.css and
    w42-widgets.css) and SF Symbols (`w42-sf`), so it follows the app's tokens,
@@ -21,11 +22,16 @@
     if (text != null) { n.textContent = text; }
     return n;
   }
+  // A relative URL inside a custom property resolves against the stylesheet that uses it (`_w42/kit/`),
+  // not the page, so `_w42/sf/` would become `_w42/kit/_w42/sf/` and 404. Resolve against the page.
+  function sfURL(name) {
+    return new URL((window.__w42SfBase || "_w42/sf/") + name + ".png", document.baseURI).href;
+  }
   // An SF Symbol, drawn by the app (`_w42/sf/<name>.png`, or `window.__w42SfBase` when a host serves
   // them elsewhere, e.g. a markdown document) and tinted by currentColor.
   function sf(name) {
     var s = el("span", "w42-sf");
-    s.style.setProperty("--sf", 'url("' + (window.__w42SfBase || "_w42/sf/") + name + '.png")');
+    s.style.setProperty("--sf", 'url("' + sfURL(name) + '")');
     s.setAttribute("aria-hidden", "true");
     return s;
   }
@@ -292,6 +298,76 @@
       setStatus("Set a url= or app= attribute", true);
     }
   }
+
+  // ---- Code card: a plain <pre><code> becomes a card, so an author never styles a code block ----
+  // Tile, title (the pre's data-title, else the language), a language badge when there is a title of
+  // its own, a copy button and a padded body that scrolls sideways instead of clipping. A block that
+  // is already inside a card (the author composed their own), a diagram, a document's prose, or is
+  // Mermaid, is left alone. The pre node is moved, not cloned, so highlighting is kept.
+  function codeLanguage(code) {
+    var m = /(?:^|\s)(?:language|lang)-([\w+#-]+)/.exec(code.className || "");
+    return m ? m[1] : "";
+  }
+  function copyCode(code, btn) {
+    var text = code.textContent || "";
+    function done() {
+      var icon = btn.firstChild;
+      btn.replaceChild(sf("checkmark"), icon);
+      setTimeout(function () { btn.replaceChild(icon, btn.firstChild); }, 1200);
+    }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      done();
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+        return;
+      }
+    } catch (e) {}
+    fallback();
+  }
+  function upgradeCode(pre) {
+    if (pre.__w42Code) { return; }
+    pre.__w42Code = true;
+    var code = pre.firstElementChild;
+    if (!code || code.tagName !== "CODE" || pre.children.length !== 1) { return; }
+    var lang = codeLanguage(code);
+    if (lang === "mermaid" || pre.classList.contains("mermaid")) { return; }
+    if (pre.closest(".wk-ccard, .wk-dcard, .wk-card, .w42-prose, w42-diagram, w42-mockup, w42-flutter-mockup")) { return; }
+    var title = pre.getAttribute("data-title") || lang || "Code";
+
+    var card = el("div", "wk-ccard");
+    var head = el("div", "wk-chead");
+    var tile = el("span", "wk-cicon");
+    tile.appendChild(sf("terminal"));
+    head.appendChild(tile);
+    head.appendChild(el("div", "wk-ctitle", title));
+    if (lang && pre.hasAttribute("data-title")) { head.appendChild(el("span", "wk-clang", lang)); }
+    var btn = el("button", "wk-btn wk-btn-icon wk-btn-sm wk-ccopy");
+    btn.type = "button";
+    btn.title = "Copy code";
+    btn.setAttribute("aria-label", "Copy code");
+    btn.appendChild(sf("doc.on.doc"));
+    btn.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); copyCode(code, btn); });
+    head.appendChild(btn);
+
+    pre.parentNode.insertBefore(card, pre);
+    pre.classList.add("wk-cbody");
+    card.appendChild(head);
+    card.appendChild(pre);
+  }
+  function upgradeAllCode() {
+    var codes = document.querySelectorAll("pre > code");
+    for (var i = 0; i < codes.length; i++) { upgradeCode(codes[i].parentNode); }
+  }
+  window.__w42.upgradeCode = upgradeAllCode;
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", upgradeAllCode); }
+  else { upgradeAllCode(); }
 
   function defineMockup(tag) {
     if (!window.customElements || window.customElements.get(tag)) { return; }

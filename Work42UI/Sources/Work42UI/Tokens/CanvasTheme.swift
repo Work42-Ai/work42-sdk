@@ -242,27 +242,48 @@ public enum CanvasTheme {
             ("s20", DT.s20), ("s24", DT.s24), ("s32", DT.s32), ("s40", DT.s40),
         ]
 
-        let radiusTokens: [(name: String, value: CGFloat)] = [
-            ("r-window", DT.rWindow), ("r-panel", DT.rPanel), ("r-card", DT.rCard),
-            ("r-button", DT.rButton), ("r-input", DT.rInput), ("r-pill", DT.rPill),
-            // Liquid Glass Large corner (popover, menu, dialog, sheet, hero).
-            ("r-glass-lg", 34),
-        ]
+        // Kit artifacts render at 110% of the native scale. The values are written out, not computed
+        // (no scale variable at runtime) and rounded to the nearest 0.5px. The native app scale in
+        // `DesignTokens` and the frozen legacy stylesheet (`legacy`) keep the original values.
+        // Spacing tokens are the same in both: they are the artifact rhythm (8 / 12 / 16), a final value.
+        let radiusTokens: [(name: String, value: CGFloat)] = legacy
+            ? [
+                ("r-window", DT.rWindow), ("r-panel", DT.rPanel), ("r-card", DT.rCard),
+                ("r-button", DT.rButton), ("r-input", DT.rInput), ("r-pill", DT.rPill),
+                // Liquid Glass Large corner (popover, menu, dialog, sheet, hero).
+                ("r-glass-lg", 34),
+            ]
+            : [
+                ("r-window", 11), ("r-panel", 13), ("r-card", 9),
+                ("r-button", 6.5), ("r-input", 4.5), ("r-pill", DT.rPill),
+                ("r-glass-lg", 37.5),
+            ]
 
-        // Control, row and glass metrics from the Web Kit Figma ("Work42 ·
-        // Spacing"): 24 pt controls and table rows, 36 pt Action Button
-        // capsules, 28 pt table header, 16 pt glass blur, 60 pt materials blur,
-        // 3.5 pt focus ring.
-        let sizeTokens: [(name: String, value: CGFloat)] = [
-            ("h-control", 24), ("h-action", 36), ("h-row", 20), ("h-table-header", 28),
-            ("glass-blur", 16), ("material-blur", 60), ("focus-ring", 3.5),
-        ]
+        // Control, row and glass metrics from the Web Kit Figma ("Work42 · Spacing"): 24 pt controls
+        // and table rows, 36 pt Action Button capsules, 28 pt table header, 16 pt glass blur, 60 pt
+        // materials blur, 3.5 pt focus ring. At 110% the first four become 26.5 / 22 / 39.5 / 31;
+        // the blurs and the focus ring are not sizes of content and stay.
+        let sizeTokens: [(name: String, value: CGFloat)] = legacy
+            ? [
+                ("h-control", 24), ("h-action", 36), ("h-row", 20), ("h-table-header", 28),
+                ("glass-blur", 16), ("material-blur", 60), ("focus-ring", 3.5),
+            ]
+            : [
+                ("h-control", 26.5), ("h-action", 39.5), ("h-row", 22), ("h-table-header", 31),
+                ("glass-blur", 16), ("material-blur", 60), ("focus-ring", 3.5),
+            ]
 
-        let fontTokens: [(name: String, value: CGFloat)] = [
-            ("f9",  DT.f9),  ("f10", DT.f10), ("f11", DT.f11), ("f12", DT.f12),
-            ("f13", DT.f13), ("f14", DT.f14), ("f15", DT.f15), ("f17", DT.f17),
-            ("f22", DT.f22), ("f30", DT.f30), ("f32", DT.f32),
-        ]
+        let fontTokens: [(name: String, value: CGFloat)] = legacy
+            ? [
+                ("f9",  DT.f9),  ("f10", DT.f10), ("f11", DT.f11), ("f12", DT.f12),
+                ("f13", DT.f13), ("f14", DT.f14), ("f15", DT.f15), ("f17", DT.f17),
+                ("f22", DT.f22), ("f30", DT.f30), ("f32", DT.f32),
+            ]
+            : [
+                ("f9",  12),   ("f10", 13),   ("f11", 14.5), ("f12", 15.5),
+                ("f13", 16.5), ("f14", 17.5), ("f15", 18.5), ("f17", 21),
+                ("f22", 26.5), ("f30", 35),   ("f32", 37.5),
+            ]
 
         // System font stack mirroring macOS / the app's `-apple-system`.
         let fontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", "

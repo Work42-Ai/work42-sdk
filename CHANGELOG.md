@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.6.1
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.0 remain binary-compatible. No public API changes.
+- **HTML artifact kit, icons.** The diagram toolbar and tile, the error card and toasts drew blank icons because the kit
+  set `--sf` to a relative URL, which a stylesheet resolves against itself (`_w42/kit/_w42/sf/…`, a 404). The URL is now
+  resolved against the page. A host's `window.__w42SfBase` still takes priority.
+- **HTML artifact kit, code card.** A plain `<pre><code class="language-x">` becomes a card (icon tile, title from
+  `data-title` or the language, language badge, copy button, padded body that scrolls sideways) that shares the diagram
+  card's frame and header. A block inside an author's own card, a diagram, a document's prose or Mermaid is left alone.
+- **HTML artifact kit, default spacing.** Cards are padded 20px, blocks in them 12px apart, a heading 8px from what
+  follows, cards and page blocks 16px apart, and plain lists show markers with 6px between items. The rules are
+  zero-specificity `:where()` rules, so any spacing utility an author writes wins; flush (`overflow-clip`) cards, flex and
+  grid children and lists with a class are left alone.
+- **HTML artifacts render at 110%.** `CanvasTheme.tokensCSS()` emits the type tokens (`--w42-f9`…`--w42-f32`), the control
+  sizes (`--w42-h-*`) and the radii (`--w42-r-*`) at 110% of the native scale as plain values (body 16.5px), every fixed
+  pixel size in the kit CSS is written at 110% (rounded to 0.5px), and the kit sets `html { font-size: 17.6px }` so
+  rem-based Tailwind spacing follows. Nothing is computed at runtime. The native `DesignTokens` scale, the frozen legacy
+  stylesheet, the spacing tokens, hairlines, shadows, blur radii and the device-mockup hardware are unchanged.
+
 ## 2.6.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.5.0 remain binary-compatible. Everything below is

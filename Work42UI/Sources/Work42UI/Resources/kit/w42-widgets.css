@@ -16,7 +16,7 @@
   w42-diagram, w42-mockup, w42-flutter-mockup { display: block; }
 
   /* ---- The card (diagram + mockup + error) ---- */
-  .wk-dcard {
+  .wk-dcard, .wk-ccard {
     display: block; width: 100%; margin: 16px 0; box-sizing: border-box; overflow: hidden;
     border-radius: var(--w42-r-panel);
     background: var(--w42-surface);
@@ -26,22 +26,22 @@
   /* A diagram card hugs the graph's natural width, centred; the bridge sets the pixel width. */
   .wk-dcard.is-diagram { width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; }
 
-  .wk-dhead {
-    display: flex; align-items: center; gap: 10px;
-    min-height: 48px; padding: 8px 10px 8px 12px; box-sizing: border-box;
+  .wk-dhead, .wk-chead {
+    display: flex; align-items: center; gap: 11px;
+    min-height: 53px; padding: 9px 11px 9px 13px; box-sizing: border-box;
     border-bottom: 0.5px solid var(--w42-separator);
     -webkit-user-select: none; user-select: none;
   }
-  .wk-dicon {
-    flex: none; width: 28px; height: 28px; display: grid; place-items: center;
-    border-radius: 8px; font-size: 15px;
+  .wk-dicon, .wk-cicon {
+    flex: none; width: 31px; height: 31px; display: grid; place-items: center;
+    border-radius: 9px; font-size: 16.5px;
     color: var(--w42-chip-fg-accent);
     background: color-mix(in srgb, var(--w42-accent) 12%, transparent);
   }
   .wk-dicon.is-success { color: var(--w42-chip-fg-success); background: color-mix(in srgb, var(--w42-green) 15%, transparent); }
   .wk-dicon.is-danger { color: var(--w42-chip-fg-failure); background: color-mix(in srgb, var(--w42-red) 14%, transparent); }
   .wk-dtext { flex: 1 1 auto; min-width: 0; line-height: 1.25; }
-  .wk-dtitle {
+  .wk-dtitle, .wk-ctitle {
     font-size: var(--w42-f13); font-weight: 600; color: var(--w42-text-primary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
@@ -49,32 +49,32 @@
     font-size: var(--w42-f10); color: var(--w42-text-tertiary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .wk-dzoom { flex: none; min-width: 34px; text-align: right; font-size: var(--w42-f10); font-variant-numeric: tabular-nums; color: var(--w42-text-tertiary); }
-  .wk-dactions { flex: none; display: inline-flex; align-items: center; gap: 8px; }
+  .wk-dzoom { flex: none; min-width: 37.5px; text-align: right; font-size: var(--w42-f10); font-variant-numeric: tabular-nums; color: var(--w42-text-tertiary); }
+  .wk-dactions { flex: none; display: inline-flex; align-items: center; gap: 9px; }
   .wk-dbody { display: block; width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
 
   /* The diagram body is pannable. */
   .wk-dslot {
     display: block; width: 100%; box-sizing: border-box; cursor: grab;
     background-image: radial-gradient(var(--w42-separator) 1px, transparent 1px);
-    background-size: 14px 14px;
+    background-size: 15.5px 15.5px;
   }
   .wk-dslot:active { cursor: grabbing; }
   .wk-dcard.is-sized .wk-dslot > svg { display: block; width: 100%; height: auto; max-width: none; }
-  .wk-dslot > svg { padding: 12px; box-sizing: border-box; }
+  .wk-dslot > svg { padding: 13px; box-sizing: border-box; }
 
   /* ---- Mermaid, refined: rounded elevated nodes, accent only on borders and arrowheads ---- */
   .wk-dslot svg .node > rect,
   .wk-dslot svg .node > polygon,
   .wk-dslot svg .node > circle {
-    rx: 12px; ry: 12px;
+    rx: 13px; ry: 13px;
     fill: var(--w42-elevated) !important;
     stroke: color-mix(in srgb, var(--w42-accent) 42%, transparent) !important;
     stroke-width: 1.4px !important;
   }
   .wk-dslot svg .node { filter: drop-shadow(0 1px 2px rgb(0 0 0 / .14)) drop-shadow(0 4px 10px rgb(0 0 0 / .10)); }
   .wk-dslot svg .cluster rect {
-    rx: 18px; ry: 18px;
+    rx: 20px; ry: 20px;
     fill: color-mix(in srgb, var(--w42-accent) 6%, var(--w42-surface)) !important;
     stroke: color-mix(in srgb, var(--w42-accent) 22%, transparent) !important;
   }
@@ -87,7 +87,7 @@
 
   /* ---- Error card: the body shows the message instead of a blank render ---- */
   .wk-dcard.is-error .wk-dbody {
-    padding: 12px 14px; font-family: var(--w42-font-mono); font-size: var(--w42-f10); line-height: 1.5;
+    padding: 13px 15.5px; font-family: var(--w42-font-mono); font-size: var(--w42-f10); line-height: 1.5;
     color: var(--w42-chip-fg-failure); white-space: pre-wrap; word-break: break-word;
   }
 
@@ -159,7 +159,7 @@
      Liquid Glass capsule). Translucent fill, blur, a light rim and a soft shadow; the mark sits in a
      circle with an optional label beside it, and the capsule is a plain circle when there is no label. */
   .wk-loader {
-    display: inline-flex; align-items: center; gap: 8px; padding: 8px;
+    display: inline-flex; align-items: center; gap: 9px; padding: 9px;
     border-radius: var(--w42-r-pill);
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--w42-text-primary) 10%, transparent), color-mix(in srgb, var(--w42-text-primary) 3%, transparent)),
@@ -169,7 +169,7 @@
                 inset 0 1px 0 color-mix(in srgb, var(--w42-text-primary) 25%, transparent),
                 0 8px 24px color-mix(in srgb, var(--w42-backdrop) 50%, transparent);
   }
-  .wk-loader-mark { width: 30px; height: 30px; flex: none; }
+  .wk-loader-mark { width: 33px; height: 33px; flex: none; }
   .wk-loader-mark svg, .wk-loader42 { width: 100%; height: 100%; display: block; }
   .wk-l42-o { fill: rgb(255 138 61); }
   .wk-l42-v { fill: rgb(91 33 182); }
@@ -177,11 +177,48 @@
   .dark .wk-l42-o { fill: rgb(255 160 96); }
   .dark .wk-l42-v { fill: rgb(122 73 225); }
   .dark .wk-l42-shade { fill: rgb(235 235 245 / .14); }
-  .wk-loader-text { padding-right: 8px; font: 500 var(--w42-f12) var(--w42-font-family); color: var(--w42-text-secondary); white-space: nowrap; }
+  .wk-loader-text { padding-right: 9px; font: 500 var(--w42-f12) var(--w42-font-family); color: var(--w42-text-secondary); white-space: nowrap; }
   .wk-loader-text:empty { display: none; }
   /* Reduced motion shows the fully painted static mark. */
   @media (prefers-reduced-motion: reduce) {
     .wk-l42-mask { mask: none !important; -webkit-mask: none !important; }
     .wk-l42-shade { display: none; }
   }
+
+  /* ---- Code card (w42-kit.js upgrades a plain <pre><code>): shares the diagram card's frame, header
+     and tile, so the two read as a pair. The body is padded and scrolls sideways, never clips. ---- */
+  .wk-ccard .wk-ctitle { flex: 1 1 auto; min-width: 0; }
+  .wk-clang {
+    flex: none; padding: 2px 9px; border-radius: var(--w42-r-pill);
+    font-size: var(--w42-f10); font-weight: 600; line-height: 1.5;
+    color: var(--w42-chip-fg-accent);
+    background: color-mix(in srgb, var(--w42-accent) 12%, transparent);
+  }
+  .wk-cbody {
+    display: block; margin: 0; padding: 13px 15.5px; box-sizing: border-box; overflow-x: auto;
+    font-family: var(--w42-font-mono); font-size: var(--w42-f11); line-height: 1.65; tab-size: 2;
+    color: var(--w42-syntax-text); background: transparent; white-space: pre;
+  }
+  .wk-cbody code { font: inherit; background: none; padding: 0; border: 0; color: inherit; }
+  /* A code block the author put inside their own flush card (overflow-clip, a header above it) is padded
+     and scrolls the same way, without being turned into a second card. Zero specificity: p-0 / m-0 win. */
+  :where(.wk-card.overflow-clip pre) { margin: 0; padding: 13px 15.5px; overflow-x: auto; }
+
+  /* ---- Default rhythm: padding in cards, space between blocks, list markers ----
+     Tailwind's reset zeroes margins and list markers, so without these an artifact has no spacing
+     unless its author writes every margin. These are the final pixel values of option B (card 20,
+     blocks 12, a heading and what follows 8, cards and page blocks 16, list items 6), already at the
+     110% scale. Every selector sits inside :where(), so none adds specificity: any utility the author
+     writes (p-4, mt-6, gap-3) wins. A flush card (overflow-clip: a header with a table or code in
+     it) gets no padding, and the children of a flex or grid container are never offset. */
+  :where(.wk-card:not(.overflow-clip, .flex, .grid, .inline-flex, .inline-grid)) { padding: 20px; }
+  :where(.wk-card:not(.overflow-clip, .flex, .grid, .inline-flex, .inline-grid) > * + *) { margin-top: 12px; }
+  :where(.wk-card:not(.overflow-clip, .flex, .grid, .inline-flex, .inline-grid) > :where(h1, h2, h3, h4, h5, h6) + *) { margin-top: 8px; }
+  :where(body > :not(script, style, link, template) + :not(script, style, link, template)) { margin-top: 16px; }
+  :where(body > :where(h1, h2, h3, h4, h5, h6) + :not(script, style, link, template)) { margin-top: 8px; }
+  :where(:not(.flex, .grid, .inline-flex, .inline-grid) > .wk-card + .wk-card) { margin-top: 16px; }
+  :where(ul:not([class])) { list-style: disc; padding-left: 1.4em; }
+  :where(ol:not([class])) { list-style: decimal; padding-left: 1.4em; }
+  :where(ul:not([class]) > li + li, ol:not([class]) > li + li) { margin-top: 6px; }
+  :where(li > ul:not([class]), li > ol:not([class])) { margin-top: 6px; }
 }

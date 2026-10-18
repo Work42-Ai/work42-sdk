@@ -34,12 +34,17 @@
     } catch (e) { /* no native host (plain browser) */ }
   }
 
+  // A relative URL inside a custom property resolves against the stylesheet that uses it (`_w42/kit/`),
+  // not the page, so `_w42/sf/` would become `_w42/kit/_w42/sf/` and 404. Resolve against the page.
+  function sfURL(name) {
+    return new URL((window.__w42SfBase || "_w42/sf/") + name + ".png", document.baseURI).href;
+  }
   // An SF Symbol, drawn by the app (`_w42/sf/<name>.png`, or `window.__w42SfBase` when a host serves
   // them elsewhere, e.g. a markdown document) and tinted by currentColor.
   function sf(name) {
     var s = document.createElement("span");
     s.className = "w42-sf";
-    s.style.setProperty("--sf", 'url("' + (window.__w42SfBase || "_w42/sf/") + name + '.png")');
+    s.style.setProperty("--sf", 'url("' + sfURL(name) + '")');
     s.setAttribute("aria-hidden", "true");
     return s;
   }
