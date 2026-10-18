@@ -206,6 +206,16 @@
   /* Code in any card the author composed matches the code card (14.5px mono), not the 16.5px body size. */
   :where(.wk-card pre) { font-family: var(--w42-font-mono); font-size: var(--w42-f11); line-height: 1.65; }
 
+  /* ---- Print and PDF export: nothing scrolls on paper, so nothing may be cut off ----
+     The diagram's minimum width (and its sideways scroll) and the code blocks' sideways scroll only make sense on a
+     screen. Printed, a diagram shrinks to the page width (small text beats a missing half) and code wraps. */
+  @media print {
+    .wk-dslot { overflow: visible; }
+    .wk-dslot svg { min-width: 0 !important; width: 100% !important; }
+    .wk-cbody, .wk-card pre, pre { white-space: pre-wrap !important; overflow: visible !important; overflow-wrap: anywhere; }
+    .wk-dcard, .wk-ccard, .wk-card { break-inside: avoid; }
+  }
+
   /* ---- Default rhythm: padding in cards, space between blocks, list markers ----
      Tailwind's reset zeroes margins and list markers, so without these an artifact has no spacing
      unless its author writes every margin. These are the final pixel values of option B (card 20,

@@ -5,7 +5,7 @@ and any session, workflow, widget, or skill contributions it provides. Build
 native sources against `Work42PluginKit.framework` and `Work42UI.framework`
 inside the installed Work42 app so the host and plugin share one runtime copy.
 
-The current public contract is SDK `2.6.3`, ABI `12`. A plugin package must
+The current public contract is SDK `2.6.4`, ABI `12`. A plugin package must
 declare both values. ABI mismatches are rejected before a Swift entry point is
 called.
 

@@ -25,6 +25,9 @@
   // A relative URL inside a custom property resolves against the stylesheet that uses it (`_w42/kit/`),
   // not the page, so `_w42/sf/` would become `_w42/kit/_w42/sf/` and 404. Resolve against the page.
   function sfURL(name) {
+    // An exported page has no _w42/sf/ to fetch from: the exporter hands over the icons as data URIs.
+    var inlined = window.__w42SfData && window.__w42SfData[name];
+    if (inlined) { return inlined; }
     return new URL((window.__w42SfBase || "_w42/sf/") + name + ".png", document.baseURI).href;
   }
   // An SF Symbol, drawn by the app (`_w42/sf/<name>.png`, or `window.__w42SfBase` when a host serves

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.6.4
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.3 remain binary-compatible. No public API changes.
+- **HTML artifact kit, offline exports.** The kit scripts draw their icons (the diagram toolbar and tile, the code card)
+  from `_w42/sf/<name>.png`, which does not exist in an exported file. `sfURL(name)` in `w42-kit.js` and `w42-diagram.js`
+  now reads `window.__w42SfData[name]` (a data URI the exporter injects) before any URL.
+- **HTML artifact kit, print and PDF.** A printed page cannot scroll, so the diagram's minimum width and the sideways
+  scroll of code blocks cut the page off (a wide diagram lost its right half in a PDF). `@media print` rules shrink a
+  diagram to the page width, wrap code, and keep cards from splitting.
+
 ## 2.6.3
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.2 remain binary-compatible. No public API changes.
