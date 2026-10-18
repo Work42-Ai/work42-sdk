@@ -7,6 +7,6 @@ import Foundation
 /// incompatible. The host, CLI, loader, templates, and release packages all
 /// read these values rather than maintaining their own mirrors.
 public enum Work42SDKCompatibility {
-    nonisolated public static let version = "2.6.2"
+    nonisolated public static let version = "2.6.3"
     nonisolated public static let abiGeneration: Int32 = 12
 }
