@@ -55,7 +55,7 @@
 
   /* The diagram body is pannable. */
   .wk-dslot {
-    display: block; width: 100%; box-sizing: border-box; cursor: grab;
+    display: block; width: 100%; box-sizing: border-box; cursor: grab; overflow-x: auto;
     background-image: radial-gradient(var(--w42-separator) 1px, transparent 1px);
     background-size: 15.5px 15.5px;
   }
@@ -203,6 +203,8 @@
   /* A code block the author put inside their own flush card (overflow-clip, a header above it) is padded
      and scrolls the same way, without being turned into a second card. Zero specificity: p-0 / m-0 win. */
   :where(.wk-card.overflow-clip pre) { margin: 0; padding: 13px 15.5px; overflow-x: auto; }
+  /* Code in any card the author composed matches the code card (14.5px mono), not the 16.5px body size. */
+  :where(.wk-card pre) { font-family: var(--w42-font-mono); font-size: var(--w42-f11); line-height: 1.65; }
 
   /* ---- Default rhythm: padding in cards, space between blocks, list markers ----
      Tailwind's reset zeroes margins and list markers, so without these an artifact has no spacing
@@ -217,6 +219,7 @@
   :where(:is(body, #w42-canvas-content) > :not(script, style, link, template) + :not(script, style, link, template)) { margin-top: 16px; }
   :where(:is(body, #w42-canvas-content) > :where(h1, h2, h3, h4, h5, h6) + :not(script, style, link, template)) { margin-top: 8px; }
   :where(:not(.flex, .grid, .inline-flex, .inline-grid) > .wk-card + .wk-card) { margin-top: 16px; }
+  :where(:is(.flex, .inline-flex):not(.flex-col, .flex-col-reverse):has(> .wk-badge, > .wk-btn)) { align-items: center; }
   :where(ul:not([class])) { list-style: disc; padding-left: 1.4em; }
   :where(ol:not([class])) { list-style: decimal; padding-left: 1.4em; }
   :where(ul:not([class]) > li + li, ol:not([class]) > li + li) { margin-top: 6px; }
