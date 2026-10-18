@@ -23,6 +23,10 @@
   // document never opts in.
   var DIAGRAM_SELECTOR = ".mermaid, pre.mermaid, code.language-mermaid, w42-diagram";
   var MIN_CARD_WIDTH = 340; // room for the title and five header controls
+  // A wide graph is scaled down to fit the column, and its labels shrink with it (about 9px beside 16.5px
+  // text). Never render it below this fraction of its natural size: Mermaid draws labels at 16px, so 0.8 keeps
+  // them at about 12.8px. Past that the body scrolls sideways (and "Fit" still shows the whole graph).
+  var MIN_TEXT_SCALE = 0.8;
   var seq = 0;
   var reg = {}; // id -> { svg, slot, card, base, cur, ar, minw, maxw, zoomEl }
 
@@ -80,6 +84,7 @@
     st.card.classList.add("is-sized");
     st.svg.style.display = "block";
     st.svg.style.width = "100%";
+    st.svg.style.minWidth = Math.ceil(st.base.w * MIN_TEXT_SCALE) + "px";
     st.svg.style.height = "auto";
     st.svg.style.maxWidth = "none";
     st.svg.removeAttribute("width");

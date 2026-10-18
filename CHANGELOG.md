@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.6.3
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.2 remain binary-compatible. No public API changes.
+- **HTML artifact kit, diagrams.** A wide diagram is no longer scaled below 80% of its natural size. Mermaid draws labels
+  at 16px, so a graph fitted into a narrow column had labels at about 9px beside 16.5px text; they now stay at about 12.8px
+  or more and the diagram body scrolls sideways past that (Fit still shows the whole graph). Small diagrams are unchanged.
+- **HTML artifact kit, code.** Code inside a card an author composed (a `wk-card` with a header div, or a bare `wk-card`)
+  uses the code card's 14.5px mono instead of the 16.5px body size.
+- **HTML artifact kit, rows.** In a flex row, a `wk-badge` or `wk-btn` next to taller content is vertically centred by
+  default. An `items-*` utility on the row still wins, and a column (`flex-col`) is unchanged.
+
 ## 2.6.2
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.1 remain binary-compatible. No public API changes.
