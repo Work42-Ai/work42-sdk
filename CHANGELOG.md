@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.6.2
+
+- Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.1 remain binary-compatible. No public API changes.
+- **HTML artifact kit, page spacing.** Fragment artifacts are served as `<body><main id="w42-canvas-content">…</main>`, so
+  the 2.6.1 page-level rhythm rules (`body > * + *`) only matched `<main>` itself and top-level blocks had no gap. They now
+  match the children of both `body` and `#w42-canvas-content`: 16px between top-level blocks and cards, 8px after a
+  heading. Still zero-specificity `:where()` rules, so any spacing utility wins.
+- **Plugin template.** `skills/work42-plugin-creator/assets/plugin-template/plugin.yaml` declares `sdk_version: 2.6.2`
+  (it was left at 2.5.0 by the 2.6.0 and 2.6.1 releases).
+
 ## 2.6.1
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.0 remain binary-compatible. No public API changes.
