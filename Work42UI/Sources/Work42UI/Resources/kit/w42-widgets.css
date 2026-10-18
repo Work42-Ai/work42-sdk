@@ -196,7 +196,7 @@
   }
   .wk-cbody {
     display: block; margin: 0; padding: 13px 15.5px; box-sizing: border-box; overflow-x: auto;
-    font-family: var(--w42-font-mono); font-size: var(--w42-f10); line-height: 1.65; tab-size: 2;
+    font-family: var(--w42-font-mono); font-size: var(--w42-f11); line-height: 1.65; tab-size: 2;
     color: var(--w42-syntax-text); background: transparent; white-space: pre;
   }
   .wk-cbody code { font: inherit; background: none; padding: 0; border: 0; color: inherit; }
