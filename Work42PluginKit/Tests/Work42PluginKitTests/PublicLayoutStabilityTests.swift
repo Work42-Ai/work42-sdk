@@ -57,7 +57,8 @@ struct PublicLayoutStabilityTests {
         #expect(MemoryLayout<WidgetMinSize>.size == 16)
         #expect(MemoryLayout<WidgetIntentMenuOption>.size == 49)
         #expect(MemoryLayout<WidgetPillMetadata>.size == 48)
-        #expect(MemoryLayout<SessionCreateContext>.size == 136)
+        // ABI generation 13 (SDK 2.8.0): `SessionCreateContext` gained `tools` (one 40-byte existential): 136 -> 176.
+        #expect(MemoryLayout<SessionCreateContext>.size == 176)
     }
 
     // A generic view is embedded with the widget's own type arguments; `EmptyView` pins the shell's own storage.

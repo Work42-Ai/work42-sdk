@@ -13,6 +13,8 @@
   session by id; `nil` runs the tool for the widget's own session, so a session-less surface such as Home must pass
   `session`. Plugin calls are not stage-gated: the workflow gate governs agent calls only. A failure throws
   `WidgetServiceError` with the tool's message and suggestion.
+- **`SessionCreateContext.tools`.** An `onCreate` hook gets the same `WidgetToolService` (`SessionCreateContext` 136 → 176 bytes),
+  so a plugin can seed another namespace or post an event without shelling out.
 - **`UnavailableWidgetToolService`.** The default for hosts without tool support (previews, tests); every call throws a
   `WidgetServiceError` with a suggestion rather than returning data. Both initializers take `tools:` with this default,
   so existing construction sites keep compiling.
