@@ -170,7 +170,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         /// while a widget was focused with NO text selection, so the comment
         /// targets the entire widget rather than a highlighted span. Carries
         /// the widget's own agent-drivable type/kindId (`widgetType` — drives
-        /// `widgetId`/`work42 widget <id>`), its SF Symbol `iconGlyph` (for the
+        /// `widgetId`/the `widget_*` tools), its SF Symbol `iconGlyph` (for the
         /// card icon, resolved by the caller in Work42App), a human `title`, and
         /// the widget's type-specific `context` (browser page URL, file path,
         /// artifact id+title, PR URL, custom slug+label — nil when none). The
@@ -385,7 +385,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
     /// The stable, agent-addressable id of the originating widget —
     /// `w_<kindId>` with colons mapped to underscores, matching
     /// `SessionDetailPanel.widgetRuntimeId(for:)` /
-    /// `WidgetRuntime.runtimeId(forKindId:)` so `work42 widget <id> …`
+    /// `WidgetRuntime.runtimeId(forKindId:)` so the `widget_*` tools
     /// resolves it. Nil when `widgetType` is nil (comments-on-widgets AC6).
     public var widgetId: String? {
         widgetType.map(Self.widgetRuntimeId(forKindId:))
@@ -401,7 +401,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
     /// so callers can interpolate it inline.
     var widgetHintLine: String {
         guard let id = widgetId, let type = widgetType else { return "" }
-        return "Widget: `\(id)` (type `\(type)`) — inspect or drive it with `work42 widget \(id) list`.\n"
+        return "Widget: `\(id)` (type `\(type)`) — inspect or drive it with `widget_list` and `widget_invoke` (id `\(id)`).\n"
     }
 
     /// Wraps `block` with the lean `[[comment:<kindTag>]] ... [[/comment]]`

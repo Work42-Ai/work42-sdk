@@ -49,7 +49,7 @@ public final class ArtifactSnapshotRenderer: NSObject {
     public static let viewportSize = CGSize(width: 760, height: 600)
 
     /// How wide to lay the page out and how much of its height to keep. The default is the
-    /// preview-card look; `fullPage(width:)` keeps the whole page (`work42 artifact snapshot`).
+    /// preview-card look; `fullPage(width:)` keeps the whole page (`artifact_snapshot`).
     public struct Options: Equatable, Sendable {
         public var width: CGFloat
         public var maxHeight: CGFloat

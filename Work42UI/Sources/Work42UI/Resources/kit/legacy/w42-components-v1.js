@@ -66,7 +66,7 @@
     var parts = buildCard(title || "Error", [], null, "w42-component-error", ERROR_ICON);
     parts.body.textContent = message;
     // Fail loud AND report: every component render failure is console.error'd
-    // so the error overlay POSTs it to errors.jsonl — `work42 artifact status`
+    // so the error overlay POSTs it to errors.jsonl — `artifact_status`
     // catches broken components mechanically, not by eye.
     if (window.console && console.error) {
       console.error("w42 component error [" + (title || "component") + "]: " + message);

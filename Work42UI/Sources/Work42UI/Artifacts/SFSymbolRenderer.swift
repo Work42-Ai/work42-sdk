@@ -1,6 +1,6 @@
 // SFSymbolRenderer.swift — draws SF Symbols for artifacts and markdown documents (WOR-213, WOR-216).
 //
-// Agents write `<i data-sf="checkmark.circle.fill"></i>`; `work42 artifact set`
+// Agents write `<i data-sf="checkmark.circle.fill"></i>`; `artifact_set`
 // rewrites it into a `w42-sf` span whose CSS mask points at
 // `_w42/sf/checkmark.circle.fill.png`. This renders that PNG with the system
 // symbol API, so the app uses SF Symbols exactly as an app is allowed to — the

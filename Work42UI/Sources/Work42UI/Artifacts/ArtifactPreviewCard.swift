@@ -5,7 +5,7 @@
 //
 // It does NOT preview the artifact. A card is a tile: a tilted 3D object in the artifact's colour,
 // carrying the type icon, bleeds off the left edge, and the title and "Kind · age" sit beside it on
-// the plain card surface. The colour and the kind come from the artifact itself (`work42 artifact set`
+// the plain card surface. The colour and the kind come from the artifact itself (`artifact_set`
 // records them), the card only draws them, so it never renders a webview or a snapshot and can never
 // churn list layout. The same tile is used in the chat transcript and, as a list, in the gallery.
 //
@@ -267,7 +267,7 @@ public struct ArtifactPreviewCard: View {
                 Text("Artifact not found: \(artifactId)")
                     .font(.system(size: DT.f12, weight: .semibold))
                     .foregroundStyle(DT.textPrimary)
-                Text("It has no content yet. Run 'work42 artifact set \(artifactId)' to create it.")
+                Text("It has no content yet. Run 'artifact_set \(artifactId)' to create it.")
                     .font(.system(size: DT.f11))
                     .foregroundStyle(DT.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

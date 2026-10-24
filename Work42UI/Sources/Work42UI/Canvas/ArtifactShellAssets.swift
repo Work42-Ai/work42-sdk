@@ -108,7 +108,7 @@ public enum ArtifactShellAssets {
 
     /// Absolute path of the bundled design-kit gallery fragment (`kit/w42-gallery.html`),
     /// or `nil` if it is missing from the build. Printed by
-    /// `work42 artifact gallery-path`.
+    /// `artifact_kit`.
     @MainActor
     public static func galleryPath() -> String? {
         kitDirectoryURL()?.appendingPathComponent("w42-gallery.html").path
