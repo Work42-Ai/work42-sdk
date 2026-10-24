@@ -261,6 +261,56 @@ nonisolated public protocol WidgetPillService: Sendable {
     func isPresented(widgetId: String) async throws -> Bool
 }
 
+// MARK: - Tools
+
+/// One work42 tool a plugin can call (SDK 2.8.0): the same catalog agents get over MCP.
+nonisolated public struct WidgetToolInfo: Sendable, Codable, Equatable {
+    /// The reserved server the tool belongs to (e.g. `work42-session`).
+    public var server: String
+    public var name: String
+    public var description: String
+    /// The tool's JSON Schema input, as a JSON value.
+    public var inputSchema: WidgetJSONValue
+
+    public init(server: String, name: String, description: String, inputSchema: WidgetJSONValue) {
+        self.server = server
+        self.name = name
+        self.description = description
+        self.inputSchema = inputSchema
+    }
+}
+
+/// Calls the work42 tools (`work42-session`, `work42-artifact`, `work42-terminal`, `work42-device`) the way an
+/// agent does, in-process. Every work42 tool is callable; plugin calls are not stage-gated by the workflow, which
+/// only governs agent calls. Failures throw `WidgetServiceError` carrying the tool's message and suggestion.
+nonisolated public protocol WidgetToolService: Sendable {
+
+    /// Every tool the host serves, across all servers.
+    func listTools() async throws -> [WidgetToolInfo]
+
+    /// Run `tool` on `server`. `session` targets another session by id; `nil` runs it for the widget's own
+    /// session (a session-less surface such as Home has none, so it must pass `session`). Returns the tool's
+    /// result as a JSON value.
+    func call(server: String, tool: String, arguments: [String: WidgetJSONValue],
+              session: String?) async throws -> WidgetJSONValue
+}
+
+/// The default for hosts without tool support (previews, tests): every call throws a named
+/// `WidgetServiceError` instead of returning fabricated data.
+nonisolated public struct UnavailableWidgetToolService: WidgetToolService {
+    public init() {}
+
+    private var error: WidgetServiceError {
+        WidgetServiceError(
+            message: "this host does not provide work42 tools",
+            suggestion: "run the widget inside Work42 2.8.0 or later, or pass a WidgetToolService when constructing the services")
+    }
+
+    public func listTools() async throws -> [WidgetToolInfo] { throw error }
+    public func call(server: String, tool: String, arguments: [String: WidgetJSONValue],
+                     session: String?) async throws -> WidgetJSONValue { throw error }
+}
+
 // MARK: - Account
 
 /// The signed-in Work42 account, as a widget may see it.
@@ -314,6 +364,9 @@ nonisolated public struct SessionServices: Sendable {
     /// `Work42WidgetPill`) — backs the pill's Session/Home list picks.
     public let pill: any WidgetPillService
 
+    /// Calls every work42 tool in-process, as an agent would (SDK 2.8.0, ABI 13).
+    public let tools: any WidgetToolService
+
     /// The owning session's id (task42-plugin-conversion, s3) — needed for
     /// e.g. artifact URL derivation (`[[artifact:id]]` embeds) and
     /// self-registration. `nil` on session-less surfaces (Home).
@@ -330,6 +383,7 @@ nonisolated public struct SessionServices: Sendable {
         intents: any WidgetIntentsService,
         storage: any WidgetStorageService,
         pill: any WidgetPillService,
+        tools: any WidgetToolService = UnavailableWidgetToolService(),
         sessionId: String? = nil,
         worktreePath: String? = nil
     ) {
@@ -338,6 +392,7 @@ nonisolated public struct SessionServices: Sendable {
         self.intents = intents
         self.storage = storage
         self.pill = pill
+        self.tools = tools
         self.sessionId = sessionId
         self.worktreePath = worktreePath
     }

@@ -143,6 +143,9 @@ public enum WidgetSDK {
     /// changing the stored layout of a value passed across the widget dylib
     /// boundary. Older hosts must reject widgets built against this layout
     /// before invoking their factory or background agent.
+    /// v13 (SDK 2.8.0): `SessionServices` and `WidgetBackgroundServices` gained the `tools`
+    /// field (`WidgetToolService`), growing both structs by one existential (40 bytes) and
+    /// changing both memberwise inits. Plugins built for ABI 12 or older must rebuild.
     nonisolated public static var abiVersion: Int32 { Work42SDKCompatibility.abiGeneration }
 
     /// C symbol name of the widget factory (`@_cdecl`). See the file

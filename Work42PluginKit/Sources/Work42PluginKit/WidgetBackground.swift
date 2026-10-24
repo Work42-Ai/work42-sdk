@@ -238,6 +238,9 @@ nonisolated public struct WidgetBackgroundServices: Sendable {
     /// the session becomes inactive.
     public let activity: any WidgetSessionActivityService
 
+    /// Calls every work42 tool in-process, as an agent would (SDK 2.8.0, ABI 13).
+    public let tools: any WidgetToolService
+
     /// The session's stable identifier — persists across dormancy/liveness
     /// cycles and is the key the host uses to route agent lifecycle events.
     public let sessionId: String
@@ -254,6 +257,7 @@ nonisolated public struct WidgetBackgroundServices: Sendable {
         storage: any WidgetStorageService,
         pill: any WidgetPillService,
         activity: any WidgetSessionActivityService = NoopWidgetSessionActivityService(),
+        tools: any WidgetToolService = UnavailableWidgetToolService(),
         sessionId: String,
         taskId: String?
     ) {
@@ -261,6 +265,7 @@ nonisolated public struct WidgetBackgroundServices: Sendable {
         self.storage = storage
         self.pill = pill
         self.activity = activity
+        self.tools = tools
         self.sessionId = sessionId
         self.taskId = taskId
     }
