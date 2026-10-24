@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Browser widgets, highlight-to-comment.** `BrowserSurface` shows the 42 `Work42CommentCapsule`, centred on the
+  selection, instead of the accent `plus.bubble.fill` button that 2.4.0 replaced everywhere else. Plugin browser widgets
+  now match the built-in Browser and markdown views once rebuilt; no widget code changes. No public API changes.
+
 ## 2.6.4
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.3 remain binary-compatible. No public API changes.
