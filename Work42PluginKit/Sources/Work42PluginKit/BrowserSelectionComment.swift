@@ -5,7 +5,7 @@
 // selection bubble + dictation publish (the GitHub PR widget used to). Any
 // `BrowserSurface` that receives `services` gets, for free:
 //
-//   • select text → a floating "＋" bubble → `CommentComposerPopover` → the
+//   • select text → the 42 `Work42CommentCapsule` → `CommentComposerPopover` → the
 //     note + highlighted excerpt land as a chat comment (`composer.attach`),
 //   • the SAME selection published to `AnnotationRegistry` so holding
 //     push-to-talk (or hands-free dictation) drops the transcript in as a
@@ -80,25 +80,20 @@ struct BrowserSelectionCommentLayer: ViewModifier {
     @ViewBuilder
     private var bubble: some View {
         if composer != nil, hasSelection, !selectionText.isEmpty {
-            Button {
+            // The 42 capsule, the same affordance as the markdown view and the
+            // built-in Browser (2.4.0 replaced the `plus.bubble.fill` button).
+            Work42CommentCapsule(label: "Comment") {
                 showingComposer = true
-            } label: {
-                Image(systemName: "plus.bubble.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(DT.systemAccent))
-                    .shadow(color: .black.opacity(0.22), radius: 3, y: 1)
             }
-            .buttonStyle(.plain)
             .help("Comment on the highlighted text")
-            // Anchor with padding (a real layout move), NOT `.offset`, so the
-            // popover attaches to the bubble's actual frame — see
-            // ArtifactCommentLayer for the rationale.
+            // The popover attaches to the capsule itself, which
+            // `work42CentredOnSelection` lays out (not offsets) — see
+            // ArtifactCommentLayer for the rationale. It opens away from the
+            // selection: above when the capsule sits above it, else below.
             .popover(
                 isPresented: $showingComposer,
                 attachmentAnchor: .point(.center),
-                arrowEdge: .leading
+                arrowEdge: selectionRect.minY >= 40 ? .top : .bottom
             ) {
                 CommentComposerPopover(
                     sourceLabel: provisionalLabel(),
@@ -107,8 +102,7 @@ struct BrowserSelectionCommentLayer: ViewModifier {
                     isPresented: $showingComposer
                 )
             }
-            .padding(.leading, max(selectionRect.maxX + 6, 0))
-            .padding(.top, max(selectionRect.minY - 2, 0))
+            .work42CentredOnSelection(selectionRect)
         }
     }
 
