@@ -71,9 +71,21 @@ public struct FindBar<Backend: FindBarBackend>: View {
     /// Drives focus into the text field when the bar opens.
     @FocusState private var isFieldFocused: Bool
 
+    /// An optional extra control shown between the next-match chevron and the
+    /// close button (the Terminal's "filter lines" toggle). Nil for every other
+    /// surface, which render exactly as before. Set with `.accessory { … }`.
+    private var accessoryView: AnyView?
+
     public init(backend: Backend, placeholder: String = "Find in page…") {
         self.backend = backend
         self.placeholder = placeholder
+    }
+
+    /// The bar with one extra trailing control (20 × 20 pt like the chevrons).
+    public func accessory<Content: View>(@ViewBuilder _ content: () -> Content) -> FindBar<Backend> {
+        var copy = self
+        copy.accessoryView = AnyView(content())
+        return copy
     }
 
     public var body: some View {
@@ -145,6 +157,9 @@ public struct FindBar<Backend: FindBarBackend>: View {
             .buttonStyle(.plain)
             .disabled(backend.findTotal == 0)
             .help("Next match")
+
+            // ── Optional extra control ─────────────────────────────────────
+            if let accessoryView { accessoryView }
 
             // ── Close ──────────────────────────────────────────────────────
             Button {
