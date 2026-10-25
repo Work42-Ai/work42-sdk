@@ -170,6 +170,25 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
         return true
     }
 
+    /// Starts the held load now, window or not. The last resort for a view that is on screen as far as its
+    /// widget can tell but never got a window, so that waiting longer would leave "Loading…" up for good. A page
+    /// that loads detached may paint blank; the widget repaints it when it gets its window. Returns whether a load
+    /// was started.
+    @discardableResult
+    func forceDeferredLoad() -> Bool {
+        guard let request = deferredLoad else { return false }
+        deferredLoad = nil
+        var chain: [String] = []
+        var next: NSView? = superview
+        while let view = next, chain.count < 8 { chain.append(String(describing: type(of: view))); next = view.superview }
+        Self.loadLog.warning("""
+            held load forced without a window (\(request.url?.host ?? "no host", privacy: .public)); \
+            superviews: \(chain.joined(separator: " > "), privacy: .public)
+            """)
+        super.load(request)
+        return true
+    }
+
     // MARK: scrollWheel override
 
     public override func scrollWheel(with event: NSEvent) {

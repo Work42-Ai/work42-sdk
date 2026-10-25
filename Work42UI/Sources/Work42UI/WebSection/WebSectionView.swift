@@ -1621,6 +1621,27 @@ public final class WebSectionLiveView {
         startProbe()
     }
 
+    // MARK: - A first load that never gets its window
+
+    /// How long a visible view may wait for a window before its held first load starts anyway.
+    static let heldLoadFallbackDelay: Duration = .milliseconds(1500)
+    private var heldLoadFallback: Task<Void, Never>?
+
+    /// A view its widget reports as visible, still holding its first load with no window: the replay can only
+    /// run when a window arrives, and in that state it may never. After a short wait the load starts detached,
+    /// so the page loads (and is repainted once attached) instead of the loading indicator staying up for good.
+    func scheduleHeldLoadFallback() {
+        guard isHeld, lastVisible == true, heldLoadFallback == nil else { return }
+        heldLoadFallback = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.heldLoadFallbackDelay)
+            guard let self, !Task.isCancelled else { return }
+            self.heldLoadFallback = nil
+            guard !self.isTornDown, self.lastVisible == true,
+                  let held = self.webView as? OverscrollPassthroughWebView else { return }
+            if held.replayDeferredLoadIfAttached() || held.forceDeferredLoad() { self.scheduleIdleCheck() }
+        }
+    }
+
     // MARK: - A page that comes back on screen
 
     private static let returnLog = Logger(subsystem: "com.work42.browser", category: "return")
@@ -1649,6 +1670,7 @@ public final class WebSectionLiveView {
             scheduleIdleCheck()
             return
         }
+        scheduleHeldLoadFallback()
         webView.setNeedsDisplay(webView.bounds)
         webView.layer?.setNeedsDisplay()
         webView.needsLayout = true
@@ -1955,6 +1977,8 @@ public final class WebSectionLiveView {
     /// retaining the message proxy. Idempotent.
     public func teardown() {
         isTornDown = true
+        heldLoadFallback?.cancel()
+        heldLoadFallback = nil
         idleCheck?.cancel()
         idleCheck = nil
         loadingObservation = nil
