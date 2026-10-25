@@ -47,7 +47,7 @@
   window.__w42 = window.__w42 || {};
 
   // ---- Error card: the failure is shown AND reported (console.error reaches the error overlay,
-  // which writes errors.jsonl, so `work42 artifact status` catches a broken widget mechanically) ----
+  // which writes errors.jsonl, so `artifact_status` catches a broken widget mechanically) ----
   function errorCard(title, message) {
     var card = el("div", "wk-dcard is-error");
     var head = el("div", "wk-dhead");

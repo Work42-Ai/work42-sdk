@@ -8,7 +8,9 @@ Work42 SDK compatibility covers the plugin-facing contracts in
 Supported contracts include:
 
 - `Work42Widget`, `Work42WidgetPill`, and `Work42WidgetBackground`
-- `SessionServices` and its storage, artifact, command, and activity services
+- `SessionServices` and its storage, artifact, command, activity, and tool services
+  (`WidgetToolService` calls every Work42 tool in-process; plugin calls are not stage-gated and `session`
+  targets another session)
 - widget intents, link intents, header labels, and browser-surface hooks
 - `PluginEntryPoint`, `Work42SessionHooks`, and the exported entry-point ABI
 - `WidgetSDK` and `Work42SDKCompatibility`

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.8.0
+
+- **ABI generation `13`.** `SessionServices` and `WidgetBackgroundServices` gain a `tools` field, which grows each
+  struct by one 40-byte existential (`WidgetBackgroundServices` 192 → 232 bytes, `SessionServices` 232 → 272, and
+  `BrowserSurface`, which holds an optional `SessionServices`, 384 → 424) and changes both memberwise initializers. Plugins built for SDK 2.0.0 to 2.7.0 (ABI 12 or older) must be rebuilt; a host
+  on ABI 13 rejects them before calling their entry point.
+- **`WidgetToolService`.** `services.tools` (in a widget and in a background agent) calls Work42's own tools
+  in-process: `listTools()` returns `[WidgetToolInfo]` (`server`, `name`, `description`, `inputSchema`) and
+  `call(server:tool:arguments:session:)` runs one and returns its result as a `WidgetJSONValue`. Every Work42 tool is
+  callable (`work42-session`, `work42-artifact`, `work42-terminal` and `work42-device`). `session` targets another
+  session by id; `nil` runs the tool for the widget's own session, so a session-less surface such as Home must pass
+  `session`. Plugin calls are not stage-gated: the workflow gate governs agent calls only. A failure throws
+  `WidgetServiceError` with the tool's message and suggestion.
+- **`SessionCreateContext.tools`.** An `onCreate` hook gets the same `WidgetToolService` (`SessionCreateContext` 136 → 176 bytes),
+  so a plugin can seed another namespace or post an event without shelling out.
+- **`UnavailableWidgetToolService`.** The default for hosts without tool support (previews, tests); every call throws a
+  `WidgetServiceError` with a suggestion rather than returning data. Both initializers take `tools:` with this default,
+  so existing construction sites keep compiling.
+
 ## 2.7.0
 
 - Retain ABI generation `12`; plugins built for SDK 2.0.0 to 2.6.4 remain binary-compatible. One additive public API.

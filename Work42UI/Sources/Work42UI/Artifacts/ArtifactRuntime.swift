@@ -17,7 +17,7 @@
 // through the filesystem) — now FOUR, counting a hot-loaded plugin widget:
 //
 //   * the Work42 app    — runs the server, binds the port, mints the secret
-//   * the `work42` CLI  — `work42 artifact url <id>` prints the loadable URL,
+//   * the `work42` CLI  — `artifact_url` prints the loadable URL,
 //                          and registers the session→dir mapping on `set`
 //   * the gallery widget — loads the URL the app already knows in-process
 //   * a plugin widget    — resolves `[[artifact:id]]` embeds via this SDK type

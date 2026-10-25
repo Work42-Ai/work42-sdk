@@ -29,6 +29,8 @@ nonisolated public struct SessionCreateContext: Sendable {
     public let storage: any WidgetStorageService
     /// Scoped shell access for this session's worktree (same contract widgets use).
     public let shell: any WidgetShellService
+    /// Calls every work42 tool in-process for this session, as an agent would (SDK 2.8.0).
+    public let tools: any WidgetToolService
 
     public init(
         sessionId: String,
@@ -36,7 +38,8 @@ nonisolated public struct SessionCreateContext: Sendable {
         worktreePath: String,
         params: [String: WidgetJSONValue],
         storage: any WidgetStorageService,
-        shell: any WidgetShellService
+        shell: any WidgetShellService,
+        tools: any WidgetToolService = UnavailableWidgetToolService()
     ) {
         self.sessionId = sessionId
         self.name = name
@@ -44,6 +47,7 @@ nonisolated public struct SessionCreateContext: Sendable {
         self.params = params
         self.storage = storage
         self.shell = shell
+        self.tools = tools
     }
 }
 

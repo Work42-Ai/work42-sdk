@@ -21,9 +21,11 @@ import Testing
 @Suite("Public struct layout is ABI (ABI generation 11)")
 struct PublicLayoutStabilityTests {
 
-    @Test("BrowserSurface keeps the 384-byte layout widgets built against SDK 1.0/1.1 expect")
+    // ABI generation 13 (SDK 2.8.0): `BrowserSurface` holds an optional `SessionServices`, which grew by the 40-byte
+    // `tools` existential: 384 -> 424. Widgets built for ABI 12 or older are rejected by the loader.
+    @Test("BrowserSurface keeps the layout widgets built against this ABI generation expect")
     func browserSurface() {
-        #expect(MemoryLayout<BrowserSurface>.size == 384)
+        #expect(MemoryLayout<BrowserSurface>.size == 424)
         #expect(MemoryLayout<BrowserSurface>.alignment == 8)
     }
 
@@ -44,8 +46,10 @@ struct PublicLayoutStabilityTests {
     // `SessionServices` is what every widget keeps for its session.
     @Test("the services and value types widgets receive and keep are unchanged")
     func servicesAndValueTypes() {
-        #expect(MemoryLayout<WidgetBackgroundServices>.size == 192)
-        #expect(MemoryLayout<SessionServices>.size == 232)
+        // ABI generation 13 (SDK 2.8.0): each gained `tools` (one 40-byte existential): 192 -> 232, 232 -> 272.
+        #expect(MemoryLayout<WidgetBackgroundServices>.size == 232)
+        #expect(MemoryLayout<SessionServices>.size == 272)
+        #expect(MemoryLayout<UnavailableWidgetToolService>.size == 0)
         #expect(MemoryLayout<NoopWidgetSessionActivityService>.size == 0)
         #expect(MemoryLayout<WidgetServiceError>.size == 32)
         #expect(MemoryLayout<WidgetShellResult>.size == 36)
@@ -53,7 +57,8 @@ struct PublicLayoutStabilityTests {
         #expect(MemoryLayout<WidgetMinSize>.size == 16)
         #expect(MemoryLayout<WidgetIntentMenuOption>.size == 49)
         #expect(MemoryLayout<WidgetPillMetadata>.size == 48)
-        #expect(MemoryLayout<SessionCreateContext>.size == 136)
+        // ABI generation 13 (SDK 2.8.0): `SessionCreateContext` gained `tools` (one 40-byte existential): 136 -> 176.
+        #expect(MemoryLayout<SessionCreateContext>.size == 176)
     }
 
     // A generic view is embedded with the widget's own type arguments; `EmptyView` pins the shell's own storage.
