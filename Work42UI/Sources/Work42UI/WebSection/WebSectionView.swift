@@ -1382,6 +1382,16 @@ public final class WebSectionLiveView {
     /// cached view shows recovery controls; the page itself is left untouched so a healthy SPA keeps its state.
     public private(set) var isUnresponsive: Bool = false
 
+    /// True while a load is waiting for the view to get a window (a view built for a tab that is not on screen
+    /// holds its first load back). The page is on its way: WebKit is idle in that time, so nothing may treat
+    /// the idle view as a finished or failed load. Computed from the web view; no stored state.
+    public var isHeld: Bool {
+        (webView as? OverscrollPassthroughWebView)?.hasDeferredLoad == true
+    }
+
+    /// Whether the stall watchdog is armed for the active navigation. Tests read it; nothing else does.
+    var isWatchdogArmed: Bool { watchdog != nil }
+
     /// How long a returning-to-visible page has to answer the probe.
     var probeTimeout: Duration = .seconds(5)
 
@@ -1421,6 +1431,10 @@ public final class WebSectionLiveView {
         coordinator.onNavigationStateChange = { [weak self] in
             self?.navigationStateDidChange()
         }
+        // `buildWebView` has already recorded the first navigation intent (and, off-window, held its load),
+        // before this callback existed. Sync once now, so the stall watchdog is armed for that first load too:
+        // a first load that never starts then ends in the "taking too long" notice instead of an endless wash.
+        navigationStateDidChange()
         coordinator.onProcessTerminated = { [weak self] in
             self?.handleProcessTermination()
         }
@@ -1599,7 +1613,9 @@ public final class WebSectionLiveView {
             invalidateProbe()
             return
         }
-        guard previous == false else { return }
+        // Coming back from hidden is the usual edge. The first time a view is ever visible is not one, unless its
+        // first load is still held back: a single-tab widget has no tab switch to give that load another chance.
+        guard previous == false || isHeld else { return }
         pageReturned("visible")
         guard status == .loaded else { return }
         startProbe()
@@ -1625,6 +1641,14 @@ public final class WebSectionLiveView {
     /// One-shot work; nothing runs while the page is hidden.
     func pageReturned(_ reason: String) {
         guard !isTornDown else { return }
+        // 0. A load held for a window starts now if the view has one: a single-tab widget has no tab switch
+        //    to give it a second chance. It runs once (the hold is cleared) and only with a window, and
+        //    nothing else is loaded on top of it, so WebKit never gets two loads for one page.
+        if let held = webView as? OverscrollPassthroughWebView, held.replayDeferredLoadIfAttached() {
+            Self.returnLog.notice("returned (\(reason, privacy: .public)): the held first load was started")
+            scheduleIdleCheck()
+            return
+        }
         webView.setNeedsDisplay(webView.bounds)
         webView.layer?.setNeedsDisplay()
         webView.needsLayout = true
@@ -2049,9 +2073,19 @@ public struct CachedWebSectionView: View {
             // partially rendered) doesn't show through distractingly.
             Color(nsColor: .windowBackgroundColor).opacity(0.85)
             // The glass logo loader: the animated 42 mark on the design system's Liquid Glass capsule
-            // (not a generic spinner), the same indicator every web-based surface uses.
-            LoadingIndicator()
+            // (not a generic spinner), the same indicator every web-based surface uses. It says what is
+            // loading, so a slow page reads as slow and not as stuck.
+            LoadingIndicator(label: loadingLabel)
         }
+    }
+
+    /// "Loading github.com…": the address being shown, or the one requested while the view still has none.
+    private var loadingLabel: String {
+        Self.loadingLabel(forHost: live.webView.url?.host ?? live.coordinator.navState.intended?.url?.host)
+    }
+
+    static func loadingLabel(forHost host: String?) -> String {
+        host.map { "Loading \($0)…" } ?? "Loading…"
     }
 
     // MARK: - Unresponsive notice
@@ -2110,7 +2144,7 @@ public struct CachedWebSectionView: View {
         ZStack {
             Color(nsColor: .windowBackgroundColor).opacity(0.92)
             VStack(spacing: 14) {
-                LoadingIndicator()
+                LoadingIndicator(label: loadingLabel)
 
                 Text("This page is taking too long")
                     .font(.system(size: 14, weight: .semibold))

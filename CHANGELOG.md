@@ -18,6 +18,13 @@
 - **`UnavailableWidgetToolService`.** The default for hosts without tool support (previews, tests); every call throws a
   `WidgetServiceError` with a suggestion rather than returning data. Both initializers take `tools:` with this default,
   so existing construction sites keep compiling.
+- **Browser widgets always show their state (WOR-400).** A browser widget with a single tab could stay on an endless
+  loading wash. The first load of a view built off-screen is now started as soon as the view has a window and is
+  visible (a single tab has no tab switch to retry it), and the 30 s "taking too long" notice covers that first load
+  too. The loading indicator names the page ("Loading github.com…"). `BrowserSurface` shows "Opening …" while its URL
+  provider or first tab is pending and, after 10 s, "Couldn't open …" with Retry; a provider that answers after a
+  Retry no longer overrides it. `WebSectionLiveView.isHeld` is new (read-only). No stored property was added to a public
+  struct: `BrowserSurface` stays 424 bytes and the ABI generation stays `13`, so plugins built for 2.8.0 need no rebuild.
 
 ## 2.7.0
 

@@ -154,10 +154,20 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
 
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard window != nil, let request = deferredLoad else { return }
+        replayDeferredLoadIfAttached()
+    }
+
+    /// Starts the held load, once, if the view has a window now. Without a window it does nothing, because
+    /// loading detached is the blank-page bug the hold prevents. `viewDidMoveToWindow` calls this; the widget
+    /// that hosts the view calls it again when the tab becomes visible, a second chance for a view that got
+    /// its window without that callback reaching it. Returns whether a load was started.
+    @discardableResult
+    func replayDeferredLoadIfAttached() -> Bool {
+        guard window != nil, let request = deferredLoad else { return false }
         deferredLoad = nil
         Self.loadLog.notice("held load replayed: the view got a window (\(request.url?.host ?? "no host", privacy: .public))")
         super.load(request)
+        return true
     }
 
     // MARK: scrollWheel override
