@@ -416,13 +416,17 @@ public final class Work42MarkdownSegmentCache {
 
     public init(capacity: Int = 512) { self.capacity = max(capacity, 1) }
 
-    public func segments(id: String, text: String, bodyFontSize: CGFloat) -> [Work42MarkdownSegment] {
+    /// `prepare`, when given, rewrites the markdown before it is split (the chat links bare file paths with it). It
+    /// runs only on a cache miss, so a row that scrolls back into view pays for neither the rewrite nor the parse.
+    public func segments(
+        id: String, text: String, bodyFontSize: CGFloat, prepare: ((String) -> String)? = nil
+    ) -> [Work42MarkdownSegment] {
         let key = Key(id: id, textHash: text.hashValue, size: bodyFontSize)
         if let hit = entries[key] {
             if let index = order.lastIndex(of: key) { order.remove(at: index); order.append(key) }
             return hit
         }
-        let parsed = Work42MarkdownSegments.split(text, bodyFontSize: bodyFontSize)
+        let parsed = Work42MarkdownSegments.split(prepare?(text) ?? text, bodyFontSize: bodyFontSize)
         entries[key] = parsed
         order.append(key)
         while order.count > capacity { entries[order.removeFirst()] = nil }
@@ -480,6 +484,7 @@ public struct Work42SelectableProse: NSViewRepresentable {
     private func configure(_ view: SelectableProseTextView, context: Context) {
         context.coordinator.onOpenLink = onOpenLink
         context.coordinator.onSelectionChange = onSelectionChange
+        view.linkOpener = onOpenLink
     }
 
     @MainActor
@@ -510,6 +515,8 @@ public final class SelectableProseTextView: NSTextView {
     private var lastWidth: CGFloat = -1
     private var lastHeight: CGFloat = 0
     private var content = NSAttributedString()
+    /// What "Open Link" in the context menu does; nil falls back to the system.
+    var linkOpener: ((URL) -> Void)?
 
     public init() {
         let storage = NSTextStorage()
@@ -567,6 +574,43 @@ public final class SelectableProseTextView: NSTextView {
         if let container = textContainer, newSize.width > 0, container.size.width != newSize.width {
             container.size = NSSize(width: newSize.width, height: CGFloat.greatestFiniteMagnitude)
         }
+    }
+
+    /// The link under `point` (in this view's coordinates), if the point is on linked text.
+    func link(at point: NSPoint) -> URL? {
+        guard let layout = layoutManager, let container = textContainer, content.length > 0 else { return nil }
+        let local = NSPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
+        let glyph = layout.glyphIndex(for: local, in: container, fractionOfDistanceThroughGlyph: nil)
+        guard layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container).contains(local) else {
+            return nil
+        }
+        let index = layout.characterIndexForGlyph(at: glyph)
+        guard index < content.length else { return nil }
+        let value = content.attribute(.link, at: index, effectiveRange: nil)
+        return (value as? URL) ?? (value as? String).flatMap(URL.init(string:))
+    }
+
+    /// The standard text menu, with "Open Link" and "Open Externally" first when the click is on a link.
+    public override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        guard let url = link(at: convert(event.locationInWindow, from: nil)) else { return menu }
+        let open = NSMenuItem(title: "Open Link", action: #selector(openLinkFromMenu(_:)), keyEquivalent: "")
+        let external = NSMenuItem(title: "Open Externally", action: #selector(openLinkExternally(_:)), keyEquivalent: "")
+        for item in [open, external] { item.target = self; item.representedObject = url }
+        menu.insertItem(open, at: 0)
+        menu.insertItem(external, at: 1)
+        menu.insertItem(.separator(), at: 2)
+        return menu
+    }
+
+    @objc private func openLinkFromMenu(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        if let linkOpener { linkOpener(url) } else { NSWorkspace.shared.open(url) }
+    }
+
+    @objc private func openLinkExternally(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// The selected text and the rect of its first line, from the start of the selection to the end of that line.
