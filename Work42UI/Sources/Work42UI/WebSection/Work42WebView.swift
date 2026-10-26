@@ -17,6 +17,7 @@
 
 import AppKit
 import Foundation
+import OSLog
 import SwiftUI
 import WebKit
 
@@ -138,6 +139,13 @@ extension EnvironmentValues {
 /// a view that needs its own behaviour and build it with `Work42WebView.make(_:configuration:role:)`.
 public class PolicyWebView: WKWebView {
     public var linkSource: String?
+
+    /// Hosts that can show a popup as a tab adopt the popup web view here and return true. Returning false (or
+    /// leaving this nil) makes the policy offer an http(s) popup to Open Link instead.
+    public var popupHandler: ((_ popup: PolicyWebView) -> Bool)?
+
+    /// Called when the page closes its own window (`window.close()`), which is how a popup tab goes away.
+    public var onClose: (() -> Void)?
 
     /// Internal so the link-policy tests can drive the proxy directly.
     let policy = LinkPolicyProxy()
@@ -396,6 +404,13 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
         caller.webView?(webView, runOpenPanelWith: parameters, initiatedByFrame: frame, completionHandler: completionHandler)
     }
 
+    func webViewDidClose(_ webView: WKWebView) {
+        (webView as? PolicyWebView)?.onClose?()
+        if let caller = callerUI, caller.responds(to: #selector(WKUIDelegate.webViewDidClose(_:))) {
+            caller.webViewDidClose?(webView)
+        }
+    }
+
     // MARK: Messages from the page
 
     func handle(_ body: Any) {
@@ -492,6 +507,8 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     // MARK: Popups
 
+    private static let popupLog = Logger(subsystem: "com.work42.browser", category: "popup")
+
     func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
@@ -518,55 +535,13 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
         if WebAppBrowserConfiguration.isApplied(to: opener.configuration) {
             WebAppBrowserConfiguration.apply(to: configuration)
         }
-        let popup = Work42WebView.make(configuration: configuration, role: .interactive(source: opener.linkSource))
-        PopupPanel.show(popup, over: opener.window)
-        return popup
-    }
-}
-
-// MARK: - Popup window
-
-/// The window an unowned popup lives in. Retained until the page closes it or the user does.
-private final class PopupPanel: NSObject, WKUIDelegate, NSWindowDelegate {
-    private static var open: Set<PopupPanel> = []
-
-    private let panel: NSPanel
-    private let webView: WKWebView
-    private var titleObservation: NSKeyValueObservation?
-
-    private init(webView: WKWebView) {
-        self.webView = webView
-        panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
-            styleMask: [.titled, .closable, .resizable, .utilityWindow],
-            backing: .buffered,
-            defer: false
-        )
-        super.init()
-        panel.isReleasedWhenClosed = false
-        panel.contentView = webView
-        panel.delegate = self
-        webView.uiDelegate = self
-        titleObservation = webView.observe(\.title, options: [.initial, .new]) { [weak self] view, _ in
-            MainActor.assumeIsolated { self?.panel.title = view.title ?? "" }
+        let popup = Work42WebView.make(PolicyWebView.self, configuration: configuration, role: .interactive(source: opener.linkSource))
+        if opener.popupHandler?(popup) == true { return popup }
+        if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            offer(url, kind: .popup) { _ in }
+        } else {
+            Self.popupLog.info("popup refused: opener has no tab host and the popup has no http(s) URL")
         }
-    }
-
-    static func show(_ webView: WKWebView, over parent: NSWindow?) {
-        let popup = PopupPanel(webView: webView)
-        open.insert(popup)
-        parent?.addChildWindow(popup.panel, ordered: .above)
-        popup.panel.center()
-        popup.panel.makeKeyAndOrderFront(nil)
-    }
-
-    func webViewDidClose(_ webView: WKWebView) {
-        panel.close()
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        titleObservation = nil
-        panel.parent?.removeChildWindow(panel)
-        PopupPanel.open.remove(self)
+        return nil
     }
 }

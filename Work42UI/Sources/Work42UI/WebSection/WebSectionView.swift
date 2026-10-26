@@ -137,12 +137,89 @@ public struct WebSectionView: NSViewRepresentable {
         onSignal: ((WebSectionSignal) -> Void)?,
         coordinator: Coordinator
     ) -> WKWebView {
+        let userContentController = WKUserContentController()
+        Self.installScripts(into: userContentController, spec: spec, onSignal: onSignal, coordinator: coordinator)
+
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController = userContentController
+        // Persistent (non-ephemeral) data store keyed by the spec so
+        // login sessions survive app restarts. NOTE (T-005.3): this is the
+        // persistent store — `WKWebsiteDataStore(forIdentifier:)`, NOT
+        // `.nonPersistent()` — which is what lets an SSO/login completed
+        // via the WKUIDelegate popup path below persist across relaunch.
+        // macOS does not inherit
+        // Safari/Chrome cookies — the user authenticates once inside
+        // this webview and WebKit keeps the session under this
+        // identifier.
+        //
+        // EPHEMERAL opt-in (`spec.ephemeral`, default false): a consumer
+        // that serves local, app-authored content needing no persisted
+        // auth (the agent canvas, spec Decision 5) gets a
+        // `WKWebsiteDataStore.nonPersistent()` instead — nothing is written
+        // to disk and `dataStoreKey` maps to no on-disk identity. This is
+        // the only branch on the flag; the component stays web-app-agnostic.
+        configuration.websiteDataStore = spec.ephemeral
+            ? WKWebsiteDataStore.nonPersistent()
+            : Self.persistentDataStore(forKey: spec.dataStoreKey)
+
+        // Use OverscrollPassthroughWebView so wheel events chain to the
+        // enclosing chat scroll view when the page is at its top/bottom
+        // boundary (feat/spec-as-html.11).
+        // Web apps present Safari's identity (local ephemeral content has no provider to satisfy).
+        if !spec.ephemeral { WebAppBrowserConfiguration.apply(to: configuration) }
+        let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: configuration, role: .interactive(source: nil))
+        webView.overscrollMode = .passthroughAtBoundary
+        // Safari-style two-finger back/forward swipe on WebKit's native history. Local ephemeral content (the agent
+        // canvas) is not a browsing surface and keeps no gesture.
+        webView.allowsBackForwardNavigationGestures = !spec.ephemeral
+        // Artifact pages draw their own page background (the canvas theme
+        // paints --w42-backdrop on body), so the web view itself paints
+        // nothing: a page that makes html/body transparent (the meet42
+        // brief and summary) shows the pane behind it. Other web apps keep
+        // WebKit's default opaque background.
+        if spec.dataStoreKey == WebAppCatalog.artifactDataStoreKey {
+            webView.setValue(false, forKey: "drawsBackground")
+            webView.underPageBackgroundColor = .clear
+        }
+        // SEAM .3: navigation + UI delegates. The Coordinator re-runs the
+        // isolation script on SPA navigation (Jira switches issues without
+        // a full reload, so the `.atDocumentEnd` user script above doesn't
+        // fire) and routes SSO/login popups (`window.open`) back into this
+        // same webview so Atlassian auth flows complete inside the widget.
+        webView.navigationDelegate = coordinator
+        webView.uiDelegate = coordinator
+        // SEAM .4: a JS->Swift message handler is wired here / on the
+        // userContentController by the next subtask. Left untouched.
+
+        let initialRequest = URLRequest(url: spec.url)
+        coordinator.navState.beginIntent(initialRequest, now: Date())
+        webView.load(initialRequest)
+
+        // Wire the overscroll handler proxy AFTER the webview is created so
+        // the proxy can hold a weak reference to it (avoids a retain cycle
+        // through the UCC → config → webview chain).
+        coordinator.overscrollProxy = OverscrollInstaller.wireProxy(
+            webView: webView,
+            controller: userContentController
+        )
+
+        return webView
+    }
+
+    /// Installs every user script and message handler a Work42 web section needs onto `userContentController`,
+    /// wiring the handlers to `coordinator`. Shared by `buildWebView` (a view it creates) and `makeLiveView(adopting:)`
+    /// (a popup WebKit created), so both get identical scripts before their first load.
+    static func installScripts(
+        into userContentController: WKUserContentController,
+        spec: WebSectionSpec,
+        onSignal: ((WebSectionSignal) -> Void)?,
+        coordinator: Coordinator
+    ) {
         // A WKUserContentController is the hook for everything the
         // later subtasks layer on: injected user scripts (.2 selector
         // isolation) and JS->Swift message handlers (.4 signals). We
         // create it now so the configuration is final and the seams
         // have a home, even though .1 adds nothing to it.
-        let userContentController = WKUserContentController()
         // SEAM .2: selector-isolation WKUserScript. The script source is
         // generated by the pure `WebSectionScript.isolation(selector:)`
         // (testable without WebKit), then injected at `.atDocumentEnd`
@@ -303,71 +380,6 @@ public struct WebSectionView: NSViewRepresentable {
         let contentReadyProxy = ContentReadyProxy(coordinator: coordinator)
         coordinator.contentReadyProxy = contentReadyProxy
         userContentController.add(contentReadyProxy, name: Self.contentReadyHandlerName)
-
-        let configuration = WKWebViewConfiguration()
-        configuration.userContentController = userContentController
-        // Persistent (non-ephemeral) data store keyed by the spec so
-        // login sessions survive app restarts. NOTE (T-005.3): this is the
-        // persistent store — `WKWebsiteDataStore(forIdentifier:)`, NOT
-        // `.nonPersistent()` — which is what lets an SSO/login completed
-        // via the WKUIDelegate popup path below persist across relaunch.
-        // macOS does not inherit
-        // Safari/Chrome cookies — the user authenticates once inside
-        // this webview and WebKit keeps the session under this
-        // identifier.
-        //
-        // EPHEMERAL opt-in (`spec.ephemeral`, default false): a consumer
-        // that serves local, app-authored content needing no persisted
-        // auth (the agent canvas, spec Decision 5) gets a
-        // `WKWebsiteDataStore.nonPersistent()` instead — nothing is written
-        // to disk and `dataStoreKey` maps to no on-disk identity. This is
-        // the only branch on the flag; the component stays web-app-agnostic.
-        configuration.websiteDataStore = spec.ephemeral
-            ? WKWebsiteDataStore.nonPersistent()
-            : Self.persistentDataStore(forKey: spec.dataStoreKey)
-
-        // Use OverscrollPassthroughWebView so wheel events chain to the
-        // enclosing chat scroll view when the page is at its top/bottom
-        // boundary (feat/spec-as-html.11).
-        // Web apps present Safari's identity (local ephemeral content has no provider to satisfy).
-        if !spec.ephemeral { WebAppBrowserConfiguration.apply(to: configuration) }
-        let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: configuration, role: .interactive(source: nil))
-        webView.overscrollMode = .passthroughAtBoundary
-        // Safari-style two-finger back/forward swipe on WebKit's native history. Local ephemeral content (the agent
-        // canvas) is not a browsing surface and keeps no gesture.
-        webView.allowsBackForwardNavigationGestures = !spec.ephemeral
-        // Artifact pages draw their own page background (the canvas theme
-        // paints --w42-backdrop on body), so the web view itself paints
-        // nothing: a page that makes html/body transparent (the meet42
-        // brief and summary) shows the pane behind it. Other web apps keep
-        // WebKit's default opaque background.
-        if spec.dataStoreKey == WebAppCatalog.artifactDataStoreKey {
-            webView.setValue(false, forKey: "drawsBackground")
-            webView.underPageBackgroundColor = .clear
-        }
-        // SEAM .3: navigation + UI delegates. The Coordinator re-runs the
-        // isolation script on SPA navigation (Jira switches issues without
-        // a full reload, so the `.atDocumentEnd` user script above doesn't
-        // fire) and routes SSO/login popups (`window.open`) back into this
-        // same webview so Atlassian auth flows complete inside the widget.
-        webView.navigationDelegate = coordinator
-        webView.uiDelegate = coordinator
-        // SEAM .4: a JS->Swift message handler is wired here / on the
-        // userContentController by the next subtask. Left untouched.
-
-        let initialRequest = URLRequest(url: spec.url)
-        coordinator.navState.beginIntent(initialRequest, now: Date())
-        webView.load(initialRequest)
-
-        // Wire the overscroll handler proxy AFTER the webview is created so
-        // the proxy can hold a weak reference to it (avoids a retain cycle
-        // through the UCC → config → webview chain).
-        coordinator.overscrollProxy = OverscrollInstaller.wireProxy(
-            webView: webView,
-            controller: userContentController
-        )
-
-        return webView
     }
 
     /// SwiftUI builds one `Coordinator` per representable instance; it is
@@ -1512,6 +1524,18 @@ public final class WebSectionLiveView {
         set { (webView as? PolicyWebView)?.linkSource = newValue }
     }
 
+    /// Set by a tab host to adopt a `window.open` popup of this page as a tab (see `PolicyWebView.popupHandler`).
+    public var popupHandler: ((PolicyWebView) -> Bool)? {
+        get { (webView as? PolicyWebView)?.popupHandler }
+        set { (webView as? PolicyWebView)?.popupHandler = newValue }
+    }
+
+    /// Fired when the page closes its own window (`window.close()`); the tab host closes the tab.
+    public var onClose: (() -> Void)? {
+        get { (webView as? PolicyWebView)?.onClose }
+        set { (webView as? PolicyWebView)?.onClose = newValue }
+    }
+
     /// Callback fired when the user deselects a previously-picked element by
     /// clicking it again (toggle-deselect). Setting this wires the callback into
     /// the Coordinator without rebuilding the WKWebView. Setting to nil clears it.
@@ -2019,6 +2043,33 @@ extension WebSectionView {
     ) -> WebSectionLiveView {
         let coordinator = Coordinator(selector: spec.selector, onSignal: onSignal)
         let webView = buildWebView(spec: spec, onSignal: onSignal, coordinator: coordinator)
+        return WebSectionLiveView(webView: webView, coordinator: coordinator)
+    }
+
+    /// Wraps a web view WebKit already created (a `window.open` popup) in a live view, without loading anything:
+    /// WebKit loads the popup's own request. Runs the same script and handler installation as `makeLiveView(spec:)`,
+    /// so it must be called before `createWebViewWith` returns and the first load starts.
+    @MainActor
+    public static func makeLiveView(
+        adopting webView: WKWebView,
+        spec: WebSectionSpec,
+        onSignal: ((WebSectionSignal) -> Void)? = nil
+    ) -> WebSectionLiveView {
+        let coordinator = Coordinator(selector: spec.selector, onSignal: onSignal)
+        installScripts(
+            into: webView.configuration.userContentController,
+            spec: spec,
+            onSignal: onSignal,
+            coordinator: coordinator
+        )
+        webView.navigationDelegate = coordinator
+        webView.uiDelegate = coordinator
+        if let overscroll = webView as? OverscrollPassthroughWebView {
+            coordinator.overscrollProxy = OverscrollInstaller.wireProxy(
+                webView: overscroll,
+                controller: webView.configuration.userContentController
+            )
+        }
         return WebSectionLiveView(webView: webView, coordinator: coordinator)
     }
 }

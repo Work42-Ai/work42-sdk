@@ -130,6 +130,7 @@
 import Combine
 import Observation
 import SwiftUI
+import WebKit
 import Work42UI
 
 // MARK: - BrowserSurfaceSpec
@@ -298,6 +299,20 @@ public final class BrowserSurfaceCache {
         let live = WebSectionView.makeLiveView(spec: spec)
         liveViews[key] = live
         return live
+    }
+
+    /// Stores a popup web view WebKit created as the live view at `key`. Nothing is loaded: WebKit loads the
+    /// popup's own request, and the popup keeps `window.opener`.
+    func adoptLiveView(forKey key: String, webView: WKWebView, spec: WebSectionSpec) -> WebSectionLiveView {
+        let live = WebSectionView.makeLiveView(adopting: webView, spec: spec)
+        liveViews[key] = live
+        return live
+    }
+
+    /// The live view cached at `key`, if one exists and is still usable. A popup tab has no URL when it opens,
+    /// so its live view is found here instead of being built from the tab's URL.
+    func existingLiveView(forKey key: String) -> WebSectionLiveView? {
+        liveViews[key].flatMap { $0.isTornDown ? nil : $0 }
     }
 
     /// Release the single live view stored at `key` (full per-tab key:
@@ -937,15 +952,50 @@ private struct BrowserSurfaceReady: View {
             building: sectionSpec
         )
         live.linkSource = linkSource
+        live.popupHandler = { [model] popup in adoptPopup(popup, opener: tab, model: model) }
         return live
+    }
+
+    /// The live view `tab` shows: built from its URL, or, for a popup tab that has no URL yet, the popup web view
+    /// adopted into the cache. Nil for an empty tab.
+    private func currentLiveView(for tab: BrowserTab) -> WebSectionLiveView? {
+        if let url = tab.url { return liveView(for: tab, url: url) }
+        return BrowserSurfaceCache.shared.existingLiveView(forKey: tabLiveKey(for: tab.id))
+    }
+
+    /// A page in `opener` opened a window: it becomes a tab right after `opener`, backed by the web view WebKit
+    /// made, so `window.opener` keeps working. `window.close()` closes the tab and returns to the opener.
+    private func adoptPopup(_ popup: PolicyWebView, opener: BrowserTab, model: BrowserWidgetModel) -> Bool {
+        let tab = BrowserTab(title: "New Tab", icon: spec.icon)
+        let sectionSpec = WebSectionSpec(
+            url: opener.url ?? URL(string: "about:blank")!,
+            selector: spec.selector,
+            dataStoreKey: spec.dataStoreKey,
+            title: spec.title
+        )
+        let adopted = BrowserSurfaceCache.shared.adoptLiveView(
+            forKey: tabLiveKey(for: tab.id), webView: popup, spec: sectionSpec
+        )
+        adopted.linkSource = linkSource
+        adopted.popupHandler = { [model] nested in adoptPopup(nested, opener: tab, model: model) }
+        adopted.onClose = { [weak model] in
+            // WebKit is inside its own close callback: let it return before the view is torn down.
+            DispatchQueue.main.async {
+                guard let model else { return }
+                model.closeTab(tab.id)
+                if model.tabs.contains(where: { $0.id == opener.id }) { model.selectTab(opener.id) }
+            }
+        }
+        model.openTab(id: tab.id, url: nil, title: tab.title, icon: tab.icon, after: opener.id)
+        return true
     }
 
     // MARK: - Body
 
     var body: some View {
         if let tab = activeTab {
-            // Resolve the live view when the tab has a URL; nil for empty tabs.
-            let live: WebSectionLiveView? = tab.url.map { liveView(for: tab, url: $0) }
+            // Resolve the live view when the tab has a URL (or is an adopted popup); nil for empty tabs.
+            let live: WebSectionLiveView? = currentLiveView(for: tab)
             VStack(spacing: 0) {
                 // Shared chrome row — rendered when the surface is live and
                 // the host does NOT own the chrome header (AC7).
@@ -1040,8 +1090,7 @@ private struct BrowserSurfaceReady: View {
             }
             // Re-wire to the new active tab's live view on every tab switch.
             .onChange(of: model.activeTabId) { _, _ in
-                guard let newTab = activeTab, let newURL = newTab.url else { return }
-                let newLive = liveView(for: newTab, url: newURL)
+                guard let newTab = activeTab, let newLive = currentLiveView(for: newTab) else { return }
                 wireModel(to: newLive, tab: newTab)
             }
         } else {
@@ -1105,9 +1154,11 @@ private struct BrowserSurfaceReady: View {
         // URL so a remount or tab-template restore reopens the actual visited page.
         live.onURLChange = { [weak model] landed in
             guard let model,
-                  model.tabs.first(where: { $0.id == tab.id })?.url != landed
+                  let current = model.tabs.first(where: { $0.id == tab.id }),
+                  current.url != landed
             else { return }
-            model.updateTab(tab.id, url: landed)
+            // A popup tab opens as "New Tab" with no address: it takes its host once it lands.
+            model.updateTab(tab.id, title: current.title == "New Tab" ? landed.host : nil, url: landed)
         }
     }
 }

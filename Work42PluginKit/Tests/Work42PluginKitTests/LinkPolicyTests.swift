@@ -90,6 +90,19 @@ private final class Rig {
     }
 }
 
+/// Stands in for a tab host: adopts every popup it is handed and counts the ones the page closes.
+@MainActor
+private final class PopupSink {
+    var popups: [PolicyWebView] = []
+    var closed = 0
+
+    func adopt(_ popup: PolicyWebView) -> Bool {
+        popups.append(popup)
+        popup.onClose = { [unowned self] in closed += 1 }
+        return true
+    }
+}
+
 @Suite("Work42WebView link policy", .serialized)
 @MainActor
 struct LinkPolicyTests {
@@ -245,17 +258,47 @@ struct LinkPolicyTests {
         #expect(rig.requests.first?.url.host == "owned.test")
     }
 
-    @Test("an unowned popup is a real attached window with window.opener")
+    @Test("an unowned popup is handed to popupHandler and keeps window.opener; no window is created")
     func unownedPopupKeepsItsOpener() async {
         let rig = Rig()
+        let sink = PopupSink()
+        rig.webView.popupHandler = sink.adopt
         await rig.load("<div>page</div>")
         let before = NSApp.windows.count
-        await rig.run("window.popup = window.open('about:blank'); window.popup.document.title = 'Sign in';")
-        #expect(await rig.eventually { NSApp.windows.count > before })
+        await rig.run("window.popup = window.open('about:blank'); 1")
+        #expect(await rig.eventually { sink.popups.count == 1 })
+        #expect(NSApp.windows.count == before)
         #expect(rig.requests.isEmpty)
         #expect((await rig.run("window.popup && !window.popup.closed") as? Bool) == true)
         #expect((await rig.run("window.popup.opener === window") as? Bool) == true)
+        #expect(sink.popups.first?.linkSource == "issue")
         await rig.run("window.popup.close()")
+        #expect(await rig.eventually { sink.closed == 1 })
+    }
+
+    @Test("with no popupHandler an http popup is offered to the host as a popup and not created")
+    func httpPopupWithoutHostIsOffered() async {
+        let rig = Rig()
+        await rig.load("<div>page</div>")
+        let before = NSApp.windows.count
+        await rig.run("window.popup = window.open('https://other.test/p'); 1")
+        #expect(await rig.eventually { rig.requests.count == 1 })
+        #expect(rig.requests.first?.kind == .popup)
+        #expect(rig.requests.first?.url.absoluteString == "https://other.test/p")
+        #expect((await rig.run("window.popup === null") as? Bool) == true)
+        #expect(NSApp.windows.count == before)
+    }
+
+    @Test("with no popupHandler a blank popup is refused")
+    func blankPopupWithoutHostIsRefused() async {
+        let rig = Rig()
+        await rig.load("<div>page</div>")
+        let before = NSApp.windows.count
+        await rig.run("window.popup = window.open('about:blank'); 1")
+        try? await Task.sleep(for: .milliseconds(400))
+        #expect((await rig.run("window.popup === null") as? Bool) == true)
+        #expect(rig.requests.isEmpty)
+        #expect(NSApp.windows.count == before)
     }
 
     @Test("an offscreen web view has no link handler and a plain type")
@@ -367,15 +410,16 @@ struct LinkPolicyTests {
     @Test("an armed item does not swallow an unrelated popup")
     func armedPopupOnlyForThatLink() async {
         let rig = Rig()
+        let sink = PopupSink()
+        rig.webView.popupHandler = sink.adopt
         rig.ownedHere = ["issue"]
         await rig.load(#"<a id="a" href="https://x.test/a">go</a>"#)
         await rightClick(rig, "a")
         #expect(await rig.eventually { rig.webView.policy.lastContextLink != nil })
         rig.webView.policy.customizeMenu(linkMenu(), source: "issue")
 
-        let before = NSApp.windows.count
         await rig.run("window.popup = window.open('about:blank'); 1")   // a sign-in popup, not the chosen link
-        #expect(await rig.eventually { NSApp.windows.count > before })
+        #expect(await rig.eventually { sink.popups.count == 1 })
         #expect(rig.requests.isEmpty)
         await rig.run("window.popup.close()")
     }
