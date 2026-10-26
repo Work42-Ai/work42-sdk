@@ -1382,6 +1382,16 @@ public final class WebSectionLiveView {
     /// cached view shows recovery controls; the page itself is left untouched so a healthy SPA keeps its state.
     public private(set) var isUnresponsive: Bool = false
 
+    /// True while a load is waiting for the view to get a window (a view built for a tab that is not on screen
+    /// holds its first load back). The page is on its way: WebKit is idle in that time, so nothing may treat
+    /// the idle view as a finished or failed load. Computed from the web view; no stored state.
+    public var isHeld: Bool {
+        (webView as? OverscrollPassthroughWebView)?.hasDeferredLoad == true
+    }
+
+    /// Whether the stall watchdog is armed for the active navigation. Tests read it; nothing else does.
+    var isWatchdogArmed: Bool { watchdog != nil }
+
     /// How long a returning-to-visible page has to answer the probe.
     var probeTimeout: Duration = .seconds(5)
 
@@ -1421,6 +1431,10 @@ public final class WebSectionLiveView {
         coordinator.onNavigationStateChange = { [weak self] in
             self?.navigationStateDidChange()
         }
+        // `buildWebView` has already recorded the first navigation intent (and, off-window, held its load),
+        // before this callback existed. Sync once now, so the stall watchdog is armed for that first load too:
+        // a first load that never starts then ends in the "taking too long" notice instead of an endless wash.
+        navigationStateDidChange()
         coordinator.onProcessTerminated = { [weak self] in
             self?.handleProcessTermination()
         }
@@ -1599,10 +1613,41 @@ public final class WebSectionLiveView {
             invalidateProbe()
             return
         }
-        guard previous == false else { return }
+        // Coming back from hidden is the usual edge. The first time a view is ever visible is not one, unless its
+        // first load is still held back: a single-tab widget has no tab switch to give that load another chance.
+        guard previous == false || isHeld else { return }
         pageReturned("visible")
         guard status == .loaded else { return }
         startProbe()
+    }
+
+    // MARK: - Mounts of this view
+
+    private struct WeakMount { weak var container: CachedWebViewContainer? }
+    private var mounts: [WeakMount] = []
+
+    /// A new mount of this view was made. SwiftUI may make two for one tile and keep either, so every mount is
+    /// tracked until it is dismantled.
+    func mountMade(_ container: CachedWebViewContainer) {
+        mounts.removeAll { $0.container == nil || $0.container === container }
+        mounts.append(WeakMount(container: container))
+    }
+
+    /// A mount was dismantled. If it was the one holding the web view, the web view is now in no view at all and
+    /// its held load can never start, so it goes to a mount that is still alive: the one in a window if there is
+    /// one, otherwise the newest. (The QA log showed SwiftUI keeping the first of two mounts and dismantling the
+    /// second 40 ms later, after the second had taken the web view; the tile in the window was left empty until
+    /// the next tab switch, 21 s later.)
+    func mountDismantled(_ container: CachedWebViewContainer) {
+        mounts.removeAll { $0.container == nil || $0.container === container }
+        guard !isTornDown, webView.superview == nil else { return }
+        let alive = mounts.compactMap(\.container)
+        guard let survivor = alive.first(where: { $0.window != nil }) ?? alive.last else { return }
+        Self.returnLog.notice("""
+            web view handed to a surviving mount after another was dismantled \
+            (\(alive.count, privacy: .public) alive, window=\(survivor.window != nil, privacy: .public))
+            """)
+        survivor.adopt()
     }
 
     // MARK: - A page that comes back on screen
@@ -1625,6 +1670,14 @@ public final class WebSectionLiveView {
     /// One-shot work; nothing runs while the page is hidden.
     func pageReturned(_ reason: String) {
         guard !isTornDown else { return }
+        // 0. A load held for a window starts now if the view has one: a single-tab widget has no tab switch
+        //    to give it a second chance. It runs once (the hold is cleared) and only with a window, and
+        //    nothing else is loaded on top of it, so WebKit never gets two loads for one page.
+        if let held = webView as? OverscrollPassthroughWebView, held.replayDeferredLoadIfAttached() {
+            Self.returnLog.notice("returned (\(reason, privacy: .public)): the held first load was started")
+            scheduleIdleCheck()
+            return
+        }
         webView.setNeedsDisplay(webView.bounds)
         webView.layer?.setNeedsDisplay()
         webView.needsLayout = true
@@ -1637,7 +1690,8 @@ public final class WebSectionLiveView {
             returned (\(reason, privacy: .public)): status=\(String(describing: self.status), privacy: .public) \
             host=\(current?.host ?? "none", privacy: .public) loading=\(self.webView.isLoading) \
             deferred=\(deferred) painted=\(self.hasPaintedContent) window=\(self.webView.window != nil) \
-            size=\(Int(self.webView.frame.width))x\(Int(self.webView.frame.height))
+            size=\(Int(self.webView.frame.width))x\(Int(self.webView.frame.height)) \
+            where=\((self.webView as? OverscrollPassthroughWebView)?.hierarchyDescription ?? "n/a", privacy: .public)
             """)
 
         // 1. The state believes there is a page; the view has none.
@@ -1976,8 +2030,8 @@ extension WebSectionView {
 /// `makeNSView`), this view adopts a `WKWebView` that lives in a
 /// LiveWidgetBackends-style cache. SwiftUI may tear this wrapper down and
 /// remount it freely (tab switch, layout change); the underlying
-/// `_CachedWebViewRepresentable` returns the SAME cached webview each time,
-/// so the page is never reloaded and the session/scroll/SPA state is
+/// `_CachedWebViewRepresentable` puts the SAME cached webview into its own
+/// container each time (`CachedWebViewContainer`), so the page is never reloaded and the session/scroll/SPA state is
 /// preserved. Cleanup (detaching delegates, dropping the cache entry) is
 /// the cache owner's job — see `WebSectionLiveView.teardown()`.
 ///
@@ -2049,9 +2103,19 @@ public struct CachedWebSectionView: View {
             // partially rendered) doesn't show through distractingly.
             Color(nsColor: .windowBackgroundColor).opacity(0.85)
             // The glass logo loader: the animated 42 mark on the design system's Liquid Glass capsule
-            // (not a generic spinner), the same indicator every web-based surface uses.
-            LoadingIndicator()
+            // (not a generic spinner), the same indicator every web-based surface uses. It says what is
+            // loading, so a slow page reads as slow and not as stuck.
+            LoadingIndicator(label: loadingLabel)
         }
+    }
+
+    /// "Loading github.com…": the address being shown, or the one requested while the view still has none.
+    private var loadingLabel: String {
+        Self.loadingLabel(forHost: live.webView.url?.host ?? live.coordinator.navState.intended?.url?.host)
+    }
+
+    static func loadingLabel(forHost host: String?) -> String {
+        host.map { "Loading \($0)…" } ?? "Loading…"
     }
 
     // MARK: - Unresponsive notice
@@ -2110,7 +2174,7 @@ public struct CachedWebSectionView: View {
         ZStack {
             Color(nsColor: .windowBackgroundColor).opacity(0.92)
             VStack(spacing: 14) {
-                LoadingIndicator()
+                LoadingIndicator(label: loadingLabel)
 
                 Text("This page is taking too long")
                     .font(.system(size: 14, weight: .semibold))
@@ -2187,6 +2251,105 @@ public struct CachedWebSectionView: View {
     }
 }
 
+// MARK: - One mount of a cached web view
+
+/// What `_CachedWebViewRepresentable` hands to SwiftUI: one container per mount, with the shared cached
+/// `WKWebView` inside it. SwiftUI can mount the same cached view a second time before it has torn the first mount
+/// down (the QA log showed 34 ms between the two), and a web view has one superview: if the representable returned
+/// the web view itself, the older mount's teardown removed it from the newer, visible one and left that tile empty,
+/// with a held first load that never started. With a container per mount the newest mount adopts the web view, and
+/// an older mount can only release it while it is still the one holding it.
+@MainActor
+final class CachedWebViewContainer: NSView {
+    let webView: WKWebView
+
+    private static let log = Logger(subsystem: "com.work42.browser", category: "host")
+    private let mountedAt = Date()
+    private var timeline: Task<Void, Never>?
+    /// The live view this is a mount of, so a dismantled mount can hand the web view on.
+    weak var live: WebSectionLiveView?
+
+    init(webView: WKWebView) {
+        self.webView = webView
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    deinit { timeline?.cancel() }
+
+    /// Where this container sits: window state, frame, and the superview chain with each view's size.
+    var placement: String {
+        var chain: [String] = []
+        var next: NSView? = superview
+        while let view = next, chain.count < 12 {
+            let size = "\(Int(view.frame.width))x\(Int(view.frame.height))"
+            chain.append("\(String(describing: type(of: view)).prefix(60))(\(size)\(view.isHidden ? ",hidden" : ""))")
+            next = view.superview
+        }
+        let windowState = window.map { "window(visible=\($0.isVisible),key=\($0.isKeyWindow),occluded=\(!$0.occlusionState.contains(.visible)))" }
+            ?? "no window"
+        return "\(windowState) frame=\(Int(frame.width))x\(Int(frame.height)) app.active=\(NSApp.isActive) "
+            + "superviews=\(chain.isEmpty ? "none" : chain.joined(separator: " > "))"
+    }
+
+    func elapsed() -> String { String(format: "%.2fs", Date().timeIntervalSince(mountedAt)) }
+
+    /// While this container has no window, log where it is at growing intervals, so a mount that SwiftUI never
+    /// attaches (or attaches late) shows what its ancestors looked like meanwhile. Stops at the window.
+    func startPlacementTimeline(label: String) {
+        timeline?.cancel()
+        guard window == nil else { return }
+        timeline = Task { @MainActor [weak self] in
+            for delay in [0.25, 0.25, 0.5, 1, 2, 4, 8, 16] as [Double] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self, !Task.isCancelled else { return }
+                if self.window != nil { return }
+                Self.log.notice("""
+                    unattached \(self.elapsed(), privacy: .public) after \(label, privacy: .public): \
+                    \(self.placement, privacy: .public)
+                    """)
+            }
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        Self.log.notice("""
+            container \(self.window == nil ? "left its window" : "got a window", privacy: .public) \
+            \(self.elapsed(), privacy: .public) after it was made: \(self.placement, privacy: .public)
+            """)
+        if window != nil { timeline?.cancel() }
+    }
+
+    override func layout() {
+        super.layout()
+        if webView.superview === self, webView.frame != bounds { webView.frame = bounds }
+    }
+
+    /// Take the web view into this container, from wherever it is. The newest mount wins.
+    func adopt() {
+        guard webView.superview !== self else { return }
+        webView.removeFromSuperview()
+        webView.frame = bounds
+        webView.autoresizingMask = [.width, .height]
+        addSubview(webView)
+    }
+
+    /// Take the web view back only when nothing holds it (an older mount took it out when it went away); a web
+    /// view that lives in another mount stays there.
+    func reclaimIfOrphaned() {
+        guard webView.superview == nil else { return }
+        adopt()
+    }
+
+    /// This mount is going away: let the web view go only if this container is the one holding it.
+    func relinquish() {
+        guard webView.superview === self else { return }
+        webView.removeFromSuperview()
+    }
+}
+
 // MARK: - Private representable
 
 /// The thin `NSViewRepresentable` that adopts the cached `WKWebView`.
@@ -2198,16 +2361,36 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> WKWebView {
+    func makeNSView(context: Context) -> CachedWebViewContainer {
         // Every time a view is hosted again (the Home page re-mounts its widgets when you come back to it) the page
         // is checked and repainted. Once on the next turn, and once more when the layout has settled.
         let live = live
+        let container = CachedWebViewContainer(webView: live.webView)
+        container.live = live
+        live.mountMade(container)
+        container.adopt()
+        let described = (live.webView as? OverscrollPassthroughWebView)?.hierarchyDescription ?? "n/a"
+        Logger(subsystem: "com.work42.browser", category: "host")
+            .notice("mounted (visible=\(context.environment.widgetIsVisible, privacy: .public)): \(described, privacy: .public)")
+        container.startPlacementTimeline(label: "mount")
         DispatchQueue.main.async { live.pageReturned("hosted") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { live.pageReturned("hosted, settled") }
-        return live.webView
+        return container
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {
+    static func dismantleNSView(_ container: CachedWebViewContainer, coordinator: Coordinator) {
+        Logger(subsystem: "com.work42.browser", category: "host")
+            .notice("dismantled \(container.elapsed(), privacy: .public) after it was made: \(container.placement, privacy: .public)")
+        container.relinquish()
+        container.live?.mountDismantled(container)
+    }
+
+    func updateNSView(_ container: CachedWebViewContainer, context: Context) {
+        // SwiftUI can mount the same cached view a second time before it tears the first mount down, and the
+        // older mount's teardown must not take the page out of the newer one. If it did, this mount is empty:
+        // take the web view back.
+        container.reclaimIfOrphaned()
+        if container.window == nil { container.startPlacementTimeline(label: "update") }
         // The cached webview owns its own state (URL, session, scroll); URL
         // changes are handled by rebuilding the cache entry under a new key,
         // not by reloading in place — so this stays a no-op for that.

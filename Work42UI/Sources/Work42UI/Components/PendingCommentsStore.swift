@@ -197,6 +197,9 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         /// `CommentMarker.decodeStaged`. No typed re-anchoring (e.g.
         /// `updateAnchor`) applies once a comment is in this shape.
         case restored(rawBlock: String)
+        /// A highlight (or a whole code snippet) in one of the agent's earlier chat replies. `messageId` is the
+        /// transcript event the text came from; the excerpt is the selected text. `startLine`/`endLine` are 0.
+        case chat(messageId: String)
     }
 
     public let id: UUID
@@ -299,6 +302,8 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
             return title
         case .restored(let rawBlock):
             return CommentMarker.decodeStaged(rawBlock).label
+        case .chat:
+            return "Chat — reply"
         }
     }
 
@@ -316,6 +321,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         case .prWebView:         return "prWebView"
         case .browserHighlight:  return "browserHighlight"
         case .artifact:           return "artifact"
+        case .chat:               return "chat"
         case .screenHighlight:   return "screenHighlight"
         case .recording:         return "recording"   // unused — see above
         // Compound tag (dogfooding follow-up) carrying the widget's OWN
@@ -378,7 +384,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         case .wholeWidget(let widgetType, _, _, _): return widgetType
         // No owning widget instance to drive. A restored comment's original
         // owning widget (if any) isn't recoverable from flat text.
-        case .screenHighlight, .recording, .restored: return nil
+        case .screenHighlight, .recording, .restored, .chat: return nil
         }
     }
 
@@ -557,6 +563,8 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
             return rawBlock
         case .artifact(let artifactId, let title, _):
             header = "On artifact '\(title)' (id `\(artifactId)`) — the user highlighted this text:"
+        case .chat:
+            header = "On your earlier reply — the user highlighted this text:"
         case .widget(let slug, let label, _):
             header = "From the '\(slug)' widget (\(label)):"
         case .widgetDocument(let slug, _, let title, _):

@@ -400,6 +400,9 @@ final class BrowserSurfaceState {
         case resolving
         /// The provider threw; fail loud with the message.
         case failed(String)
+        /// The provider has not answered within `BrowserSurface.openingTimeout`: say so, with Retry. A late
+        /// answer still opens the surface unless Retry has started a newer attempt.
+        case timedOut
         /// The surface has its URL and the model is live.
         case ready
     }
@@ -408,6 +411,10 @@ final class BrowserSurfaceState {
 
     /// Bumped to re-run a failed provider resolution (Retry button).
     var retryNonce = 0
+
+    /// Counts resolution attempts. An attempt that finds a newer one has started (Retry) drops its answer, so a
+    /// provider that answers late never overrides a Retry.
+    var generation = 0
 
     /// Guards the `configure:` closure — set to true after the first
     /// `wireHooks` call for this view mount. Resets to false when the
@@ -549,26 +556,28 @@ public struct BrowserSurface: View {
             BrowserSurfaceReady(
                 model: model, cacheKey: cacheKey, spec: spec,
                 services: services,
-                selectionResolver: selectionResolver
+                selectionResolver: selectionResolver,
+                onRetry: { [state] in state.retryNonce += 1 }
             )
         } else {
             switch state.resolution {
             case .resolving:
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                BrowserSurfaceOpening(title: displayTitle)
             case .failed(let message):
-                errorCard(message: message)
+                errorCard(heading: "\(displayTitle) failed to resolve its URL", message: message)
+            case .timedOut:
+                errorCard(heading: "Couldn't open \(displayTitle)", message: BrowserSurface.timedOutMessage)
             case .ready:
                 // `.ready` with no cached model can't happen in normal use
                 // (resolution populates the cache before flipping state) —
-                // render the spinner rather than trap.
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // render the indicator rather than trap.
+                BrowserSurfaceOpening(title: displayTitle)
             }
         }
     }
+
+    /// What the surface calls itself in its loading and error states.
+    private var displayTitle: String { spec.title ?? "Browser" }
 
     // MARK: - Public hook accessor
 
@@ -610,9 +619,32 @@ public struct BrowserSurface: View {
     /// calls `wireHooks` once on the first `.task` execution; subsequent
     /// `.task` executions (re-renders) are guarded by `state.configureInvoked`.
     private func resolveIfNeeded(cacheKey: String) async {
+        await Self.resolve(
+            spec: spec, cacheKey: cacheKey, state: state, configure: configure, timeout: Self.openingTimeout)
+    }
+
+    /// How long the surface waits for its URL provider (or for a first tab) before it says it could not open.
+    static let openingTimeout: Duration = .seconds(10)
+
+    static let timedOutMessage = "It is taking longer than expected. Try again."
+
+    /// `resolveIfNeeded`'s work, on explicit inputs so tests can drive it with a short `timeout`. A surface that
+    /// is still resolving when `timeout` passes shows the timed-out state with Retry instead of an endless
+    /// indicator; an answer that arrives after that still opens the surface. Retry starts a new attempt
+    /// (`state.generation`), and an older attempt that answers after it drops its answer.
+    @MainActor
+    static func resolve(
+        spec: BrowserSurfaceSpec,
+        cacheKey: String,
+        state: BrowserSurfaceState,
+        configure: ((BrowserWidgetModel) -> Void)?,
+        timeout: Duration
+    ) async {
+        let existing = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey)
         // Cache hit: already resolved. Call wireHooks on first mount only,
-        // then flip to ready.
-        if let model = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey) {
+        // then flip to ready. A cached model with no tab at all is not "resolved": it falls through to be
+        // seeded again, which is also what Retry does for it.
+        if let model = existing, !model.tabs.isEmpty {
             if !state.configureInvoked {
                 state.configureInvoked = true
                 BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure)
@@ -623,12 +655,20 @@ public struct BrowserSurface: View {
         // The model is gone but this surface resolved before: its cache entry was torn down under it. Wait a beat
         // before rebuilding — a widget that is closing removes this view in the same pass as its deactivate, which
         // cancels this task, so nothing is rebuilt (and leaked) for a surface nobody sees any more.
-        if state.configureInvoked {
+        if existing == nil, state.configureInvoked {
             try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
             state.configureInvoked = false
         }
+        state.generation += 1
+        let generation = state.generation
         state.resolution = .resolving
+        let deadline = Task { @MainActor in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled, state.generation == generation, case .resolving = state.resolution else { return }
+            state.resolution = .timedOut
+        }
+        defer { deadline.cancel() }
 
         let url: URL
         switch spec.source {
@@ -641,10 +681,13 @@ public struct BrowserSurface: View {
                 // Fail loud (AC4 / repo's fail-loud rule): the widget's URL
                 // producer failing must render as an error card, never a
                 // silent blank webview.
+                guard state.generation == generation else { return }
                 state.resolution = .failed(error.localizedDescription)
                 return
             }
         }
+        // A Retry started a newer attempt while this one waited: its answer wins, this one is dropped.
+        guard state.generation == generation else { return }
 
         // Build (or retrieve) the model and seed its first tab.
         let model = BrowserSurfaceCache.shared.model(forKey: cacheKey) {
@@ -668,8 +711,10 @@ public struct BrowserSurface: View {
         // Wire default + widget-supplied hooks. Called exactly once per model
         // creation — the configureInvoked guard is set here so any subsequent
         // cache-hit path (e.g. a retry loop) doesn't re-call wireHooks.
-        state.configureInvoked = true
-        BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure)
+        if !state.configureInvoked {
+            state.configureInvoked = true
+            BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure)
+        }
         state.resolution = .ready
     }
 
@@ -732,22 +777,46 @@ public struct BrowserSurface: View {
 
     // MARK: - Fail-loud error card
 
-    /// Fail-loud error state for a throwing URL provider, with Retry.
-    private func errorCard(message: String) -> some View {
+    /// Fail-loud error state for a URL provider that threw or took too long, with Retry.
+    private func errorCard(heading: String, message: String) -> some View {
+        BrowserSurfaceOpenError(heading: heading, message: message) {
+            state.retryNonce += 1
+        }
+    }
+}
+
+// MARK: - Opening and open-error states
+
+/// The branded indicator a surface shows while it has no page to show yet (the URL provider is working, or the
+/// first tab is being made). Names the widget, so a slow one reads as slow and not as stuck.
+private struct BrowserSurfaceOpening: View {
+    let title: String
+
+    var body: some View {
+        LoadingIndicator(label: "Opening \(title)…")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// A surface that could not open (the provider failed, or neither a model nor a tab appeared in time), with Retry.
+private struct BrowserSurfaceOpenError: View {
+    let heading: String
+    let message: String
+    let onRetry: () -> Void
+
+    var body: some View {
         VStack(spacing: DT.s12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 24, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text("\(spec.title ?? "Browser") failed to resolve its URL")
+            Text(heading)
                 .font(.system(size: DT.f13, weight: .semibold))
             Text(message)
                 .font(.system(size: DT.f12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .textSelection(.enabled)
-            Button("Retry") {
-                state.retryNonce += 1
-            }
+            Button("Retry", action: onRetry)
         }
         .padding(DT.s24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -816,6 +885,15 @@ private struct BrowserSurfaceReady: View {
 
     /// Plugin selection resolver, forwarded from `BrowserSurface`.
     var selectionResolver: WebSelectionResolver?
+
+    /// Retry for the "couldn't open" state: runs the surface's resolution again (it seeds a first tab when the
+    /// model has none).
+    var onRetry: () -> Void = {}
+
+    /// While the model has no tab: whether the wait has run past `BrowserSurface.openingTimeout`, and which
+    /// attempt it is (Retry restarts the wait). Private view state; the public struct is untouched.
+    @State private var noTabsTimedOut = false
+    @State private var noTabsAttempt = 0
 
     /// The widget this surface belongs to, set by the host around every plugin widget. Every link clicked in
     /// the page is offered to Open Link with it as the source.
@@ -952,6 +1030,7 @@ private struct BrowserSurfaceReady: View {
             // Stable id so SwiftUI knows which content to remount on tab switch.
             .id("surface:\(tab.id)")
             .onAppear {
+                noTabsTimedOut = false      // a tab exists: the no-tab wait, if there was one, is over
                 // Wire the model to the live view (if any). Empty tabs have no
                 // live view yet; wiring happens on the next render after the URL
                 // is pinned via navigateToDraft().
@@ -966,11 +1045,25 @@ private struct BrowserSurfaceReady: View {
                 wireModel(to: newLive, tab: newTab)
             }
         } else {
-            // No tabs at all: transitional state before resolveIfNeeded seeds
-            // the first tab. Show a spinner until the model is seeded.
-            ProgressView()
-                .controlSize(.small)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // No tabs at all: transitional state before resolveIfNeeded seeds the first tab. The branded
+            // indicator shows until it is seeded; if that takes too long, say so, with Retry.
+            let title = spec.title ?? "Browser"
+            if noTabsTimedOut {
+                BrowserSurfaceOpenError(
+                    heading: "Couldn't open \(title)", message: BrowserSurface.timedOutMessage
+                ) {
+                    noTabsTimedOut = false
+                    noTabsAttempt += 1
+                    onRetry()
+                }
+            } else {
+                BrowserSurfaceOpening(title: title)
+                    .task(id: noTabsAttempt) {
+                        try? await Task.sleep(for: BrowserSurface.openingTimeout)
+                        guard !Task.isCancelled else { return }
+                        noTabsTimedOut = true
+                    }
+            }
         }
     }
 
