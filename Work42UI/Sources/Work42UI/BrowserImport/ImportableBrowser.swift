@@ -81,6 +81,16 @@ public nonisolated enum ImportableBrowser: String, CaseIterable, Sendable {
         }
     }
 
+    /// The installed app's own icon (its real logo), or nil when the app can't be found. Read once per browser.
+    @MainActor
+    public var appIcon: NSImage? {
+        if let cached = ImportableBrowserIcons.icons[self] { return cached }
+        let icon = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+            .map { NSWorkspace.shared.icon(forFile: $0.path) }
+        ImportableBrowserIcons.icons[self] = icon
+        return icon
+    }
+
     /// The browsers installed on this Mac, in `allCases` order: the app is found by bundle identifier and, except
     /// for Safari (whose folder is protected), its data folder exists.
     @MainActor
@@ -90,4 +100,10 @@ public nonisolated enum ImportableBrowser: String, CaseIterable, Sendable {
             return browser == .safari || FileManager.default.fileExists(atPath: browser.dataRoot.path)
         }
     }
+}
+
+/// `appIcon`'s cache; a missing app is remembered as nil.
+@MainActor
+private enum ImportableBrowserIcons {
+    static var icons: [ImportableBrowser: NSImage?] = [:]
 }
