@@ -1621,6 +1621,35 @@ public final class WebSectionLiveView {
         startProbe()
     }
 
+    // MARK: - Mounts of this view
+
+    private struct WeakMount { weak var container: CachedWebViewContainer? }
+    private var mounts: [WeakMount] = []
+
+    /// A new mount of this view was made. SwiftUI may make two for one tile and keep either, so every mount is
+    /// tracked until it is dismantled.
+    func mountMade(_ container: CachedWebViewContainer) {
+        mounts.removeAll { $0.container == nil || $0.container === container }
+        mounts.append(WeakMount(container: container))
+    }
+
+    /// A mount was dismantled. If it was the one holding the web view, the web view is now in no view at all and
+    /// its held load can never start, so it goes to a mount that is still alive: the one in a window if there is
+    /// one, otherwise the newest. (The QA log showed SwiftUI keeping the first of two mounts and dismantling the
+    /// second 40 ms later, after the second had taken the web view; the tile in the window was left empty until
+    /// the next tab switch, 21 s later.)
+    func mountDismantled(_ container: CachedWebViewContainer) {
+        mounts.removeAll { $0.container == nil || $0.container === container }
+        guard !isTornDown, webView.superview == nil else { return }
+        let alive = mounts.compactMap(\.container)
+        guard let survivor = alive.first(where: { $0.window != nil }) ?? alive.last else { return }
+        Self.returnLog.notice("""
+            web view handed to a surviving mount after another was dismantled \
+            (\(alive.count, privacy: .public) alive, window=\(survivor.window != nil, privacy: .public))
+            """)
+        survivor.adopt()
+    }
+
     // MARK: - A page that comes back on screen
 
     private static let returnLog = Logger(subsystem: "com.work42.browser", category: "return")
@@ -2237,6 +2266,8 @@ final class CachedWebViewContainer: NSView {
     private static let log = Logger(subsystem: "com.work42.browser", category: "host")
     private let mountedAt = Date()
     private var timeline: Task<Void, Never>?
+    /// The live view this is a mount of, so a dismantled mount can hand the web view on.
+    weak var live: WebSectionLiveView?
 
     init(webView: WKWebView) {
         self.webView = webView
@@ -2335,6 +2366,8 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         // is checked and repainted. Once on the next turn, and once more when the layout has settled.
         let live = live
         let container = CachedWebViewContainer(webView: live.webView)
+        container.live = live
+        live.mountMade(container)
         container.adopt()
         let described = (live.webView as? OverscrollPassthroughWebView)?.hierarchyDescription ?? "n/a"
         Logger(subsystem: "com.work42.browser", category: "host")
@@ -2349,6 +2382,7 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         Logger(subsystem: "com.work42.browser", category: "host")
             .notice("dismantled \(container.elapsed(), privacy: .public) after it was made: \(container.placement, privacy: .public)")
         container.relinquish()
+        container.live?.mountDismantled(container)
     }
 
     func updateNSView(_ container: CachedWebViewContainer, context: Context) {
