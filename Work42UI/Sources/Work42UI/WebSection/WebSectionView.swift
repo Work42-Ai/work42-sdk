@@ -1662,7 +1662,7 @@ public final class WebSectionLiveView {
             host=\(current?.host ?? "none", privacy: .public) loading=\(self.webView.isLoading) \
             deferred=\(deferred) painted=\(self.hasPaintedContent) window=\(self.webView.window != nil) \
             size=\(Int(self.webView.frame.width))x\(Int(self.webView.frame.height)) \
-            where=\((self.webView as? OverscrollPassthroughWebView)?.hierarchyDescription ?? "n/a")
+            where=\((self.webView as? OverscrollPassthroughWebView)?.hierarchyDescription ?? "n/a", privacy: .public)
             """)
 
         // 1. The state believes there is a page; the view has none.
@@ -2234,12 +2234,67 @@ public struct CachedWebSectionView: View {
 final class CachedWebViewContainer: NSView {
     let webView: WKWebView
 
+    private static let log = Logger(subsystem: "com.work42.browser", category: "host")
+    private let mountedAt = Date()
+    private var timeline: Task<Void, Never>?
+
     init(webView: WKWebView) {
         self.webView = webView
         super.init(frame: .zero)
     }
 
     required init?(coder: NSCoder) { nil }
+
+    deinit { timeline?.cancel() }
+
+    /// Where this container sits: window state, frame, and the superview chain with each view's size.
+    var placement: String {
+        var chain: [String] = []
+        var next: NSView? = superview
+        while let view = next, chain.count < 12 {
+            let size = "\(Int(view.frame.width))x\(Int(view.frame.height))"
+            chain.append("\(String(describing: type(of: view)).prefix(60))(\(size)\(view.isHidden ? ",hidden" : ""))")
+            next = view.superview
+        }
+        let windowState = window.map { "window(visible=\($0.isVisible),key=\($0.isKeyWindow),occluded=\(!$0.occlusionState.contains(.visible)))" }
+            ?? "no window"
+        return "\(windowState) frame=\(Int(frame.width))x\(Int(frame.height)) app.active=\(NSApp.isActive) "
+            + "superviews=\(chain.isEmpty ? "none" : chain.joined(separator: " > "))"
+    }
+
+    func elapsed() -> String { String(format: "%.2fs", Date().timeIntervalSince(mountedAt)) }
+
+    /// While this container has no window, log where it is at growing intervals, so a mount that SwiftUI never
+    /// attaches (or attaches late) shows what its ancestors looked like meanwhile. Stops at the window.
+    func startPlacementTimeline(label: String) {
+        timeline?.cancel()
+        guard window == nil else { return }
+        timeline = Task { @MainActor [weak self] in
+            for delay in [0.25, 0.25, 0.5, 1, 2, 4, 8, 16] as [Double] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self, !Task.isCancelled else { return }
+                if self.window != nil { return }
+                Self.log.notice("""
+                    unattached \(self.elapsed(), privacy: .public) after \(label, privacy: .public): \
+                    \(self.placement, privacy: .public)
+                    """)
+            }
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        Self.log.notice("""
+            container \(self.window == nil ? "left its window" : "got a window", privacy: .public) \
+            \(self.elapsed(), privacy: .public) after it was made: \(self.placement, privacy: .public)
+            """)
+        if window != nil { timeline?.cancel() }
+    }
+
+    override func layout() {
+        super.layout()
+        if webView.superview === self, webView.frame != bounds { webView.frame = bounds }
+    }
 
     /// Take the web view into this container, from wherever it is. The newest mount wins.
     func adopt() {
@@ -2281,14 +2336,18 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         let live = live
         let container = CachedWebViewContainer(webView: live.webView)
         container.adopt()
+        let described = (live.webView as? OverscrollPassthroughWebView)?.hierarchyDescription ?? "n/a"
         Logger(subsystem: "com.work42.browser", category: "host")
-            .notice("mounted: \((live.webView as? OverscrollPassthroughWebView)?.hierarchyDescription ?? "n/a")")
+            .notice("mounted (visible=\(context.environment.widgetIsVisible, privacy: .public)): \(described, privacy: .public)")
+        container.startPlacementTimeline(label: "mount")
         DispatchQueue.main.async { live.pageReturned("hosted") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { live.pageReturned("hosted, settled") }
         return container
     }
 
     static func dismantleNSView(_ container: CachedWebViewContainer, coordinator: Coordinator) {
+        Logger(subsystem: "com.work42.browser", category: "host")
+            .notice("dismantled \(container.elapsed(), privacy: .public) after it was made: \(container.placement, privacy: .public)")
         container.relinquish()
     }
 
@@ -2297,6 +2356,7 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         // older mount's teardown must not take the page out of the newer one. If it did, this mount is empty:
         // take the web view back.
         container.reclaimIfOrphaned()
+        if container.window == nil { container.startPlacementTimeline(label: "update") }
         // The cached webview owns its own state (URL, session, scroll); URL
         // changes are handled by rebuilding the cache entry under a new key,
         // not by reloading in place — so this stays a no-op for that.
