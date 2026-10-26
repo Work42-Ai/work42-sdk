@@ -146,6 +146,9 @@ public enum WidgetSDK {
     /// v13 (SDK 2.8.0): `SessionServices` and `WidgetBackgroundServices` gained the `tools`
     /// field (`WidgetToolService`), growing both structs by one existential (40 bytes) and
     /// changing both memberwise inits. Plugins built for ABI 12 or older must rebuild.
+    /// v14 (SDK 2.9.0): web popups open as tabs. `PolicyWebView` (an open class a plugin may subclass) gained the
+    /// stored `popupHandler` and `onClose`, shifting its instance layout; `BrowserWidgetModel.openTab` gained the
+    /// `after:` parameter, replacing the old symbol. Plugins built for ABI 13 or older must rebuild.
     nonisolated public static var abiVersion: Int32 { Work42SDKCompatibility.abiGeneration }
 
     /// C symbol name of the widget factory (`@_cdecl`). See the file
