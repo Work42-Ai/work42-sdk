@@ -1420,9 +1420,24 @@ public final class WebSectionLiveView {
     private var probeGeneration = 0
     private var lastVisible: Bool?
 
-    init(webView: WKWebView, coordinator: WebSectionView.Coordinator) {
+    /// Whether this view keeps its cookies in a persistent data store (everything but artifacts and previews).
+    /// Only persistent views take part in the sign-in import: they reload when it finishes, and show its banner.
+    public let isPersistent: Bool
+
+    /// Observes `.work42BrowserCookiesImported`. Removed in `teardown()`.
+    private var cookieImportObserver: NSObjectProtocol?
+
+    init(webView: WKWebView, coordinator: WebSectionView.Coordinator, isPersistent: Bool) {
         self.webView = webView
         self.coordinator = coordinator
+        self.isPersistent = isPersistent
+        if isPersistent {
+            cookieImportObserver = NotificationCenter.default.addObserver(
+                forName: .work42BrowserCookiesImported, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reloadAfterCookieImport() }
+            }
+        }
         // Wire the coordinator's status callback so every nav-delegate event
         // propagates into this observable property. The closure captures
         // `self` weakly to avoid a retain cycle (coordinator → live).
@@ -1556,6 +1571,13 @@ public final class WebSectionLiveView {
     /// (which posts `{ type: "stop" }` → `onPickerStopped`).
     public func stopPicker() {
         webView.evaluateJavaScript("window.__w42Picker?.stop()", completionHandler: nil)
+    }
+
+    /// A sign-in import just wrote cookies: a persistent view showing a web page reloads to pick them up.
+    private func reloadAfterCookieImport() {
+        guard !isTornDown, isPersistent,
+              let scheme = webView.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
+        reload()
     }
 
     /// Reload the current page in the cached webview.
@@ -2009,6 +2031,8 @@ public final class WebSectionLiveView {
     /// retaining the message proxy. Idempotent.
     public func teardown() {
         isTornDown = true
+        if let cookieImportObserver { NotificationCenter.default.removeObserver(cookieImportObserver) }
+        cookieImportObserver = nil
         idleCheck?.cancel()
         idleCheck = nil
         loadingObservation = nil
@@ -2043,7 +2067,7 @@ extension WebSectionView {
     ) -> WebSectionLiveView {
         let coordinator = Coordinator(selector: spec.selector, onSignal: onSignal)
         let webView = buildWebView(spec: spec, onSignal: onSignal, coordinator: coordinator)
-        return WebSectionLiveView(webView: webView, coordinator: coordinator)
+        return WebSectionLiveView(webView: webView, coordinator: coordinator, isPersistent: !spec.ephemeral)
     }
 
     /// Wraps a web view WebKit already created (a `window.open` popup) in a live view, without loading anything:
@@ -2070,7 +2094,7 @@ extension WebSectionView {
                 controller: webView.configuration.userContentController
             )
         }
-        return WebSectionLiveView(webView: webView, coordinator: coordinator)
+        return WebSectionLiveView(webView: webView, coordinator: coordinator, isPersistent: !spec.ephemeral)
     }
 }
 
