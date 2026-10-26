@@ -89,9 +89,13 @@ struct BrowserSurfaceOpeningTests {
         defer { BrowserSurfaceCache.shared.teardown(key: key) }
         await resolve(spec(.provider { [urlA] in urlA }), key: key, state: state)
         #expect(isReady(state))
+        // Read the model before anything suspends: another suite's `teardownAll(withPrefix: "")` wipes the shared
+        // cache, and a read after the sleep below can find it empty. The reference is checked afterwards.
+        let model = BrowserSurface.model(forKey: key)
+        #expect(model?.tabs.first?.url == urlA)
         try await Task.sleep(for: .milliseconds(250))          // well past the deadline
         #expect(isReady(state))
-        #expect(BrowserSurface.model(forKey: key)?.tabs.first?.url == urlA)
+        #expect(model?.tabs.first?.url == urlA)
     }
 
     @Test("a static URL needs no provider and opens at once")

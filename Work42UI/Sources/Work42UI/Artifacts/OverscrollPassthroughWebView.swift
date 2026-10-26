@@ -154,7 +154,29 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
 
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        replayDeferredLoadIfAttached()
+        Self.loadLog.notice("moved to window: \(self.hierarchyDescription, privacy: .public)")
+        if replayDeferredLoadIfAttached() { return }
+        // A page that loaded while detached may have painted nothing; once it is on screen, draw it.
+        if window != nil { setNeedsDisplay(bounds) }
+    }
+
+    public override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        Self.loadLog.notice("moved to superview: \(self.hierarchyDescription, privacy: .public)")
+    }
+
+    /// Where this view sits, for diagnosing a view that is on screen as far as its widget knows but has no
+    /// window: the window state, the frame, and the superview chain with each view's hidden state.
+    var hierarchyDescription: String {
+        var chain: [String] = []
+        var next: NSView? = superview
+        while let view = next, chain.count < 10 {
+            chain.append(String(describing: type(of: view)) + (view.isHidden ? "[hidden]" : ""))
+            next = view.superview
+        }
+        let windowState = window.map { "window(visible=\($0.isVisible),key=\($0.isKeyWindow))" } ?? "no window"
+        return "\(windowState) frame=\(Int(frame.width))x\(Int(frame.height)) hidden=\(isHiddenOrHasHiddenAncestor) "
+            + "held=\(deferredLoad != nil) superviews=\(chain.isEmpty ? "none" : chain.joined(separator: " > "))"
     }
 
     /// Starts the held load, once, if the view has a window now. Without a window it does nothing, because
@@ -166,25 +188,6 @@ public final class OverscrollPassthroughWebView: PolicyWebView {
         guard window != nil, let request = deferredLoad else { return false }
         deferredLoad = nil
         Self.loadLog.notice("held load replayed: the view got a window (\(request.url?.host ?? "no host", privacy: .public))")
-        super.load(request)
-        return true
-    }
-
-    /// Starts the held load now, window or not. The last resort for a view that is on screen as far as its
-    /// widget can tell but never got a window, so that waiting longer would leave "Loading…" up for good. A page
-    /// that loads detached may paint blank; the widget repaints it when it gets its window. Returns whether a load
-    /// was started.
-    @discardableResult
-    func forceDeferredLoad() -> Bool {
-        guard let request = deferredLoad else { return false }
-        deferredLoad = nil
-        var chain: [String] = []
-        var next: NSView? = superview
-        while let view = next, chain.count < 8 { chain.append(String(describing: type(of: view))); next = view.superview }
-        Self.loadLog.warning("""
-            held load forced without a window (\(request.url?.host ?? "no host", privacy: .public)); \
-            superviews: \(chain.joined(separator: " > "), privacy: .public)
-            """)
         super.load(request)
         return true
     }

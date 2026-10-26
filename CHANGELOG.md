@@ -23,7 +23,9 @@
   visible (a single tab has no tab switch to retry it), and the 30 s "taking too long" notice covers that first load
   too. The loading indicator names the page ("Loading github.com…"). `BrowserSurface` shows "Opening …" while its URL
   provider or first tab is pending and, after 10 s, "Couldn't open …" with Retry; a provider that answers after a
-  Retry no longer overrides it. `WebSectionLiveView.isHeld` is new (read-only). No stored property was added to a public
+  Retry no longer overrides it. A cached web view now sits in its own container per mount, so SwiftUI mounting the
+  same cached view twice no longer lets the older mount's teardown empty the visible one (the cause of tiles that
+  never loaded). `WebSectionLiveView.isHeld` is new (read-only). No stored property was added to a public
   struct: `BrowserSurface` stays 424 bytes and the ABI generation stays `13`, so plugins built for 2.8.0 need no rebuild.
 
 ## 2.7.0
