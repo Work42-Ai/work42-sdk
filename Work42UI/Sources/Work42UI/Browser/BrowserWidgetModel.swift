@@ -289,15 +289,22 @@ public final class BrowserWidgetModel: ObservableObject {
     /// creating a duplicate — this makes the operation idempotent when called
     /// from the GitHub PR widget's `task_prs` refresh path.
     ///
+    /// A new tab goes at the end, or directly after the tab `after` names (a popup opens next to its opener).
+    /// An `after` that is not an open tab appends.
+    ///
     /// - Returns: the new or existing tab's id.
     @discardableResult
-    public func openTab(id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil) -> UUID {
+    public func openTab(id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil) -> UUID {
         if let existingIndex = tabs.firstIndex(where: { $0.id == id }) {
             selectTab(tabs[existingIndex].id)
             return tabs[existingIndex].id
         }
         let tab = BrowserTab(id: id, url: url, title: title, icon: icon)
-        tabs.append(tab)
+        if let after, let openerIndex = tabs.firstIndex(where: { $0.id == after }) {
+            tabs.insert(tab, at: openerIndex + 1)
+        } else {
+            tabs.append(tab)
+        }
         activeTabId = tab.id
         // The new tab becomes active: mirror its URL into the capsule — an empty
         // tab CLEARS the capsule so it feels like a fresh browser (no carryover
