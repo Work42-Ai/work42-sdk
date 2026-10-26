@@ -2153,6 +2153,20 @@ public struct CachedWebSectionView: View {
                     EmptyView()
                 }
             }
+            // The sign-in import banner: every persistent web view showing a web page, until an import succeeds or
+            // the user opts out. Ephemeral views (artifacts, previews) never show it. The state is shared, so hiding
+            // it is immediate everywhere.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if showsImportBanner {
+                    ImportBannerView(state: .shared).padding(DT.s8)
+                }
+            }
+    }
+
+    private var showsImportBanner: Bool {
+        guard live.isPersistent, !ImportBannerState.shared.resolved, !ImportBannerState.shared.browsers.isEmpty,
+              let scheme = live.webView.url?.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
     }
 
     /// Keep the loading overlay up until the page has genuinely painted its
