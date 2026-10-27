@@ -486,7 +486,13 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     @State private var lastItemCount = 0
     /// Item count when the user last was at the bottom; the pill shows `count - seenCount`.
     @State private var seenCount = 0
+    /// Items shown when the user started scrolling. Appends are held back while a gesture is live and
+    /// land when it ends: inserting rows mid-gesture re-lays out the stack and fights the scroll.
+    @State private var heldCount: Int?
     @State private var metrics = ScrollMetrics()
+
+    /// How many items are on screen: all of them, or the count held while the user scrolls.
+    private var shownCount: Int { min(items.count, heldCount ?? items.count) }
 
     private typealias ScrollMetrics = ConversationScrollMetrics
 
@@ -518,11 +524,11 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         var all: [ConversationEntry<Item.ID>] = []
         var actors: [Item.ID: ConversationActor] = [:]
         if always {
-            for item in items[windowStart...] {
+            for item in items[windowStart..<shownCount] {
                 if let a = actor(item) { actors[item.id] = a }
             }
         } else {
-            for (index, item) in items.enumerated() {
+            for (index, item) in items.prefix(shownCount).enumerated() {
                 guard let a = actor(item) else { continue }
                 all.append(ConversationEntry(id: item.id, actorID: a.id, isMe: a.isMe, date: nil))
                 if index >= windowStart { actors[item.id] = a }
@@ -533,7 +539,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         let from = max(0, windowStart - 1)
         var windowActors: [ConversationEntry<Item.ID>] = []
         var windowDated: [ConversationEntry<Item.ID>] = []
-        for item in items[from...] {
+        for item in items[from..<shownCount] {
             if let a = actor(item) {
                 windowActors.append(ConversationEntry(id: item.id, actorID: a.id, isMe: a.isMe, date: nil))
             }
@@ -550,12 +556,13 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     // MARK: Body
 
     public var body: some View {
-        let windowStart = ConversationLayout.renderedStart(itemCount: items.count, renderCount: renderCount)
+        let shown = shownCount
+        let windowStart = ConversationLayout.renderedStart(itemCount: shown, renderCount: renderCount)
         let hiddenOlder = windowStart
         // The ForEach iterates light keys (an index and an id), not `Item` values: SwiftUI copies
         // the data element on every placement pass, and for a multi-word enum that copy plus its
         // ARC traffic dominated a fast scroll in the agent chat. The row looks its item up.
-        let rowKeys = (windowStart..<items.count).map { RowKey(index: $0, id: items[$0].id) }
+        let rowKeys = (windowStart..<shown).map { RowKey(index: $0, id: items[$0].id) }
         let layout = layout(windowStart: windowStart)
 
         return ScrollViewReader { proxy in
@@ -641,7 +648,14 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             .background(
                 ConversationLiveScrollProbe { scrolling in
                     isLiveScrolling = scrolling
-                    if scrolling { metrics.userHasScrolled = true }
+                    if scrolling {
+                        metrics.userHasScrolled = true
+                        heldCount = items.count
+                    } else {
+                        heldCount = nil
+                        // A re-pin during the gesture left its trim for now, when it is invisible.
+                        if isPinnedToBottom { trimWindow() }
+                    }
                 }
             )
             // Distance may RE-pin (arriving back at the bottom is unambiguous, whatever the cause)
@@ -662,12 +676,13 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 guard top.isFinite else { return }
                 metrics.topOffset = top
                 guard metrics.loadArmed else { return }
-                let hidden = ConversationLayout.renderedStart(itemCount: items.count, renderCount: renderCount)
+                let hidden = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: renderCount)
                 guard hidden > 0 else { return }
-                let nearTop = metrics.userHasScrolled && top > -viewportHeight
-                // A window shorter than the viewport has nothing to scroll: fill it.
-                let underfilled = top >= 0 && metrics.bottomDistance <= 0
-                guard nearTop || underfilled else { return }
+                // Older pages load only while the reader is scrolling UP through history, never while
+                // the view is following the bottom: the newest items are always laid out already.
+                // An underfilled window does not load by itself (AC5): pages come only from scrolling up.
+                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight
+                guard nearTop else { return }
                 metrics.loadArmed = false
                 var tx = Transaction()
                 tx.disablesAnimations = true
@@ -678,21 +693,20 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             // The scroll view starts at the bottom and STAYS there while content grows, as long as
             // the user has not scrolled away: following needs no scrollTo at all.
             .defaultScrollAnchor(.bottom)
-            // Back at the bottom: trim the window to one page (invisible, rows above the viewport)
-            // and mark everything seen.
+            // Back at the bottom: trim the window to one page (rows above the viewport) and mark
+            // everything seen. Mid-gesture the trim waits for the gesture to end, so rows never drop
+            // while the user is still scrolling. Page loads require being unpinned, so the trimmed,
+            // shorter content no longer reads as "near the top" and cascades into a load.
             .onChange(of: isPinnedToBottom) { _, pinned in
                 guard pinned else { return }
                 seenCount = items.count
-                if renderCount != pageSize {
-                    var tx = Transaction()
-                    tx.disablesAnimations = true
-                    withTransaction(tx) { renderCount = pageSize }
-                }
+                if !isLiveScrolling { trimWindow() }
             }
             // Boundary stability while reading history: when the conversation grows and the user is
             // NOT at the bottom, grow the window by the same delta so the rendered set stays a
-            // superset and the oldest visible row never changes under them.
-            .onChange(of: items.count) { _, count in
+            // superset and the oldest visible row never changes under them. Counts what is SHOWN,
+            // so lines held during a gesture are applied when it ends.
+            .onChange(of: shownCount) { _, count in
                 defer { lastItemCount = count }
                 if isPinnedToBottom {
                     seenCount = count
@@ -712,7 +726,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     metrics.appendGrowthTarget = nil
                     return
                 }
-                let previousTop = ConversationLayout.renderedStart(itemCount: items.count, renderCount: oldCount)
+                let previousTop = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: oldCount)
                 guard items.indices.contains(previousTop) else { return }
                 var tx = Transaction()
                 tx.disablesAnimations = true
@@ -722,6 +736,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             }
             .onChange(of: resetKey) { _, _ in
                 isPinnedToBottom = true
+                heldCount = nil
                 renderCount = pageSize
                 lastItemCount = items.count
                 seenCount = items.count
@@ -731,6 +746,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             }
             .onChange(of: scrollToBottomTrigger) { _, _ in
                 isPinnedToBottom = true
+                heldCount = nil
                 seenCount = items.count
                 // Order matters (a chat bug fixed the hard way): scroll to the bottom of the CURRENT,
                 // not-yet-trimmed content first, THEN trim the window. Dropping rows above the
@@ -738,11 +754,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // the animated scroll races the content shrink's offset clamping against the scroll
                 // and can land away from the bottom.
                 scrollToBottom(proxy, animated: true)
-                if renderCount != pageSize {
-                    var tx = Transaction()
-                    tx.disablesAnimations = true
-                    withTransaction(tx) { renderCount = pageSize }
-                }
+                trimWindow()
             }
             // A turn can finish while the app is in the background, where the scroll cannot apply.
             // Re-pin on return, but only when already pinned so a deliberate scroll-up is kept.
@@ -750,7 +762,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 if isPinnedToBottom { scrollToBottom(proxy, animated: false) }
             }
             .onAppear {
-                lastItemCount = items.count
+                lastItemCount = shownCount
                 seenCount = items.count
             }
             .overlay(alignment: .bottom) {
@@ -764,6 +776,14 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         }
     }
 
+    /// Drop the rows above the newest page, without animation. Only call when they are out of view.
+    private func trimWindow() {
+        guard renderCount != pageSize else { return }
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx) { renderCount = pageSize }
+    }
+
     private func spacing(before isRunStart: Bool, hasDivider: Bool) -> CGFloat {
         if hasDivider { return rowSpacing }
         if let runSpacing, !isRunStart { return runSpacing }
@@ -774,9 +794,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         let unseen = max(0, items.count - seenCount)
         return Button {
             // Synchronous button action: a safe scroll site.
-            var tx = Transaction()
-            tx.disablesAnimations = true
-            withTransaction(tx) { renderCount = pageSize }
+            trimWindow()
             isPinnedToBottom = true
             seenCount = items.count
             scrollToBottom(proxy, animated: true)
