@@ -196,6 +196,8 @@ public struct ConversationMessageRow<Content: View>: View {
     let logo: Image?
     @ViewBuilder let content: () -> Content
 
+    @Environment(\.colorScheme) private var colorScheme
+
     /// - Parameters:
     ///   - context: Where the item sits (from `ConversationView`'s row builder).
     ///   - logo: Drawn in the avatar instead of the initials (the agent's provider mark).
@@ -237,9 +239,10 @@ public struct ConversationMessageRow<Content: View>: View {
     private func header(_ actor: ConversationActor) -> some View {
         HStack(spacing: ConversationMetrics.avatarGap) {
             ConversationAvatar(actor: actor, logo: logo)
+            // The name in the actor's colour, like the avatar (resolved so near-black stays legible).
             Text(actor.name)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DT.resolveChipTint(actor.color, colorScheme: colorScheme).foreground)
                 .lineLimit(1)
             if let date = context.date {
                 Text(conversationTimeFormatter.string(from: date))
@@ -537,6 +540,8 @@ private final class ConversationScrollMetrics {
     /// place is for older PAGES loading above the viewport; growth from appended lines must not
     /// re-anchor (it would scroll to the top of the window and cascade into page loads).
     var appendGrowthTarget: Int?
+    /// The pending trim back to one page after re-pinning; cancelled when the reader scrolls again.
+    var trimTask: Task<Void, Never>?
     /// True once the user has scrolled by hand. The first layout pass reports the top before the
     /// bottom anchor applies, so without this a fresh open would load a page it does not need.
     var userHasScrolled = false
@@ -801,11 +806,12 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     isLiveScrolling = scrolling
                     if scrolling {
                         metrics.userHasScrolled = true
+                        metrics.trimTask?.cancel()
                         heldCount = items.count
                     } else {
                         heldCount = nil
-                        // A re-pin during the gesture left its trim for now, when it is invisible.
-                        if isPinnedToBottom { trimWindow() }
+                        // A re-pin during the gesture left its trim for later.
+                        if isPinnedToBottom { scheduleTrim() }
                     }
                 }
             )
@@ -857,9 +863,12 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             // while the user is still scrolling. Page loads require being unpinned, so the trimmed,
             // shorter content no longer reads as "near the top" and cascades into a load.
             .onChange(of: isPinnedToBottom) { _, pinned in
-                guard pinned else { return }
+                guard pinned else {
+                    metrics.trimTask?.cancel()
+                    return
+                }
                 seenCount = items.count
-                if !isLiveScrolling { trimWindow() }
+                if !isLiveScrolling { scheduleTrim() }
             }
             // Boundary stability while reading history: when the conversation grows and the user is
             // NOT at the bottom, grow the window by the same delta so the rendered set stays a
@@ -928,13 +937,31 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 seenCount = items.count
             }
             .overlay(alignment: .bottom) {
-                if !isPinnedToBottom {
-                    jumpToLatest(proxy)
-                        .padding(.bottom, 14)
-                        .transition(.opacity)
+                ZStack {
+                    if !isPinnedToBottom {
+                        jumpToLatest(proxy)
+                            .padding(.bottom, 14)
+                            .transition(.opacity)
+                    }
                 }
+                // Scoped to the pill. On the whole list it made every row change in the re-pin
+                // update an animated one (WOR-420).
+                .animation(.easeInOut(duration: 0.18), value: isPinnedToBottom)
             }
-            .animation(.easeInOut(duration: 0.18), value: isPinnedToBottom)
+        }
+    }
+
+    /// Back at the bottom: drop the history rows above the newest page, but only once the reader has
+    /// settled there and only when the window has grown past a few pages. Trimming on arrival removed
+    /// hundreds of rows in the frame the reader stopped on, and scrolling back up then rebuilt them a
+    /// page at a time (WOR-420). Cancelled by the next gesture or by leaving the bottom.
+    private func scheduleTrim() {
+        metrics.trimTask?.cancel()
+        guard renderCount > pageSize * 3 else { return }
+        metrics.trimTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, isPinnedToBottom, !isLiveScrolling else { return }
+            trimWindow()
         }
     }
 
