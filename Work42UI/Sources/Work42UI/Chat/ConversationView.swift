@@ -170,7 +170,7 @@ public struct ConversationBubble<Content: View>: View {
 /// The measurements every conversation row shares, so the chat and the transcript line up.
 public enum ConversationMetrics {
     /// Diameter of a run's avatar.
-    public static let avatarSize: CGFloat = 24
+    public static let avatarSize: CGFloat = 28
     /// Gap between the avatar and the name.
     public static let avatarGap: CGFloat = 8
     /// How far a run's lines sit from the leading edge: under the name, past the avatar.
@@ -250,27 +250,33 @@ public struct ConversationMessageRow<Content: View>: View {
     }
 }
 
-/// The flat avatar of a run: a provider logo on a neutral fill, or initials on the actor's colour.
+/// The flat avatar of a run, in the chip language of the provider pill: a translucent fill of the
+/// actor's colour with a hairline stroke, and the mark (a template provider logo, or the initials)
+/// drawn in that colour. `DT.resolveChipTint` keeps a near-black colour (Codex) legible in dark mode.
 struct ConversationAvatar: View {
     let actor: ConversationActor
     let logo: Image?
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         let size = ConversationMetrics.avatarSize
+        let tint = DT.resolveChipTint(actor.color, colorScheme: colorScheme)
         ZStack {
+            Circle().fill(tint.fill)
+            Circle().strokeBorder(tint.stroke, lineWidth: 0.5)
             if let logo {
-                Circle().fill(Color.primary.opacity(0.08))
                 logo
+                    .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: size * 0.62, height: size * 0.62)
+                    .frame(width: size * 0.5, height: size * 0.5)
             } else {
-                Circle().fill(actor.color.opacity(0.3))
                 Text(actor.initials)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 11, weight: .semibold))
             }
         }
+        .foregroundStyle(tint.foreground)
         .frame(width: size, height: size)
     }
 }
