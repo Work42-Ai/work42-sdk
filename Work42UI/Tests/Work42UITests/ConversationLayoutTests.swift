@@ -53,24 +53,45 @@ struct ConversationLayoutTests {
     // MARK: Dividers
 
     @Test func dividerAppearsAtExactlyTheGap() {
-        let at300 = [Entry(id: 0, actorID: "a", isMe: false, date: t0),
-                     Entry(id: 1, actorID: "a", isMe: false, date: t0.addingTimeInterval(300))]
-        #expect(ConversationLayout.dividerBefore(entries: at300) == [1])
+        // 15 minutes, the same in the chat and the transcript.
+        let at900 = [Entry(id: 0, actorID: "a", isMe: false, date: t0),
+                     Entry(id: 1, actorID: "a", isMe: false, date: t0.addingTimeInterval(900))]
+        #expect(ConversationLayout.dividerBefore(entries: at900) == [1])
     }
 
     @Test func noDividerJustUnderTheGap() {
-        let at299 = [Entry(id: 0, actorID: "a", isMe: false, date: t0),
-                     Entry(id: 1, actorID: "a", isMe: false, date: t0.addingTimeInterval(299))]
-        #expect(ConversationLayout.dividerBefore(entries: at299).isEmpty)
+        let at899 = [Entry(id: 0, actorID: "a", isMe: false, date: t0),
+                     Entry(id: 1, actorID: "a", isMe: false, date: t0.addingTimeInterval(899))]
+        #expect(ConversationLayout.dividerBefore(entries: at899).isEmpty)
+    }
+
+    @Test func leadingPutsADividerOnTheFirstDatedItem() {
+        let list = [Entry(id: 0, actorID: "a", isMe: false, date: nil),
+                    Entry(id: 1, actorID: "a", isMe: false, date: t0),
+                    Entry(id: 2, actorID: "a", isMe: false, date: t0.addingTimeInterval(60))]
+        #expect(ConversationLayout.dividerBefore(entries: list, leading: true) == [1])
+        #expect(ConversationLayout.dividerBefore(entries: list).isEmpty)
     }
 
     @Test func nilDatesNeverProduceADividerOrMoveTheReference() {
         let mixed = [Entry(id: 0, actorID: "a", isMe: false, date: t0),
                      Entry(id: 1, actorID: "a", isMe: false, date: nil),
-                     Entry(id: 2, actorID: "a", isMe: false, date: t0.addingTimeInterval(400))]
+                     Entry(id: 2, actorID: "a", isMe: false, date: t0.addingTimeInterval(1000))]
         #expect(ConversationLayout.dividerBefore(entries: mixed) == [2])
         let allNil = (0..<4).map { Entry(id: $0, actorID: "a", isMe: false, date: nil) }
         #expect(ConversationLayout.dividerBefore(entries: allNil).isEmpty)
+    }
+
+    @Test func dayClockLabelNamesTheDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let today = ConversationDateDivider.dayClockLabel(for: now, now: now, calendar: calendar)
+        let yesterday = ConversationDateDivider.dayClockLabel(
+            for: now.addingTimeInterval(-86_400), now: now, calendar: calendar
+        )
+        #expect(today.hasPrefix("Today \u{00B7} "))
+        #expect(yesterday.hasPrefix("Yesterday \u{00B7} "))
     }
 
     @Test func customGapIsHonoured() {
