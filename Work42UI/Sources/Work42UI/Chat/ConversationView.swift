@@ -173,8 +173,6 @@ public enum ConversationMetrics {
     public static let avatarSize: CGFloat = 28
     /// Gap between the avatar and the name.
     public static let avatarGap: CGFloat = 8
-    /// How far a run's lines sit from the leading edge: under the name, past the avatar.
-    public static let indent: CGFloat = avatarSize + avatarGap
     /// Space between a run's header and its first line, and between its lines.
     public static let lineSpacing: CGFloat = 6
     /// Inner padding of my accent card.
@@ -186,7 +184,7 @@ public enum ConversationMetrics {
 ///
 ///   • Mine: an accent card on the trailing edge, hugging its text (up to 75% of the row), no header.
 ///   • Anyone else: on the first line of a run, a small avatar (the agent's provider logo, or
-///     coloured initials), the name and the time; every line of the run is indented under the name.
+///     coloured initials), the name and the time; the lines start at the leading edge, flush with the avatar.
 ///   • No actor (a system line): the content as is.
 ///
 /// Deliberately cheap per row: a flat circle instead of glass, no bubble around other people's
@@ -232,7 +230,6 @@ public struct ConversationMessageRow<Content: View>: View {
                     if context.isRunStart { header(actor) }
                     content()
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, ConversationMetrics.indent)
                 }
             }
         } else {
