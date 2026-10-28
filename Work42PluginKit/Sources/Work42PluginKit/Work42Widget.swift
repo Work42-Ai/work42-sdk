@@ -632,6 +632,23 @@ public protocol Work42WidgetCustomHeader: Work42Widget {
     var contentPadding: Double { get }
 }
 
+// MARK: - Work42WidgetActionPopovers
+
+/// Optional popovers for action-area buttons.
+///
+/// A widget whose action-area intent opens a panel (a settings sheet, a filter) returns that panel here, and
+/// Work42 shows it in a popover anchored to the intent's own button when it is tapped, instead of running the
+/// intent's `perform`. Without this a widget could only anchor the panel somewhere inside its own body, far from
+/// the button. A separate protocol discovered with a conditional cast, like `Work42WidgetCustomHeader`, so
+/// widgets built against older SDKs keep their ABI.
+@MainActor
+public protocol Work42WidgetActionPopovers: Work42Widget {
+
+    /// The popover content for the action-area intent named `intentName`, or nil when that intent has no popover
+    /// (its `perform` runs as usual). `dismiss` closes the popover.
+    func actionAreaPopover(for intentName: String, dismiss: @escaping @MainActor () -> Void) -> AnyView?
+}
+
 extension Work42Widget {
 
     /// Default keeps every SF-Symbol-only widget source-compatible with SDK v6.
