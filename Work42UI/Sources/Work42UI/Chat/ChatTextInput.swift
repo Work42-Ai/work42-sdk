@@ -188,17 +188,23 @@ private struct ChatTextInputCore: NSViewRepresentable {
     func updateNSView(_ scrollView: ChatScrollView, context: Context) {
         guard let textView = scrollView.documentView as? SubmitInterceptingTextView else { return }
         let font = NSFont.systemFont(ofSize: fontSize)
+        var sizeChanged = false
         if textView.font?.pointSize != font.pointSize {
             textView.font = font
             scrollView.font = font
+            sizeChanged = true
         }
         if textView.string != text {
             textView.string = text
+            sizeChanged = true
         }
         textView.onSubmit = onSubmit
         textView.onPasteImage = onPasteImage
         textView.onPasteFiles = onPasteFiles
-        scrollView.invalidateIntrinsicContentSize()
+        // Only when what the height depends on changed: this runs on every render of the
+        // view that hosts the composer, and an unconditional invalidation re-measured the
+        // text on every one of them.
+        if sizeChanged { scrollView.invalidateIntrinsicContentSize() }
     }
 
     /// SwiftUI does NOT automatically respect an NSView's
@@ -215,6 +221,12 @@ private struct ChatTextInputCore: NSViewRepresentable {
     ) -> CGSize? {
         let width = proposal.width ?? nsView.bounds.width
         guard width.isFinite, width > 0 else { return nil }
+        // SwiftUI asks on every layout pass, usually with the same answer: reuse the last
+        // measurement while the text, width, font and line limits are unchanged.
+        let key = MeasureKey(text: text, width: width, fontSize: fontSize, minLines: minLines, maxLines: maxLines)
+        if let cached = context.coordinator.measured, cached.key == key {
+            return CGSize(width: width, height: cached.height)
+        }
         let height = ChatScrollView.measureHeight(
             text: text,
             font: NSFont.systemFont(ofSize: fontSize),
@@ -222,12 +234,24 @@ private struct ChatTextInputCore: NSViewRepresentable {
             minLines: minLines,
             maxLines: maxLines
         )
+        context.coordinator.measured = (key, height)
         return CGSize(width: width, height: height)
+    }
+
+    /// Everything `measureHeight` depends on.
+    struct MeasureKey: Equatable {
+        let text: String
+        let width: CGFloat
+        let fontSize: CGFloat
+        let minLines: Int
+        let maxLines: Int
     }
 
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ChatTextInputCore
+        /// The last height `sizeThatFits` measured, and for what.
+        var measured: (key: MeasureKey, height: CGFloat)?
 
         init(parent: ChatTextInputCore) { self.parent = parent }
 

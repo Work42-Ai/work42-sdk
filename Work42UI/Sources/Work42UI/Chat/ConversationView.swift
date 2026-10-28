@@ -165,6 +165,129 @@ public struct ConversationBubble<Content: View>: View {
     }
 }
 
+// MARK: - Message row
+
+/// The measurements every conversation row shares, so the chat and the transcript line up.
+public enum ConversationMetrics {
+    /// Diameter of a run's avatar.
+    public static let avatarSize: CGFloat = 28
+    /// Gap between the avatar and the name.
+    public static let avatarGap: CGFloat = 8
+    /// How far a run's lines sit from the leading edge: under the name, past the avatar.
+    public static let indent: CGFloat = avatarSize + avatarGap
+    /// Space between a run's header and its first line, and between its lines.
+    public static let lineSpacing: CGFloat = 6
+    /// Inner padding of my accent card.
+    public static let cardHorizontalPadding: CGFloat = 16
+    public static let cardVerticalPadding: CGFloat = 12
+}
+
+/// One message, laid out the same in the agent chat and the meeting transcript (WOR-420):
+///
+///   • Mine: an accent card on the trailing edge, hugging its text (up to 75% of the row), no header.
+///   • Anyone else: on the first line of a run, a small avatar (the agent's provider logo, or
+///     coloured initials), the name and the time; every line of the run is indented under the name.
+///   • No actor (a system line): the content as is.
+///
+/// Deliberately cheap per row: a flat circle instead of glass, no bubble around other people's
+/// lines and no per-row measuring, so a long conversation scrolls without per-row overhead.
+public struct ConversationMessageRow<Content: View>: View {
+    let context: ConversationRowContext
+    let logo: Image?
+    @ViewBuilder let content: () -> Content
+
+    @Environment(\.colorScheme) private var colorScheme
+    /// The row width `ConversationView` measured once for the list (0 outside one: no cap).
+    @Environment(\.chatBubbleContainerWidth) private var containerWidth
+
+    /// - Parameters:
+    ///   - context: Where the item sits (from `ConversationView`'s row builder).
+    ///   - logo: Drawn in the avatar instead of the initials (the agent's provider mark).
+    ///   - content: The message body. For my card, pad it with the `ConversationMetrics` card padding.
+    public init(
+        context: ConversationRowContext,
+        logo: Image? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.context = context
+        self.logo = logo
+        self.content = content
+    }
+
+    public var body: some View {
+        if let actor = context.actor {
+            if actor.isMe {
+                // My card sits on the trailing edge and hugs its text, up to three quarters of the row.
+                content()
+                    .foregroundStyle(DT.accentForeground)
+                    .environment(\.chatBubbleForegroundColor, DT.accentForeground)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(DT.systemAccent.opacity(0.15))
+                    )
+                    .frame(maxWidth: containerWidth > 0 ? containerWidth * 0.75 : nil, alignment: .trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                VStack(alignment: .leading, spacing: ConversationMetrics.lineSpacing) {
+                    if context.isRunStart { header(actor) }
+                    content()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, ConversationMetrics.indent)
+                }
+            }
+        } else {
+            content()
+        }
+    }
+
+    private func header(_ actor: ConversationActor) -> some View {
+        HStack(spacing: ConversationMetrics.avatarGap) {
+            ConversationAvatar(actor: actor, logo: logo)
+            // The name in the actor's colour, like the avatar (resolved so near-black stays legible).
+            Text(actor.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DT.resolveChipTint(actor.color, colorScheme: colorScheme).foreground)
+                .lineLimit(1)
+            if let date = context.date {
+                Text(conversationTimeFormatter.string(from: date))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
+/// The flat avatar of a run, in the chip language of the provider pill: a translucent fill of the
+/// actor's colour with a hairline stroke, and the mark (a template provider logo, or the initials)
+/// drawn in that colour. `DT.resolveChipTint` keeps a near-black colour (Codex) legible in dark mode.
+struct ConversationAvatar: View {
+    let actor: ConversationActor
+    let logo: Image?
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let size = ConversationMetrics.avatarSize
+        let tint = DT.resolveChipTint(actor.color, colorScheme: colorScheme)
+        ZStack {
+            Circle().fill(tint.fill)
+            Circle().strokeBorder(tint.stroke, lineWidth: 0.5)
+            if let logo {
+                logo
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size * 0.5, height: size * 0.5)
+            } else {
+                Text(actor.initials)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+        }
+        .foregroundStyle(tint.foreground)
+        .frame(width: size, height: size)
+    }
+}
+
 private let conversationTimeFormatter: DateFormatter = {
     let f = DateFormatter()
     f.dateStyle = .none
@@ -185,6 +308,36 @@ public struct ConversationDateDivider: View {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
         return f.localizedString(for: date, relativeTo: Date())
+    }
+
+    /// "Today · 9:30", "Yesterday · 9:30", "Mon, Oct 26 · 9:30": the day and the clock time, the
+    /// default divider of every conversation.
+    public nonisolated static func dayClockLabel(for date: Date) -> String {
+        dayClockLabel(for: date, now: Date(), calendar: .current)
+    }
+
+    nonisolated static func dayClockLabel(for date: Date, now: Date, calendar: Calendar) -> String {
+        let clock = DateFormatter()
+        clock.calendar = calendar
+        clock.timeZone = calendar.timeZone
+        clock.dateStyle = .none
+        clock.timeStyle = .short
+        let day: String
+        if calendar.isDate(date, inSameDayAs: now) {
+            day = "Today"
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+                  calendar.isDate(date, inSameDayAs: yesterday) {
+            day = "Yesterday"
+        } else {
+            let f = DateFormatter()
+            f.calendar = calendar
+            f.timeZone = calendar.timeZone
+            f.setLocalizedDateFormatFromTemplate(
+                calendar.isDate(date, equalTo: now, toGranularity: .year) ? "EEEMMMd" : "EEEMMMdyyyy"
+            )
+            day = f.string(from: date)
+        }
+        return "\(day) \u{00B7} \(clock.string(from: date))"
     }
 
     /// "10:42 AM": a clock time, for recorded meetings that are read after the fact.
@@ -380,12 +533,19 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
 private final class ConversationScrollMetrics {
     var bottomDistance: CGFloat = .infinity
     var topOffset: CGFloat = .infinity
-    /// One automatic page load per arrival at the top; re-armed once the page has landed.
+    /// False while a page load is in flight: every trigger that arrives meanwhile is DROPPED, not
+    /// queued. Re-armed only once the page has landed (see `pageLanded`).
     var loadArmed = true
+    /// Set when the new page's rows and re-anchor were applied; the next top-offset report (which
+    /// comes after that layout) re-arms loading. Re-arming any earlier let a scroll event in the
+    /// same frame start a second load before the first one had laid out.
+    var pageLanded = false
     /// The `renderCount` an append-driven growth is about to set. The re-anchor that keeps a reader's
     /// place is for older PAGES loading above the viewport; growth from appended lines must not
     /// re-anchor (it would scroll to the top of the window and cascade into page loads).
     var appendGrowthTarget: Int?
+    /// The pending trim back to one page after re-pinning; cancelled when the reader scrolls again.
+    var trimTask: Task<Void, Never>?
     /// True once the user has scrolled by hand. The first layout pass reports the top before the
     /// bottom anchor applies, so without this a fresh open would load a page it does not need.
     var userHasScrolled = false
@@ -455,7 +615,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         rowSpacing: CGFloat = 12,
         runSpacing: CGFloat? = nil,
         labels: ConversationLabels = .automatic,
-        dividerLabel: @escaping (Date) -> String = ConversationDateDivider.relativeLabel(for:),
+        dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
         @ViewBuilder row: @escaping (Item, ConversationRowContext) -> Row,
@@ -486,7 +646,13 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     @State private var lastItemCount = 0
     /// Item count when the user last was at the bottom; the pill shows `count - seenCount`.
     @State private var seenCount = 0
+    /// Items shown when the user started scrolling. Appends are held back while a gesture is live and
+    /// land when it ends: inserting rows mid-gesture re-lays out the stack and fights the scroll.
+    @State private var heldCount: Int?
     @State private var metrics = ScrollMetrics()
+
+    /// How many items are on screen: all of them, or the count held while the user scrolls.
+    private var shownCount: Int { min(items.count, heldCount ?? items.count) }
 
     private typealias ScrollMetrics = ConversationScrollMetrics
 
@@ -518,11 +684,11 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         var all: [ConversationEntry<Item.ID>] = []
         var actors: [Item.ID: ConversationActor] = [:]
         if always {
-            for item in items[windowStart...] {
+            for item in items[windowStart..<shownCount] {
                 if let a = actor(item) { actors[item.id] = a }
             }
         } else {
-            for (index, item) in items.enumerated() {
+            for (index, item) in items.prefix(shownCount).enumerated() {
                 guard let a = actor(item) else { continue }
                 all.append(ConversationEntry(id: item.id, actorID: a.id, isMe: a.isMe, date: nil))
                 if index >= windowStart { actors[item.id] = a }
@@ -533,7 +699,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         let from = max(0, windowStart - 1)
         var windowActors: [ConversationEntry<Item.ID>] = []
         var windowDated: [ConversationEntry<Item.ID>] = []
-        for item in items[from...] {
+        for item in items[from..<shownCount] {
             if let a = actor(item) {
                 windowActors.append(ConversationEntry(id: item.id, actorID: a.id, isMe: a.isMe, date: nil))
             }
@@ -542,7 +708,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         return Layout(
             labeled: always || ConversationLayout.labeledMode(entries: all),
             runStarts: ConversationLayout.runStarts(entries: windowActors),
-            dividers: ConversationLayout.dividerBefore(entries: windowDated),
+            dividers: ConversationLayout.dividerBefore(entries: windowDated, leading: from == 0),
             actors: actors
         )
     }
@@ -550,12 +716,13 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     // MARK: Body
 
     public var body: some View {
-        let windowStart = ConversationLayout.renderedStart(itemCount: items.count, renderCount: renderCount)
+        let shown = shownCount
+        let windowStart = ConversationLayout.renderedStart(itemCount: shown, renderCount: renderCount)
         let hiddenOlder = windowStart
         // The ForEach iterates light keys (an index and an id), not `Item` values: SwiftUI copies
         // the data element on every placement pass, and for a multi-word enum that copy plus its
         // ARC traffic dominated a fast scroll in the agent chat. The row looks its item up.
-        let rowKeys = (windowStart..<items.count).map { RowKey(index: $0, id: items[$0].id) }
+        let rowKeys = (windowStart..<shown).map { RowKey(index: $0, id: items[$0].id) }
         let layout = layout(windowStart: windowStart)
 
         return ScrollViewReader { proxy in
@@ -641,7 +808,15 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             .background(
                 ConversationLiveScrollProbe { scrolling in
                     isLiveScrolling = scrolling
-                    if scrolling { metrics.userHasScrolled = true }
+                    if scrolling {
+                        metrics.userHasScrolled = true
+                        metrics.trimTask?.cancel()
+                        heldCount = items.count
+                    } else {
+                        heldCount = nil
+                        // A re-pin during the gesture left its trim for later.
+                        if isPinnedToBottom { scheduleTrim() }
+                    }
                 }
             )
             // Distance may RE-pin (arriving back at the bottom is unambiguous, whatever the cause)
@@ -661,13 +836,22 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             .onPreferenceChange(ConversationTopOffsetKey.self) { top in
                 guard top.isFinite else { return }
                 metrics.topOffset = top
-                guard metrics.loadArmed else { return }
-                let hidden = ConversationLayout.renderedStart(itemCount: items.count, renderCount: renderCount)
+                if !metrics.loadArmed {
+                    // The in-flight page has landed: this report comes from the layout that placed
+                    // it. Re-arm, but let the NEXT scroll frame decide whether another page is due.
+                    if metrics.pageLanded {
+                        metrics.pageLanded = false
+                        metrics.loadArmed = true
+                    }
+                    return
+                }
+                let hidden = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: renderCount)
                 guard hidden > 0 else { return }
-                let nearTop = metrics.userHasScrolled && top > -viewportHeight
-                // A window shorter than the viewport has nothing to scroll: fill it.
-                let underfilled = top >= 0 && metrics.bottomDistance <= 0
-                guard nearTop || underfilled else { return }
+                // Older pages load only while the reader is scrolling UP through history, never while
+                // the view is following the bottom: the newest items are always laid out already.
+                // An underfilled window does not load by itself (AC5): pages come only from scrolling up.
+                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight
+                guard nearTop else { return }
                 metrics.loadArmed = false
                 var tx = Transaction()
                 tx.disablesAnimations = true
@@ -678,21 +862,23 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             // The scroll view starts at the bottom and STAYS there while content grows, as long as
             // the user has not scrolled away: following needs no scrollTo at all.
             .defaultScrollAnchor(.bottom)
-            // Back at the bottom: trim the window to one page (invisible, rows above the viewport)
-            // and mark everything seen.
+            // Back at the bottom: trim the window to one page (rows above the viewport) and mark
+            // everything seen. Mid-gesture the trim waits for the gesture to end, so rows never drop
+            // while the user is still scrolling. Page loads require being unpinned, so the trimmed,
+            // shorter content no longer reads as "near the top" and cascades into a load.
             .onChange(of: isPinnedToBottom) { _, pinned in
-                guard pinned else { return }
-                seenCount = items.count
-                if renderCount != pageSize {
-                    var tx = Transaction()
-                    tx.disablesAnimations = true
-                    withTransaction(tx) { renderCount = pageSize }
+                guard pinned else {
+                    metrics.trimTask?.cancel()
+                    return
                 }
+                seenCount = items.count
+                if !isLiveScrolling { scheduleTrim() }
             }
             // Boundary stability while reading history: when the conversation grows and the user is
             // NOT at the bottom, grow the window by the same delta so the rendered set stays a
-            // superset and the oldest visible row never changes under them.
-            .onChange(of: items.count) { _, count in
+            // superset and the oldest visible row never changes under them. Counts what is SHOWN,
+            // so lines held during a gesture are applied when it ends.
+            .onChange(of: shownCount) { _, count in
                 defer { lastItemCount = count }
                 if isPinnedToBottom {
                     seenCount = count
@@ -706,13 +892,15 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             // A page was added above the viewport: keep the user's place by re-anchoring on the
             // previously topmost row. Synchronous handler, so the proxy is live.
             .onChange(of: renderCount) { oldCount, newCount in
-                defer { metrics.loadArmed = true }
                 guard newCount > oldCount else { return }
+                // Appended lines are not a page load: they neither land nor re-arm one in flight.
                 if metrics.appendGrowthTarget == newCount {
                     metrics.appendGrowthTarget = nil
                     return
                 }
-                let previousTop = ConversationLayout.renderedStart(itemCount: items.count, renderCount: oldCount)
+                // The page's rows are in this update; the next top-offset report re-arms loading.
+                if !metrics.loadArmed { metrics.pageLanded = true }
+                let previousTop = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: oldCount)
                 guard items.indices.contains(previousTop) else { return }
                 var tx = Transaction()
                 tx.disablesAnimations = true
@@ -722,15 +910,18 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             }
             .onChange(of: resetKey) { _, _ in
                 isPinnedToBottom = true
+                heldCount = nil
                 renderCount = pageSize
                 lastItemCount = items.count
                 seenCount = items.count
                 metrics.userHasScrolled = false
                 metrics.loadArmed = true
+                metrics.pageLanded = false
                 scrollToBottom(proxy, animated: false)
             }
             .onChange(of: scrollToBottomTrigger) { _, _ in
                 isPinnedToBottom = true
+                heldCount = nil
                 seenCount = items.count
                 // Order matters (a chat bug fixed the hard way): scroll to the bottom of the CURRENT,
                 // not-yet-trimmed content first, THEN trim the window. Dropping rows above the
@@ -738,11 +929,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // the animated scroll races the content shrink's offset clamping against the scroll
                 // and can land away from the bottom.
                 scrollToBottom(proxy, animated: true)
-                if renderCount != pageSize {
-                    var tx = Transaction()
-                    tx.disablesAnimations = true
-                    withTransaction(tx) { renderCount = pageSize }
-                }
+                trimWindow()
             }
             // A turn can finish while the app is in the background, where the scroll cannot apply.
             // Re-pin on return, but only when already pinned so a deliberate scroll-up is kept.
@@ -750,18 +937,44 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 if isPinnedToBottom { scrollToBottom(proxy, animated: false) }
             }
             .onAppear {
-                lastItemCount = items.count
+                lastItemCount = shownCount
                 seenCount = items.count
             }
             .overlay(alignment: .bottom) {
-                if !isPinnedToBottom {
-                    jumpToLatest(proxy)
-                        .padding(.bottom, 14)
-                        .transition(.opacity)
+                ZStack {
+                    if !isPinnedToBottom {
+                        jumpToLatest(proxy)
+                            .padding(.bottom, 14)
+                            .transition(.opacity)
+                    }
                 }
+                // Scoped to the pill. On the whole list it made every row change in the re-pin
+                // update an animated one (WOR-420).
+                .animation(.easeInOut(duration: 0.18), value: isPinnedToBottom)
             }
-            .animation(.easeInOut(duration: 0.18), value: isPinnedToBottom)
         }
+    }
+
+    /// Back at the bottom: drop the history rows above the newest page, but only once the reader has
+    /// settled there and only when the window has grown past a few pages. Trimming on arrival removed
+    /// hundreds of rows in the frame the reader stopped on, and scrolling back up then rebuilt them a
+    /// page at a time (WOR-420). Cancelled by the next gesture or by leaving the bottom.
+    private func scheduleTrim() {
+        metrics.trimTask?.cancel()
+        guard renderCount > pageSize * 3 else { return }
+        metrics.trimTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, isPinnedToBottom, !isLiveScrolling else { return }
+            trimWindow()
+        }
+    }
+
+    /// Drop the rows above the newest page, without animation. Only call when they are out of view.
+    private func trimWindow() {
+        guard renderCount != pageSize else { return }
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx) { renderCount = pageSize }
     }
 
     private func spacing(before isRunStart: Bool, hasDivider: Bool) -> CGFloat {
@@ -774,9 +987,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         let unseen = max(0, items.count - seenCount)
         return Button {
             // Synchronous button action: a safe scroll site.
-            var tx = Transaction()
-            tx.disablesAnimations = true
-            withTransaction(tx) { renderCount = pageSize }
+            trimWindow()
             isPinnedToBottom = true
             seenCount = items.count
             scrollToBottom(proxy, animated: true)
@@ -830,7 +1041,7 @@ extension ConversationView where Footer == EmptyView {
         rowSpacing: CGFloat = 12,
         runSpacing: CGFloat? = nil,
         labels: ConversationLabels = .automatic,
-        dividerLabel: @escaping (Date) -> String = ConversationDateDivider.relativeLabel(for:),
+        dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
         @ViewBuilder row: @escaping (Item, ConversationRowContext) -> Row

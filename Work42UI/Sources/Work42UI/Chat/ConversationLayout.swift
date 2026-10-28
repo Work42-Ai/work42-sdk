@@ -33,7 +33,7 @@ public nonisolated enum ConversationLayout {
     public static let labeledActorThreshold = 3
 
     /// A gap of at least this many seconds between consecutive items shows a time divider.
-    public static let dividerGap: TimeInterval = 300
+    public static let dividerGap: TimeInterval = 900
 
     /// True when the conversation has three or more distinct actors.
     ///
@@ -62,15 +62,18 @@ public nonisolated enum ConversationLayout {
     /// The ids of items that follow the previous dated item by at least `gap` seconds.
     ///
     /// An item with no date never gets a divider and does not move the reference point, so a
-    /// dateless item between two dated ones does not hide (or fake) a gap.
+    /// dateless item between two dated ones does not hide (or fake) a gap. With `leading`, the first
+    /// dated item gets one too (the start of the conversation is in view).
     public static func dividerBefore<ID>(
-        entries: [ConversationEntry<ID>], gap: TimeInterval = dividerGap
+        entries: [ConversationEntry<ID>], gap: TimeInterval = dividerGap, leading: Bool = false
     ) -> Set<ID> {
         var dividers = Set<ID>()
         var previousDate: Date?
         for entry in entries {
             guard let date = entry.date else { continue }
-            if let previousDate, date.timeIntervalSince(previousDate) >= gap {
+            if let previousDate {
+                if date.timeIntervalSince(previousDate) >= gap { dividers.insert(entry.id) }
+            } else if leading {
                 dividers.insert(entry.id)
             }
             previousDate = date
