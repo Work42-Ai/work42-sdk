@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.10.0
+
+- **ABI generation stays `14`.** Additions only: no stored property was added to an existing public type, so plugins
+  built for 2.9.0 need no rebuild.
+- **`ConversationMessageRow`** (WOR-420): one message row for agent chat and meeting transcripts. Your own messages are
+  a trailing accent card (up to 75% of the row); others get a chip-tinted 28 pt avatar, their name in their colour and
+  the time on a run's first line. `ConversationMetrics` holds its measurements; day dividers read "Today · 9:30" and
+  appear after 15-minute gaps.
+- **`ConversationView` window**: page loads drop new triggers while one is in flight, and re-pin trims only after
+  settling, which removes the bottom jitter and the hitches when scrolling back to the latest lines.
+- **`Work42ActionButtonGroup` / `Work42ActionSegment`**: related action-area buttons share one extra-large glass
+  capsule with circle (icon) or capsule (text) highlights.
+- **Action-area menus open an `NSMenu`** (`Work42ActionMenuPresenter`), so a redraw mid-click no longer resets them.
+- **`Work42WidgetActionPopovers`** (opt-in, found by conditional cast): a widget anchors a popover to one of its own
+  action-area buttons. Hosts older than 2.10.0 ignore it.
+
+## 2.9.0
+
+- **ABI generation `14`.** Web popups open as tabs.
+
 ## 2.8.0
 
 - **ABI generation `13`.** `SessionServices` and `WidgetBackgroundServices` gain a `tools` field, which grows each
