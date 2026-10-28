@@ -184,7 +184,7 @@ public enum ConversationMetrics {
 
 /// One message, laid out the same in the agent chat and the meeting transcript (WOR-420):
 ///
-///   • Mine: a full-width accent card with no header.
+///   • Mine: an accent card on the trailing edge, hugging its text (up to 75% of the row), no header.
 ///   • Anyone else: on the first line of a run, a small avatar (the agent's provider logo, or
 ///     coloured initials), the name and the time; every line of the run is indented under the name.
 ///   • No actor (a system line): the content as is.
@@ -197,6 +197,8 @@ public struct ConversationMessageRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @Environment(\.colorScheme) private var colorScheme
+    /// The row width `ConversationView` measured once for the list (0 outside one: no cap).
+    @Environment(\.chatBubbleContainerWidth) private var containerWidth
 
     /// - Parameters:
     ///   - context: Where the item sits (from `ConversationView`'s row builder).
@@ -215,14 +217,16 @@ public struct ConversationMessageRow<Content: View>: View {
     public var body: some View {
         if let actor = context.actor {
             if actor.isMe {
+                // My card sits on the trailing edge and hugs its text, up to three quarters of the row.
                 content()
                     .foregroundStyle(DT.accentForeground)
                     .environment(\.chatBubbleForegroundColor, DT.accentForeground)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(DT.systemAccent.opacity(0.15))
                     )
+                    .frame(maxWidth: containerWidth > 0 ? containerWidth * 0.75 : nil, alignment: .trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             } else {
                 VStack(alignment: .leading, spacing: ConversationMetrics.lineSpacing) {
                     if context.isRunStart { header(actor) }
