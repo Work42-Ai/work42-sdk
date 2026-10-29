@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.1
+
+- **ABI generation stays `14`.** Documentation only; no API changed.
+- **Plugin-creator skill documents `start_hook`** (WOR-433): a session type can set a setup command that runs once in a
+  "Setup" terminal when a session starts, with its environment, failure handling and exit-code rules.
+
 ## 2.10.0
 
 - **ABI generation stays `14`.** Additions only: no stored property was added to an existing public type, so plugins
