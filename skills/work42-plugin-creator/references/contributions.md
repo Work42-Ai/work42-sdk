@@ -59,11 +59,38 @@ Stage-rule kinds are `execute`, `edit`, `fetch`, or `mcp`; actions are `allow` o
 
 ## Session types
 
-Each `session-types/<id>.json` declares `id`, display `name`, and a same-bundle `workflow`. Optional arrays `session_skills` and `session_mcps` must name same-bundle folders. `create_intent`, when present, must name a same-bundle intent. Other supported fields are `layout_json`, `icon`, `accent_hex`, `fresh_per_session`, `shows_in_new_session_menu`, `sort_order`, `enforce_capability_gate`, `self_archives`, `list_shape`, `archive_source`, `shows_in_session_list`, and typed `args`.
+Each `session-types/<id>.json` declares `id`, display `name`, and a same-bundle `workflow`. Optional arrays `session_skills` and `session_mcps` must name same-bundle folders. `create_intent`, when present, must name a same-bundle intent. Other supported fields are `layout_json`, `icon`, `accent_hex`, `fresh_per_session`, `shows_in_new_session_menu`, `sort_order`, `enforce_capability_gate`, `self_archives`, `list_shape`, `archive_source`, `shows_in_session_list`, `start_hook` (a setup command, see below), and typed `args`.
 
 `widgets` is the explicit list of widget kind ids sessions of this type have: built-in kinds as plain ids (`chat`, `files`, `terminal`) and plugin widgets as `widget:<slug>`. Only these exist in its sessions (the `+ Widget` picker, background work, link handling, the widgets' skills); installing a plugin adds its widgets to the catalog but to no type's list. A `widget:` entry must be one of this plugin's widgets or one of a plugin named in `requires`, or install fails. When `widgets` is absent, the ids found in `layout_json` are used. Keep it in step with the layout.
 
 Removing the plugin deregisters it first: its sessions become plain chat sessions that keep their transcript, artifacts, storage and layout minus the plugin's widgets, and only then are the type and its workflows deleted.
+
+### Setting a session up: `start_hook`
+
+New worktrees hold only what git checks out; Work42 copies nothing into them. A type that needs more (an `.env`, a generated config, an install step) sets `start_hook` in its own `session-types/<id>.json`, a shell command run once when a session of that type starts. It belongs to the type, not the plugin, and a blank value fails the install. A script the plugin ships is reached as `"\"$WORK42_PLUGIN_DIR/hooks/setup.sh\""`.
+
+```json
+{"id":"my-session","name":"My Session","workflow":"my-flow","start_hook":"\"$WORK42_PLUGIN_DIR/hooks/setup.sh\""}
+```
+
+- **When:** on the runner's first start, in a Terminal tab named "Setup", in the session folder. The agent's first prompt and any message the user types wait until it exits. It never runs twice for a session; an app quit mid-run is recorded as failed (`interrupted`).
+- **Environment:** `WORKTREE` (session folder, also the cwd), `SESSION_ID`, `REPOS` (the new worktrees, joined with `:`), `REPO_ROOTS` (the source repo folders, joined with `:`, same order), `WORKSPACE_ROOT`, `WORK42_PLUGIN_DIR`, `WORK42_SESSION_ID` and `WORK42_SESSION_DIR`. A variable that can't be resolved is unset. A path containing `:` can't be split.
+- **Failure:** the session continues. Chat shows the exit code and log path, the agent's first input is a system event with the same, the output is in `<session dir>/start-hook.log` (last 128 KB), and the outcome is in storage `hook/start_hook`: `{"status":"succeeded|failed|running","exit_code":0,"reason":null,"command":"…","log":"…","started_at":"…","finished_at":"…"}`. Ctrl-C in the Setup tab stops a hung hook and counts as a failure.
+- **Exit code matters:** end the script with a command that succeeds. `[ -f x ] && cp x y` as the last line fails the hook whenever `x` is missing; use `if`.
+
+```sh
+#!/bin/bash
+set -e
+IFS=: read -ra src <<< "$REPO_ROOTS"
+IFS=: read -ra wt <<< "$REPOS"
+for i in "${!src[@]}"; do
+  if [ -f "${src[$i]}/.env" ]; then
+    cp -n "${src[$i]}/.env" "${wt[$i]}/.env" || true
+  fi
+done
+```
+
+`start_hook` versus the compiled hook: `start_hook` is a shell command that sets up files and tools. Use the compiled `onCreate` in `Sources/Plugin.swift` when setup needs the session's storage or the work42 tools; both can be used.
 
 ## Intents
 
