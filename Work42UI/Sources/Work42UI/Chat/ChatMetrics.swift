@@ -50,10 +50,10 @@ public enum ChatMetrics {
     /// The code panel (`CodePanel`, WOR-516): the chat's fenced code block, an activity card's detail panels and the
     /// inline terminal are one component, so these are the only numbers they use. They are the chat code card's.
     public static let codePanelPadding: CGFloat = 12
-    public static let codePanelHeaderHeight: CGFloat = 38
-    public static let codePanelHeaderTop: CGFloat = 8
-    /// The opacity of the system accent in a panel's buttons: a hint of colour on the glass, nothing louder.
-    public static let codePanelButtonTint: Double = 0.25
+    /// The panel's buttons are the large glass size ("+ Add Widget"); the header is as tall as one plus the air above
+    /// and below it (WOR-517).
+    public static let codePanelHeaderHeight: CGFloat = 52
+    public static let codePanelHeaderTop: CGFloat = 0
 
     /// Text sizes of the activity card (WOR-508): the same size for the sentence and its rows, so the card reads as
     /// one quiet block of the reply; the sentence differs by colour, not by size or weight. 13 pt read too small, so

@@ -26,6 +26,7 @@ public struct CodePanel<Actions: View, Content: View>: View {
     private let copyText: String?
     private let copyHelp: String
     private let style: CodePanelStyle
+    private let edgeToEdge: Bool
     private let actions: Actions
     private let content: Content
 
@@ -33,6 +34,8 @@ public struct CodePanel<Actions: View, Content: View>: View {
     ///   - title: the header's mono label: a language, a path or `$ command`.
     ///   - meta: small text before the buttons: "+3 −1", "exit 1".
     ///   - copyText: what Copy puts on the pasteboard; nil leaves the Copy button out.
+    ///   - edgeToEdge: the content is not inset by the panel: it brings its own `codePanelPadding` inside a scroll view,
+    ///     so what scrolls reaches the panel's edges and its scroller sits on the edge (WOR-517).
     ///   - actions: secondary actions after Copy, each a `CodePanelAction`.
     public init(
         title: String,
@@ -42,6 +45,7 @@ public struct CodePanel<Actions: View, Content: View>: View {
         copyText: String? = nil,
         copyHelp: String = "Copy",
         style: CodePanelStyle = .standalone,
+        edgeToEdge: Bool = false,
         @ViewBuilder actions: () -> Actions,
         @ViewBuilder content: () -> Content
     ) {
@@ -52,6 +56,7 @@ public struct CodePanel<Actions: View, Content: View>: View {
         self.copyText = copyText
         self.copyHelp = copyHelp
         self.style = style
+        self.edgeToEdge = edgeToEdge
         self.actions = actions()
         self.content = content()
     }
@@ -59,9 +64,14 @@ public struct CodePanel<Actions: View, Content: View>: View {
     public var body: some View {
         VStack(spacing: 0) {
             header
-            content
-                .padding(ChatMetrics.codePanelPadding)
+            // Scrolling content (the inline terminal) insets itself, so its scroller sits on the panel's edge.
+            if edgeToEdge {
+                content
+            } else {
+                content.padding(ChatMetrics.codePanelPadding)
+            }
         }
+        .clipShape(RoundedRectangle(cornerRadius: DT.rCard, style: .continuous))
         .background(RoundedRectangle(cornerRadius: DT.rCard, style: .continuous).fill(Color.primary.opacity(0.05)))
         .overlay {
             if style == .standalone {
@@ -81,9 +91,8 @@ public struct CodePanel<Actions: View, Content: View>: View {
                 .textSelection(.enabled)
             Spacer(minLength: DT.s8)
             if let meta, !meta.isEmpty {
-                Text(meta)
+                ChangeCountsText(meta, color: metaColor)
                     .font(.system(size: DT.f12, design: .monospaced))
-                    .foregroundStyle(metaColor)
                     .lineLimit(1)
             }
             if let copyText { CodePanelCopyButton(text: copyText, help: copyHelp) }
@@ -105,11 +114,12 @@ extension CodePanel where Actions == EmptyView {
         copyText: String? = nil,
         copyHelp: String = "Copy",
         style: CodePanelStyle = .standalone,
+        edgeToEdge: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
             title: title, titleTruncation: titleTruncation, meta: meta, metaColor: metaColor, copyText: copyText,
-            copyHelp: copyHelp, style: style, actions: { EmptyView() }, content: content
+            copyHelp: copyHelp, style: style, edgeToEdge: edgeToEdge, actions: { EmptyView() }, content: content
         )
     }
 }
@@ -166,8 +176,9 @@ struct CodePanelCopyButton: View {
     }
 }
 
-/// How every button of a code panel looks: glass at the regular control size, tinted with the system accent at a low
-/// opacity, with the accent as its label colour. The panel's buttons are defined here and nowhere else.
+/// How every button of a code panel looks: the same glass capsule as "+ Add Widget" (a light fill in light mode, a dark
+/// one in dark mode) at the large control size, with the system accent as its label colour and no tint on the fill.
+/// The panel's buttons are defined here and nowhere else (WOR-517).
 struct CodePanelButtonLook: ViewModifier {
     enum Shape { case capsule, circle }
     let shape: Shape
@@ -175,17 +186,41 @@ struct CodePanelButtonLook: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .controlSize(.regular)
+                .controlSize(.extraLarge)
                 .buttonStyle(.glass)
                 .buttonBorderShape(shape == .circle ? .circle : .capsule)
-                .tint(DT.systemAccent.opacity(ChatMetrics.codePanelButtonTint))
                 .foregroundStyle(DT.systemAccent)
         } else {
             content
-                .controlSize(.regular)
+                .controlSize(.large)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(shape == .circle ? .circle : .capsule)
-                .tint(DT.systemAccent)
+                .foregroundStyle(DT.systemAccent)
         }
+    }
+}
+
+/// Small header text where `+N` is green and `−N` red, the rest in `color`: "+16 −53", "exit 1", "3 matches".
+public struct ChangeCountsText: View {
+    private let text: String
+    private let color: Color
+
+    public init(_ text: String, color: Color = .secondary) {
+        self.text = text
+        self.color = color
+    }
+
+    public var body: some View {
+        let words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        words.enumerated().reduce(Text("")) { result, item in
+            let (index, word) = item
+            let tint: Color = Self.isCount(word, sign: "+") ? DT.green : Self.isCount(word, sign: "\u{2212}") || Self.isCount(word, sign: "-") ? DT.red : color
+            return result + Text((index == 0 ? "" : " ") + word).foregroundColor(tint)
+        }
+    }
+
+    /// `+16`, `−53`: the sign followed by digits only.
+    public static func isCount(_ word: String, sign: String) -> Bool {
+        word.hasPrefix(sign) && word.count > sign.count && word.dropFirst(sign.count).allSatisfy(\.isNumber)
     }
 }
