@@ -47,10 +47,13 @@ public enum ChatMetrics {
     public static let detailBottom: CGFloat = 14
     /// Padding between an activity card's edge and its rows.
     public static let activityCardPadding = EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
-    /// Padding inside a detail panel (the code, diff or output under a step), and the room its header buttons get.
-    public static let panelPadding: CGFloat = 14
-    /// Height of a detail panel's header: the same as the chat's code card, so their buttons line up (WOR-507).
-    public static let panelHeaderHeight: CGFloat = 38
+    /// The code panel (`CodePanel`, WOR-516): the chat's fenced code block, an activity card's detail panels and the
+    /// inline terminal are one component, so these are the only numbers they use. They are the chat code card's.
+    public static let codePanelPadding: CGFloat = 12
+    public static let codePanelHeaderHeight: CGFloat = 38
+    public static let codePanelHeaderTop: CGFloat = 8
+    /// The opacity of the system accent in a panel's buttons: a hint of colour on the glass, nothing louder.
+    public static let codePanelButtonTint: Double = 0.25
 
     /// Text sizes of the activity card (WOR-508): the same size for the sentence and its rows, so the card reads as
     /// one quiet block of the reply; the sentence differs by colour, not by size or weight. 13 pt read too small, so
