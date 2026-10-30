@@ -384,6 +384,8 @@ private final class ProseBuilder {
             : .systemFont(ofSize: style.size, weight: weight)
         if style.italic { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
         var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: style.color]
+        // A little letter spacing for an airier reply (WOR-510); inline code keeps its own spacing.
+        if !style.mono { attrs[.kern] = ChatMetrics.bodyTracking }
         if style.mono { attrs[.backgroundColor] = NSColor.labelColor.withAlphaComponent(0.08) }
         if style.strike { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         if let link = style.link {
