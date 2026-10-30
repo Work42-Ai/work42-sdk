@@ -21,11 +21,10 @@ public enum ChatMetrics {
     public static let headerToBody: CGFloat = 10
 
     public static let bodyFontSize: CGFloat = 16
-    /// Line height of reply text (about 1.6x, WOR-510: a little more air than the first 1.5x).
-    public static let bodyLineHeight: CGFloat = 26
-    public static let paragraphSpacing: CGFloat = 16
-    /// Letter spacing of reply text, in points (WOR-510). Code keeps its own spacing.
-    public static let bodyTracking: CGFloat = 0.2
+    /// Line height of reply text (1.5x). A taller line, a wider paragraph gap and letter spacing were tried (WOR-510)
+    /// and looked wrong on the regular chat, so they were taken out again (WOR-512).
+    public static let bodyLineHeight: CGFloat = 24
+    public static let paragraphSpacing: CGFloat = 14
     /// Extra space between wrapped lines that brings the body font to `bodyLineHeight`.
     public static var bodyLineSpacing: CGFloat {
         max(0, bodyLineHeight - NSFont.systemFont(ofSize: bodyFontSize).boundingRectForFont.height.rounded())
@@ -54,8 +53,9 @@ public enum ChatMetrics {
     public static let panelHeaderHeight: CGFloat = 38
 
     /// Text sizes of the activity card (WOR-508): the same size for the sentence and its rows, so the card reads as
-    /// one quiet block of the reply; the sentence differs by colour and a medium-light weight, not by size.
-    public static let activitySentenceSize: CGFloat = 13
-    public static let activityRowSize: CGFloat = 13
+    /// one quiet block of the reply; the sentence differs by colour, not by size or weight. 13 pt read too small, so
+    /// it is 14 again (WOR-512).
+    public static let activitySentenceSize: CGFloat = 14
+    public static let activityRowSize: CGFloat = 14
     public static let activityMetaSize: CGFloat = 12
 }
