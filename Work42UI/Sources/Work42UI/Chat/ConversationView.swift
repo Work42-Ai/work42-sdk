@@ -658,7 +658,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     private static var scrollSpace: String { "conversationScroll" }
     private static var bottomAnchorID: String { "conversation-bottom-anchor" }
     /// Within this many points of the bottom edge counts as "at the bottom".
-    private static var bottomPinThreshold: CGFloat { 24 }
+    private static var bottomPinThreshold: CGFloat { ConversationPinning.threshold }
 
     // MARK: Layout
 
@@ -824,12 +824,12 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             .onPreferenceChange(ConversationBottomDistanceKey.self) { distance in
                 guard distance.isFinite else { return }
                 metrics.bottomDistance = distance
-                let pinned = distance <= Self.bottomPinThreshold
-                if pinned {
-                    if !isPinnedToBottom { isPinnedToBottom = true }
-                } else if isLiveScrolling, isPinnedToBottom {
-                    isPinnedToBottom = false
-                }
+                let outcome = ConversationPinning.resolve(
+                    pinned: isPinnedToBottom, distance: distance, isUserScrolling: isLiveScrolling)
+                if outcome.pinned != isPinnedToBottom { isPinnedToBottom = outcome.pinned }
+                // The content grew under a pinned reader (a row opened, an image landed, the working
+                // indicator appeared): follow it, frame by frame while it animates.
+                if outcome.follow { scrollToBottom(proxy, animated: false) }
             }
             // Automatic older-page loading, once per arrival near the top.
             .onPreferenceChange(ConversationTopOffsetKey.self) { top in
@@ -943,8 +943,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 ZStack {
                     if !isPinnedToBottom {
                         jumpToLatest(proxy)
-                            .padding(.bottom, 14)
-                            .transition(.opacity)
+                            .padding(.bottom, 12)
+                            .transition(.opacity.combined(with: .offset(y: 6)))
                     }
                 }
                 // Scoped to the pill. On the whole list it made every row change in the re-pin
@@ -983,8 +983,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     }
 
     private func jumpToLatest(_ proxy: ScrollViewProxy) -> some View {
-        let unseen = max(0, items.count - seenCount)
-        return Button {
+        Button {
             // Synchronous button action: a safe scroll site.
             trimWindow()
             isPinnedToBottom = true
@@ -992,23 +991,20 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             scrollToBottom(proxy, animated: true)
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.down")
+                Image(systemName: "arrow.down")
                     .font(.system(size: DT.f11, weight: .semibold))
-                Text("Jump to latest")
-                    .font(.system(size: DT.f12, weight: .medium))
-                if unseen > 0 {
-                    Text("\(unseen)")
-                        .font(.system(size: DT.f10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(DT.systemAccent))
-                }
+                Text("Latest")
+                    .font(.system(size: DT.f13, weight: .medium))
             }
-            .padding(.horizontal, 4)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .glassCapsuleSurface()
+            .contentShape(Capsule())
         }
-        .glassSubtleCapsule(tint: DT.systemAccent)
+        .buttonStyle(.plain)
         .help("Scroll to the newest message")
+        .accessibilityLabel("Scroll to latest")
     }
 
     /// Scroll to the bottom anchor. MUST be called from a synchronous SwiftUI context (an
