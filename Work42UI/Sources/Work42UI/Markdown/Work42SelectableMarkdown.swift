@@ -6,9 +6,10 @@
 //
 //   * `Work42MarkdownSegments.split` parses markdown with cmark-gfm (the parser the Markdown preview already uses)
 //     and returns a short list of segments: ONE `NSAttributedString` for each run of prose (paragraphs, headings,
-//     lists, quotes, rules, inline marks), the fenced code blocks apart (the host draws them as cards), and the
-//     blocks it does not style natively (tables, images, raw HTML) as their markdown source, which the host draws
-//     with `Work42MarkdownText` as before. Nothing is ever dropped.
+//     lists, quotes, rules, tables, inline marks), the fenced code blocks apart (the host draws them as cards), and
+//     the blocks it does not style natively (images, raw HTML) as their markdown source, which the host draws with
+//     `Work42MarkdownText` as before. Nothing is ever dropped. A table is a real text table inside the prose run
+//     (`NSTextTable`), so a drag selects across its cells and rows and on into the prose around it (WOR-478).
 //   * `Work42SelectableProse` shows one prose segment in a read-only `NSTextView`, so a drag selects across all of it.
 //   * `Work42MarkdownSegmentCache` keeps the parsed segments so a row that scrolls back into view does not re-parse.
 //
@@ -28,7 +29,7 @@ public enum Work42MarkdownSegment: Equatable {
     /// A fenced or indented code block: the lower-cased first word of the info string (nil when untagged) and the
     /// code without its trailing newline.
     case code(language: String?, code: String)
-    /// A block rendered by `Work42MarkdownText` (a table, an image, raw HTML): its markdown source.
+    /// A block rendered by `Work42MarkdownText` (an image, raw HTML): its markdown source.
     case markdown(String)
 }
 
@@ -111,7 +112,9 @@ private final class ProseBuilder {
             var code = Self.literal(node)
             while code.hasSuffix("\n") { code.removeLast() }
             segments.append(.code(language: info, code: code))
-        case "table", "html_block", "footnote_definition":
+        case "table":
+            appendTable(node)
+        case "html_block", "footnote_definition":
             flush()
             appendSource(of: node)
         default:
@@ -143,6 +146,61 @@ private final class ProseBuilder {
         let end = min(max(Int(cmark_node_get_end_line(node)), start), lines.count)
         guard start <= end else { return }
         segments.append(.markdown(lines[(start - 1)..<end].joined(separator: "\n")))
+    }
+
+    // MARK: Tables
+
+    /// A GFM table as a text table in the current prose run: a bordered cell per paragraph, the header row semibold.
+    /// Cells hold their inline marks (code, links, emphasis). The run goes on after the table with a normal gap.
+    private func appendTable(_ node: CmarkNode) {
+        var rows: [[CmarkNode]] = []
+        var row = cmark_node_first_child(node)
+        while let r = row {
+            var cells: [CmarkNode] = []
+            var cell = cmark_node_first_child(r)
+            while let c = cell { cells.append(c); cell = cmark_node_next(c) }
+            rows.append(cells)
+            row = cmark_node_next(r)
+        }
+        let columns = rows.map(\.count).max() ?? 0
+        guard columns > 0 else { return }
+
+        let table = NSTextTable()
+        table.numberOfColumns = columns
+        table.layoutAlgorithm = .automaticLayoutAlgorithm
+        table.collapsesBorders = true
+        table.hidesEmptyCells = false
+
+        let border = NSColor.labelColor.withAlphaComponent(0.18)
+        for (r, cells) in rows.enumerated() {
+            for c in 0..<columns {
+                let block = NSTextTableBlock(table: table, startingRow: r, rowSpan: 1, startingColumn: c, columnSpan: 1)
+                block.setWidth(0.5, type: .absoluteValueType, for: .border)
+                block.setBorderColor(border)
+                block.setWidth(6, type: .absoluteValueType, for: .padding, edge: .minY)
+                block.setWidth(6, type: .absoluteValueType, for: .padding, edge: .maxY)
+                block.setWidth(12, type: .absoluteValueType, for: .padding, edge: .minX)
+                block.setWidth(12, type: .absoluteValueType, for: .padding, edge: .maxX)
+                if r == 0 { block.backgroundColor = NSColor.labelColor.withAlphaComponent(0.06) }
+
+                let style = NSMutableParagraphStyle()
+                style.textBlocks = [block]
+                style.lineSpacing = 2
+                let inline = InlineStyle(size: bodySize, baseWeight: r == 0 ? .semibold : .regular)
+                let piece = NSMutableAttributedString()
+                if c < cells.count { appendInlines(of: cells[c], style: inline, into: piece) }
+                if piece.length == 0 { piece.append(NSAttributedString(string: " ", attributes: attributes(for: inline))) }
+                piece.append(NSAttributedString(string: "\n", attributes: attributes(for: inline)))
+                piece.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: piece.length))
+                current.append(piece)
+            }
+        }
+        // The gap after the table: a thin empty paragraph, outside the table.
+        let gap = NSMutableParagraphStyle()
+        gap.paragraphSpacing = ChatMetrics.paragraphSpacing - 2
+        current.append(NSAttributedString(string: "\n", attributes: [
+            .font: NSFont.systemFont(ofSize: 2), .paragraphStyle: gap,
+        ]))
     }
 
     // MARK: Blocks
@@ -439,6 +497,43 @@ public final class Work42MarkdownSegmentCache {
 
 // MARK: - Selectable prose view
 
+// MARK: - Copy text
+
+/// The plain text of a selection in a prose run. Prose copies as it reads; table cells copy as a spreadsheet would:
+/// a tab between the cells of a row and a newline between rows (WOR-478).
+@_spi(Work42Host)
+public enum ProseCopyText {
+    public static func plainText(of text: NSAttributedString, range: NSRange) -> String {
+        let full = text.string as NSString
+        let range = NSIntersectionRange(range, NSRange(location: 0, length: full.length))
+        guard range.length > 0 else { return "" }
+        var out = ""
+        var lastCell: (table: ObjectIdentifier, row: Int)?
+        var location = range.location
+        while location < NSMaxRange(range) {
+            let paragraph = full.paragraphRange(for: NSRange(location: location, length: 0))
+            let part = NSIntersectionRange(paragraph, range)
+            location = NSMaxRange(paragraph)
+            guard part.length > 0 else { continue }
+            var piece = full.substring(with: part)
+            let style = text.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+            if let cell = style?.textBlocks.last as? NSTextTableBlock {
+                if piece.hasSuffix("\n") { piece.removeLast() }
+                let key = ObjectIdentifier(cell.table)
+                if let last = lastCell {
+                    out += (last.table == key && last.row == cell.startingRow) ? "\t" : "\n"
+                }
+                out += piece
+                lastCell = (key, cell.startingRow)
+            } else {
+                if lastCell != nil { out += "\n"; lastCell = nil }
+                out += piece
+            }
+        }
+        return out
+    }
+}
+
 /// One run of prose in a read-only text view: a drag selects across all of it, ⌘C copies it.
 @_spi(Work42Host)
 public struct Work42SelectableProse: NSViewRepresentable {
@@ -590,6 +685,16 @@ public final class SelectableProseTextView: NSTextView {
         return (value as? URL) ?? (value as? String).flatMap(URL.init(string:))
     }
 
+    /// ⌘C: the selection as rich text, with the plain text laid out for pasting (tab-separated table rows).
+    public override func copy(_ sender: Any?) {
+        let range = selectedRange()
+        guard range.length > 0, range.location + range.length <= content.length else { super.copy(sender); return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([content.attributedSubstring(from: range)])
+        pasteboard.setString(ProseCopyText.plainText(of: content, range: range), forType: .string)
+    }
+
     /// The standard text menu, with "Open Link" and "Open Externally" first when the click is on a link.
     public override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event) ?? NSMenu()
@@ -618,7 +723,7 @@ public final class SelectableProseTextView: NSTextView {
         let range = selectedRange()
         guard range.length > 0, let layout = layoutManager, let container = textContainer,
               range.location + range.length <= content.length else { return ("", .zero) }
-        let text = content.attributedSubstring(from: range).string
+        let text = ProseCopyText.plainText(of: content, range: range)
         let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
         guard glyphs.length > 0 else { return (text, .zero) }
         let first = layout.boundingRect(forGlyphRange: NSRange(location: glyphs.location, length: 1), in: container)
