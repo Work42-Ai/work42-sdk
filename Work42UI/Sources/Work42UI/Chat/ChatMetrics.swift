@@ -35,7 +35,9 @@ public enum ChatMetrics {
     /// Text inside the composer box.
     public static let composerTextInsets = EdgeInsets(top: 16, leading: 18, bottom: 14, trailing: 18)
     /// The composer box inside the widget: side margin, with air above and below.
-    public static let composerOuter = EdgeInsets(top: 14, leading: sideMargin, bottom: 14, trailing: sideMargin)
+    /// Left, right and bottom are the same `sideMargin`, so the box is as far from the widget's edge below as at the
+    /// sides (WOR-504); the top is the gap to the transcript above it.
+    public static let composerOuter = EdgeInsets(top: 14, leading: sideMargin, bottom: sideMargin, trailing: sideMargin)
 
     /// Height of one row in an activity card, and the air around an opened detail.
     public static let activityRowHeight: CGFloat = 30
