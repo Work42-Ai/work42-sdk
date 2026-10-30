@@ -170,14 +170,16 @@ public struct ConversationBubble<Content: View>: View {
 /// The measurements every conversation row shares, so the chat and the transcript line up.
 public enum ConversationMetrics {
     /// Diameter of a run's avatar.
-    public static let avatarSize: CGFloat = 28
+    public static let avatarSize: CGFloat = ChatMetrics.avatarSize
     /// Gap between the avatar and the name.
-    public static let avatarGap: CGFloat = 8
-    /// Space between a run's header and its first line, and between its lines.
+    public static let avatarGap: CGFloat = ChatMetrics.avatarGap
+    /// Space between a run's header and its first line.
+    public static let headerToBody: CGFloat = ChatMetrics.headerToBody
+    /// Tight space between consecutive lines of one run, for transcripts that want it (meet42).
     public static let lineSpacing: CGFloat = 6
     /// Inner padding of my accent card.
-    public static let cardHorizontalPadding: CGFloat = 16
-    public static let cardVerticalPadding: CGFloat = 12
+    public static let cardHorizontalPadding: CGFloat = ChatMetrics.myCardPadding.leading
+    public static let cardVerticalPadding: CGFloat = ChatMetrics.myCardPadding.top
 }
 
 /// One message, laid out the same in the agent chat and the meeting transcript (WOR-420):
@@ -226,7 +228,7 @@ public struct ConversationMessageRow<Content: View>: View {
                     .frame(maxWidth: containerWidth > 0 ? containerWidth * 0.75 : nil, alignment: .trailing)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             } else {
-                VStack(alignment: .leading, spacing: ConversationMetrics.lineSpacing) {
+                VStack(alignment: .leading, spacing: ConversationMetrics.headerToBody) {
                     if context.isRunStart { header(actor) }
                     content()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -609,8 +611,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         pageSize: Int,
         resetKey: AnyHashable = 0,
         scrollToBottomTrigger: Int = 0,
-        rowSpacing: CGFloat = 12,
-        runSpacing: CGFloat? = nil,
+        rowSpacing: CGFloat = ChatMetrics.turnSpacing,
+        runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,
@@ -786,7 +788,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // The row width every bubble may use, measured once here (the content padding is 18 a
                 // side), so bubbles do not each measure and re-layout on every append.
                 .environment(\.chatBubbleContainerWidth, max(0, viewportWidth - 36))
-                .padding(.horizontal, 18)
+                .padding(.horizontal, ChatMetrics.sideMargin)
                 .padding(.vertical, 18)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1035,8 +1037,8 @@ extension ConversationView where Footer == EmptyView {
         pageSize: Int,
         resetKey: AnyHashable = 0,
         scrollToBottomTrigger: Int = 0,
-        rowSpacing: CGFloat = 12,
-        runSpacing: CGFloat? = nil,
+        rowSpacing: CGFloat = ChatMetrics.turnSpacing,
+        runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,

@@ -85,7 +85,7 @@ private struct BlockContext {
     var indent: CGFloat = 0
     var color: NSColor = .labelColor
     var textBlocks: [NSTextBlock] = []
-    var spacingAfter: CGFloat = 12
+    var spacingAfter: CGFloat = ChatMetrics.paragraphSpacing
 }
 
 private final class ProseBuilder {
@@ -342,7 +342,7 @@ private final class ProseBuilder {
         _ ctx: BlockContext, before: CGFloat, after: CGFloat, markerIndent: CGFloat? = nil
     ) -> NSMutableParagraphStyle {
         let style = NSMutableParagraphStyle()
-        style.lineSpacing = 6
+        style.lineSpacing = ChatMetrics.bodyLineSpacing
         style.paragraphSpacingBefore = before
         style.paragraphSpacing = after
         style.headIndent = ctx.indent
