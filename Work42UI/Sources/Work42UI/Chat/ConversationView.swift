@@ -609,6 +609,9 @@ private final class ConversationScrollMetrics {
     /// True once the user has scrolled by hand. The first layout pass reports the top before the
     /// bottom anchor applies, so without this a fresh open would load a page it does not need.
     var userHasScrolled = false
+    /// True from the moment a page lands until the reader starts a NEW scroll: a page never triggers
+    /// the next one by itself, so loads cannot cascade up the history.
+    var awaitingScroll = false
 }
 
 // MARK: - Labels
@@ -802,6 +805,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         guard metrics.pageLanded, metrics.scroller.restore() else { return }
         metrics.pageLanded = false
         metrics.loadArmed = true
+        metrics.awaitingScroll = true
     }
 
     // MARK: Body
@@ -901,6 +905,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     isLiveScrolling = scrolling
                     if scrolling {
                         metrics.userHasScrolled = true
+                        metrics.awaitingScroll = false
                         metrics.trimTask?.cancel()
                         heldCount = items.count
                     } else {
@@ -939,7 +944,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // Older pages load only while the reader is scrolling UP through history, never while
                 // the view is following the bottom: the newest items are always laid out already.
                 // An underfilled window does not load by itself (AC5): pages come only from scrolling up.
-                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight
+                let nearTop = metrics.userHasScrolled && !metrics.awaitingScroll && !isPinnedToBottom
+                    && top > -viewportHeight
                 guard nearTop else { return }
                 metrics.loadArmed = false
                 var tx = Transaction()
