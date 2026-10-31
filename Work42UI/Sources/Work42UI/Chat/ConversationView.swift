@@ -559,6 +559,14 @@ private final class ConversationScroller {
         let offsetFromTop = doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
         distanceFromBottom = doc.frame.height - (offsetFromTop + clip.bounds.height)
         documentHeight = doc.frame.height
+        // The page's layout can take longer than any timer guess: restore the moment the content resizes.
+        stopObserving()
+        doc.postsFrameChangedNotifications = true
+        frameObserver = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification, object: doc, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.restore() }
+        }
         ConversationDiagnostics.note(
             "page load: capture flipped=\(doc.isFlipped) doc=\(Int(doc.frame.height)) offset=\(Int(offsetFromTop)) "
             + "view=\(Int(clip.bounds.height)) fromBottom=\(Int(distanceFromBottom ?? 0))")
@@ -574,6 +582,7 @@ private final class ConversationScroller {
         let wantedFromTop = max(0, doc.frame.height - clip.bounds.height - distance)
         let currentFromTop = doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
         distanceFromBottom = nil
+        stopObserving()
         let y = doc.isFlipped ? wantedFromTop : doc.frame.height - clip.bounds.height - wantedFromTop
         ConversationDiagnostics.note(
             "page load: restore doc \(Int(documentHeight))->\(Int(doc.frame.height)) offset \(Int(currentFromTop))->\(Int(wantedFromTop))")
@@ -584,7 +593,17 @@ private final class ConversationScroller {
         return true
     }
 
-    func cancel() { distanceFromBottom = nil }
+    func cancel() {
+        distanceFromBottom = nil
+        stopObserving()
+    }
+
+    private var frameObserver: (any NSObjectProtocol)?
+
+    private func stopObserving() {
+        if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
+        frameObserver = nil
+    }
 }
 
 /// Latest probe readings, kept off `@State` so a scroll does not re-evaluate the body each frame.
@@ -785,12 +804,9 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     private func keepPlaceForPage() {
         let scroller = metrics.scroller
         scroller.capture()
+        // The restore itself runs when the content resizes; this only gives up if it never does.
         Task { @MainActor in
-            for milliseconds in [0, 50, 100] {
-                try? await Task.sleep(for: .milliseconds(milliseconds))
-                _ = scroller.restore()
-            }
-            try? await Task.sleep(for: .milliseconds(250))
+            try? await Task.sleep(for: .seconds(2))
             scroller.cancel()
         }
     }
