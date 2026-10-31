@@ -531,6 +531,12 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
     }
 }
 
+/// Where the host hears about page loads (the app writes them to its perf log); nil elsewhere.
+public enum ConversationDiagnostics {
+    nonisolated(unsafe) public static var sink: ((String) -> Void)?
+    static func note(_ message: @autoclosure () -> String) { sink?(message()) }
+}
+
 /// Keeps the reader's place when a page lands above the viewport, by holding the distance from the
 /// bottom of the content. `scrollTo(firstRow, anchor: .top)` was wrong: loading starts up to a
 /// viewport BEFORE the top, so the old first row sits above the viewport and pinning it to the top
@@ -543,10 +549,19 @@ private final class ConversationScroller {
 
     /// Call just before the page's rows are laid out.
     func capture() {
-        guard let scrollView, let doc = scrollView.documentView, doc.isFlipped else { distanceFromBottom = nil; return }
+        guard let scrollView, let doc = scrollView.documentView else {
+            ConversationDiagnostics.note("page load: no scroll view to hold the place")
+            distanceFromBottom = nil
+            return
+        }
         let clip = scrollView.contentView
-        distanceFromBottom = doc.frame.height - (clip.bounds.origin.y + clip.bounds.height)
+        // Flipped documents measure the offset from the top; unflipped ones from the bottom.
+        let offsetFromTop = doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
+        distanceFromBottom = doc.frame.height - (offsetFromTop + clip.bounds.height)
         documentHeight = doc.frame.height
+        ConversationDiagnostics.note(
+            "page load: capture flipped=\(doc.isFlipped) doc=\(Int(doc.frame.height)) offset=\(Int(offsetFromTop)) "
+            + "view=\(Int(clip.bounds.height)) fromBottom=\(Int(distanceFromBottom ?? 0))")
     }
 
     /// Call once the page is laid out. Returns false while the content has not grown yet.
@@ -556,9 +571,13 @@ private final class ConversationScroller {
         guard let scrollView, let doc = scrollView.documentView else { distanceFromBottom = nil; return true }
         guard doc.frame.height != documentHeight else { return false }
         let clip = scrollView.contentView
-        let y = max(0, doc.frame.height - clip.bounds.height - distance)
+        let wantedFromTop = max(0, doc.frame.height - clip.bounds.height - distance)
+        let currentFromTop = doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
         distanceFromBottom = nil
-        if abs(clip.bounds.origin.y - y) > 0.5 {
+        let y = doc.isFlipped ? wantedFromTop : doc.frame.height - clip.bounds.height - wantedFromTop
+        ConversationDiagnostics.note(
+            "page load: restore doc \(Int(documentHeight))->\(Int(doc.frame.height)) offset \(Int(currentFromTop))->\(Int(wantedFromTop))")
+        if abs(currentFromTop - wantedFromTop) > 0.5 {
             clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
             scrollView.reflectScrolledClipView(clip)
         }
@@ -920,7 +939,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // Older pages load only while the reader is scrolling UP through history, never while
                 // the view is following the bottom: the newest items are always laid out already.
                 // An underfilled window does not load by itself (AC5): pages come only from scrolling up.
-                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight * 2.5
+                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight
                 guard nearTop else { return }
                 metrics.loadArmed = false
                 var tx = Transaction()
