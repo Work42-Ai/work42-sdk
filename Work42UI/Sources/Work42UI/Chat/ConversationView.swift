@@ -390,12 +390,10 @@ private struct ConversationTopOffsetKey: PreferenceKey {
 /// A programmatic scroll posts neither, so "only the user can unpin" still holds. Every historical
 /// "jumps off the bottom" bug in the chat traced back to using distance as a proxy for intent.
 private struct ConversationLiveScrollProbe: NSViewRepresentable {
-    let scroller: ConversationScroller
     let onLiveScrollChange: (Bool) -> Void
 
     func makeNSView(context: Context) -> NSView {
         let view = ProbeView()
-        view.scroller = scroller
         view.onLiveScrollChange = onLiveScrollChange
         return view
     }
@@ -406,7 +404,6 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
 
     private final class ProbeView: NSView {
         var onLiveScrollChange: ((Bool) -> Void)?
-        var scroller: ConversationScroller?
         // `deinit` is nonisolated, so these tokens are `nonisolated(unsafe)`: removal is thread-safe
         // and they are opaque and never mutated concurrently.
         nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
@@ -474,7 +471,6 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
         private func bindScrollViewIfNeeded() {
             guard foundScrollView == nil, let scrollView = resolveScrollView() else { return }
             foundScrollView = scrollView
-            scroller?.scrollView = scrollView
             let center = NotificationCenter.default
             observers = [
                 center.addObserver(
@@ -531,47 +527,9 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
     }
 }
 
-/// Keeps the reader's place when a page lands above the viewport, by holding the distance from the
-/// bottom of the content. `scrollTo(firstRow, anchor: .top)` was wrong: loading starts up to a
-/// viewport BEFORE the top, so the old first row sits above the viewport and pinning it to the top
-/// edge moved the reader by up to a screen ("jumps to other content").
-@MainActor
-private final class ConversationScroller {
-    weak var scrollView: NSScrollView?
-    private var distanceFromBottom: CGFloat?
-    private var documentHeight: CGFloat = 0
-
-    /// Call just before the page's rows are laid out.
-    func capture() {
-        guard let scrollView, let doc = scrollView.documentView, doc.isFlipped else { distanceFromBottom = nil; return }
-        let clip = scrollView.contentView
-        distanceFromBottom = doc.frame.height - (clip.bounds.origin.y + clip.bounds.height)
-        documentHeight = doc.frame.height
-    }
-
-    /// Call once the page is laid out. Returns false while the content has not grown yet.
-    @discardableResult
-    func restore() -> Bool {
-        guard let distance = distanceFromBottom else { return true }
-        guard let scrollView, let doc = scrollView.documentView else { distanceFromBottom = nil; return true }
-        guard doc.frame.height != documentHeight else { return false }
-        let clip = scrollView.contentView
-        let y = max(0, doc.frame.height - clip.bounds.height - distance)
-        distanceFromBottom = nil
-        if abs(clip.bounds.origin.y - y) > 0.5 {
-            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
-            scrollView.reflectScrolledClipView(clip)
-        }
-        return true
-    }
-
-    func cancel() { distanceFromBottom = nil }
-}
-
 /// Latest probe readings, kept off `@State` so a scroll does not re-evaluate the body each frame.
 @MainActor
 private final class ConversationScrollMetrics {
-    let scroller = ConversationScroller()
     var bottomDistance: CGFloat = .infinity
     var topOffset: CGFloat = .infinity
     /// False while a page load is in flight: every trigger that arrives meanwhile is DROPPED, not
@@ -691,7 +649,6 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     /// land when it ends: inserting rows mid-gesture re-lays out the stack and fights the scroll.
     @State private var heldCount: Int?
     @State private var metrics = ScrollMetrics()
-    private var scroller: ConversationScroller { metrics.scroller }
 
     /// How many items are on screen: all of them, or the count held while the user scrolls.
     private var shownCount: Int { min(items.count, heldCount ?? items.count) }
@@ -753,36 +710,6 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             dividers: ConversationLayout.dividerBefore(entries: windowDated, leading: from == 0),
             actors: actors
         )
-    }
-
-    // MARK: Keeping the reader's place
-
-    /// A page is about to be laid out above the viewport: remember the distance from the bottom and put
-    /// it back once the rows are in. Reports only fire when a value changes, so it also retries on the
-    /// next run-loop turns, and gives up after 0.4s so loading is never left disarmed.
-    private func keepPlaceForPage() {
-        let scroller = metrics.scroller
-        scroller.capture()
-        Task { @MainActor in
-            for milliseconds in [0, 50, 100] {
-                try? await Task.sleep(for: .milliseconds(milliseconds))
-                _ = scroller.restore()
-            }
-            try? await Task.sleep(for: .milliseconds(250))
-            scroller.cancel()
-        }
-    }
-
-    private func restorePlaceIfPageLanded() {
-        guard metrics.pageLanded else { return }
-        _ = metrics.scroller.restore()
-    }
-
-    /// The page's layout reported: put the reader back where they were, then allow the next page.
-    private func rearmAfterPage() {
-        guard metrics.pageLanded, metrics.scroller.restore() else { return }
-        metrics.pageLanded = false
-        metrics.loadArmed = true
     }
 
     // MARK: Body
@@ -878,7 +805,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 }
             )
             .background(
-                ConversationLiveScrollProbe(scroller: scroller) { scrolling in
+                ConversationLiveScrollProbe { scrolling in
                     isLiveScrolling = scrolling
                     if scrolling {
                         metrics.userHasScrolled = true
@@ -896,7 +823,6 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             // or our own scrollTo must never take the view away from the bottom.
             .onPreferenceChange(ConversationBottomDistanceKey.self) { distance in
                 guard distance.isFinite else { return }
-                restorePlaceIfPageLanded()
                 metrics.bottomDistance = distance
                 let outcome = ConversationPinning.resolve(
                     pinned: isPinnedToBottom, distance: distance, isUserScrolling: isLiveScrolling)
@@ -912,7 +838,10 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 if !metrics.loadArmed {
                     // The in-flight page has landed: this report comes from the layout that placed
                     // it. Re-arm, but let the NEXT scroll frame decide whether another page is due.
-                    rearmAfterPage()
+                    if metrics.pageLanded {
+                        metrics.pageLanded = false
+                        metrics.loadArmed = true
+                    }
                     return
                 }
                 let hidden = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: renderCount)
@@ -920,7 +849,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // Older pages load only while the reader is scrolling UP through history, never while
                 // the view is following the bottom: the newest items are always laid out already.
                 // An underfilled window does not load by itself (AC5): pages come only from scrolling up.
-                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight * 2.5
+                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight
                 guard nearTop else { return }
                 metrics.loadArmed = false
                 var tx = Transaction()
@@ -970,15 +899,18 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 }
                 // The page's rows are in this update; the next top-offset report re-arms loading.
                 if !metrics.loadArmed { metrics.pageLanded = true }
-                // The rows are not laid out yet: remember the distance from the bottom now, restore
-                // it from the first top-offset report after that layout.
-                keepPlaceForPage()
+                let previousTop = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: oldCount)
+                guard items.indices.contains(previousTop) else { return }
+                var tx = Transaction()
+                tx.disablesAnimations = true
+                withTransaction(tx) {
+                    proxy.scrollTo(items[previousTop].id, anchor: .top)
+                }
             }
             .onChange(of: resetKey) { _, _ in
                 isPinnedToBottom = true
                 heldCount = nil
                 renderCount = pageSize
-                metrics.scroller.cancel()
                 lastItemCount = items.count
                 seenCount = items.count
                 metrics.userHasScrolled = false
