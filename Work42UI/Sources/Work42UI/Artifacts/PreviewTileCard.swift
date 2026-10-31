@@ -14,14 +14,14 @@ public enum PreviewTileSizeMode: Equatable {
     case chat(width: CGFloat)
     case thumbnail
 
-    var cardWidth: CGFloat? {
+    public var cardWidth: CGFloat? {
         switch self {
         case .chat(let width): width
         case .thumbnail: nil
         }
     }
 
-    var height: CGFloat {
+    public var height: CGFloat {
         switch self {
         case .chat: 100
         case .thumbnail: 100
