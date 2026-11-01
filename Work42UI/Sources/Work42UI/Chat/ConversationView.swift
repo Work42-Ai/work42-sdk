@@ -988,7 +988,11 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                             labelsMe: labels == .always
                         ))
                         .id(item.id)
-                        .padding(.top, isFirst ? 0 : spacing(before: isRunStart, hasDivider: layout.dividers.contains(item.id)))
+                        .padding(.top, isFirst ? 0 : ConversationLayout.gapBefore(
+                            hasDivider: layout.dividers.contains(item.id), hasActor: actor != nil,
+                            isRunStart: isRunStart,
+                            previousIsMe: layout.actors[items[key.index - 1].id]?.isMe ?? false,
+                            rowSpacing: rowSpacing, runSpacing: runSpacing))
                         // Rows land instantly: no insert/remove animation inside the list.
                         .transition(.identity)
                     }
@@ -1168,12 +1172,6 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         var tx = Transaction()
         tx.disablesAnimations = true
         withTransaction(tx) { renderCount = pageSize }
-    }
-
-    private func spacing(before isRunStart: Bool, hasDivider: Bool) -> CGFloat {
-        if hasDivider { return rowSpacing }
-        if let runSpacing, !isRunStart { return runSpacing }
-        return rowSpacing
     }
 
     private func jumpToLatest(_ proxy: ScrollViewProxy) -> some View {

@@ -14,6 +14,38 @@ struct ConversationLayoutTests {
         }
     }
 
+    // MARK: Gap above a row (WOR-557)
+
+    private func gap(
+        divider: Bool = false, actor: Bool, runStart: Bool = true, previousIsMe: Bool = false, run: CGFloat? = 16
+    ) -> CGFloat {
+        ConversationLayout.gapBefore(
+            hasDivider: divider, hasActor: actor, isRunStart: runStart, previousIsMe: previousIsMe,
+            rowSpacing: 28, runSpacing: run)
+    }
+
+    @Test func rowsWithoutAnActorSitAtTheBlockGapInsideATurn() {
+        #expect(gap(actor: false) == 16)
+    }
+
+    @Test func aRowWithoutAnActorAfterYourMessageKeepsTheTurnGap() {
+        #expect(gap(actor: false, previousIsMe: true) == 28)
+    }
+
+    @Test func rowsWithAnActorKeepTheRunRule() {
+        #expect(gap(actor: true, runStart: true) == 28)
+        #expect(gap(actor: true, runStart: false) == 16)
+    }
+
+    @Test func aDateDividerKeepsTheTurnGap() {
+        #expect(gap(divider: true, actor: false) == 28)
+    }
+
+    @Test func withoutARunGapEveryRowUsesTheRowGap() {
+        #expect(gap(actor: false, run: nil) == 28)
+        #expect(gap(actor: true, runStart: false, run: nil) == 28)
+    }
+
     // MARK: Labeled mode
 
     @Test func twoActorsAreNotLabeled() {
