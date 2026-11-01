@@ -8,26 +8,9 @@
 import AppKit
 import SwiftUI
 
-/// The two homes of a tile card. Chat resolves an explicit width upstream; a list tile fills the list's width. Both have the
-/// same fixed height, so a card can never churn list layout.
-public enum PreviewTileSizeMode: Equatable {
-    case chat(width: CGFloat)
-    case thumbnail
-
-    public var cardWidth: CGFloat? {
-        switch self {
-        case .chat(let width): width
-        case .thumbnail: nil
-        }
-    }
-
-    public var height: CGFloat {
-        switch self {
-        case .chat: 100
-        case .thumbnail: 100
-        }
-    }
-}
+/// The two homes of a tile card: `ArtifactPreviewCard.SizeMode`, where the type has lived since SDK 2.10 (keeping it
+/// there keeps ABI 14).
+public typealias PreviewTileSizeMode = ArtifactPreviewCard.SizeMode
 
 @MainActor
 public struct PreviewTileCard<Accessory: View>: View {

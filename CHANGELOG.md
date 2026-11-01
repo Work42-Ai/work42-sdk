@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.11.0
+
+- **ABI generation stays `14`.** Additions only: no public symbol was removed and no stored property was added to an
+  existing public type, so plugins built for 2.10.x need no rebuild. `ArtifactPreviewCard.SizeMode` keeps its place;
+  `PreviewTileSizeMode` is a second name for it.
+- **`PreviewTileCard`** (WOR-535): the artifact card's tile made general (a tilted slab with an SF Symbol, title,
+  subtitle with an optional `subtitleColor`, an accessory and one primary glass button). `ArtifactPreviewCard` now draws it.
+- **`ChatMetrics`** (WOR-470): one spacing system for a chat (side margin, turn and block gaps, reply line height,
+  composer and card insets). `ConversationMetrics` reads from it; `avatarGap` is now 10 pt (was 8).
+- **`CodePanel`, `CodePanelAction`, `ChangeCountsText`** (WOR-516, WOR-517): the design system's code card, with a header,
+  accent-tinted buttons and green and red change counts.
+- **Selectable tables** (WOR-478): Markdown tables render as selectable text in the prose run, and
+  `ProseCopyText.plainText(of:range:)` copies them tab-separated.
+- **`ConversationView`**: follows content growth while pinned, with a Latest pill (WOR-473); older pages keep the reader's
+  place, measured from the bottom, and load one page per arrival at the top (WOR-553, WOR-554: `ConversationPaging`,
+  `ConversationHold`, `ConversationPinning`); rows without a participant sit at the block gap inside a turn
+  (`ConversationLayout.gapBefore`, WOR-557); a send while pinned follows without an animated scroll (WOR-558).
+  `ConversationDiagnostics.timingSink` reports its own layout and scroll timings.
+- **`ConversationMessageRow`** can caption another participant (WOR-545).
+
 ## 2.10.1
 
 - **ABI generation stays `14`.** Documentation only; no API changed.
