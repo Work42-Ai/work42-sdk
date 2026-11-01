@@ -50,8 +50,8 @@ extension MarkdownUI.Theme {
             }
             .paragraph { configuration in
                 configuration.label
-                    .lineSpacing(6)
-                    .padding(.bottom, DT.s12)   // air BETWEEN paragraphs
+                    .lineSpacing(ChatMetrics.bodyLineSpacing)
+                    .padding(.bottom, ChatMetrics.paragraphSpacing)   // air BETWEEN paragraphs
             }
 
             // MARK: Inline marks

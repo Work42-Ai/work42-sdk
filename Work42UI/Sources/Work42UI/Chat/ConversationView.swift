@@ -170,14 +170,16 @@ public struct ConversationBubble<Content: View>: View {
 /// The measurements every conversation row shares, so the chat and the transcript line up.
 public enum ConversationMetrics {
     /// Diameter of a run's avatar.
-    public static let avatarSize: CGFloat = 28
+    public static let avatarSize: CGFloat = ChatMetrics.avatarSize
     /// Gap between the avatar and the name.
-    public static let avatarGap: CGFloat = 8
-    /// Space between a run's header and its first line, and between its lines.
+    public static let avatarGap: CGFloat = ChatMetrics.avatarGap
+    /// Space between a run's header and its first line.
+    public static let headerToBody: CGFloat = ChatMetrics.headerToBody
+    /// Tight space between consecutive lines of one run, for transcripts that want it (meet42).
     public static let lineSpacing: CGFloat = 6
     /// Inner padding of my accent card.
-    public static let cardHorizontalPadding: CGFloat = 16
-    public static let cardVerticalPadding: CGFloat = 12
+    public static let cardHorizontalPadding: CGFloat = ChatMetrics.myCardPadding.leading
+    public static let cardVerticalPadding: CGFloat = ChatMetrics.myCardPadding.top
 }
 
 /// One message, laid out the same in the agent chat and the meeting transcript (WOR-420):
@@ -192,6 +194,9 @@ public enum ConversationMetrics {
 public struct ConversationMessageRow<Content: View>: View {
     let context: ConversationRowContext
     let logo: Image?
+    let detail: AnyView?
+    let bubble: Bool
+    let onOpenName: (() -> Void)?
     @ViewBuilder let content: () -> Content
 
     @Environment(\.colorScheme) private var colorScheme
@@ -207,8 +212,29 @@ public struct ConversationMessageRow<Content: View>: View {
         logo: Image? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
+        self.init(context: context, logo: logo, detail: nil, bubble: false, onOpenName: nil, content: content)
+    }
+
+    /// A message from another participant, captioned and set apart from this chat's own agent.
+    ///
+    /// - Parameters:
+    ///   - detail: Drawn between the name and the time, in the header: where the message came from (the model,
+    ///     and the session when it is another one).
+    ///   - bubble: Sets the body in the neutral leading bubble the meeting transcript uses for another speaker.
+    ///   - onOpenName: Makes the name a plain button (it opens whatever the participant is).
+    public init(
+        context: ConversationRowContext,
+        logo: Image?,
+        detail: AnyView?,
+        bubble: Bool,
+        onOpenName: (() -> Void)?,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.context = context
         self.logo = logo
+        self.detail = detail
+        self.bubble = bubble
+        self.onOpenName = onOpenName
         self.content = content
     }
 
@@ -226,10 +252,24 @@ public struct ConversationMessageRow<Content: View>: View {
                     .frame(maxWidth: containerWidth > 0 ? containerWidth * 0.75 : nil, alignment: .trailing)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             } else {
-                VStack(alignment: .leading, spacing: ConversationMetrics.lineSpacing) {
+                VStack(alignment: .leading, spacing: ConversationMetrics.headerToBody) {
                     if context.isRunStart { header(actor) }
-                    content()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if bubble {
+                        // The same neutral tint and 12 pt corner as `ChatBubble` (`.neutral`), hugging its
+                        // text up to 85% of the row, so another participant reads apart from this chat's agent.
+                        content()
+                            .padding(.horizontal, ConversationMetrics.cardHorizontalPadding)
+                            .padding(.vertical, ConversationMetrics.cardVerticalPadding)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.secondary.opacity(0.10))
+                            )
+                            .frame(maxWidth: containerWidth > 0 ? containerWidth * 0.85 : nil, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        content()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
         } else {
@@ -241,15 +281,28 @@ public struct ConversationMessageRow<Content: View>: View {
         HStack(spacing: ConversationMetrics.avatarGap) {
             ConversationAvatar(actor: actor, logo: logo)
             // The name in the actor's colour, like the avatar (resolved so near-black stays legible).
-            Text(actor.name)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(DT.resolveChipTint(actor.color, colorScheme: colorScheme).foreground)
-                .lineLimit(1)
+            nameView(actor)
+            if let detail { detail }
             if let date = context.date {
                 Text(conversationTimeFormatter.string(from: date))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
+        }
+    }
+
+    /// The actor's name; a plain button when the host says what opening it does.
+    @ViewBuilder
+    private func nameView(_ actor: ConversationActor) -> some View {
+        let name = Text(actor.name)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(DT.resolveChipTint(actor.color, colorScheme: colorScheme).foreground)
+            .lineLimit(1)
+        if let onOpenName {
+            Button(action: onOpenName) { name }
+                .buttonStyle(.plain)
+        } else {
+            name
         }
     }
 }
@@ -388,10 +441,12 @@ private struct ConversationTopOffsetKey: PreferenceKey {
 /// A programmatic scroll posts neither, so "only the user can unpin" still holds. Every historical
 /// "jumps off the bottom" bug in the chat traced back to using distance as a proxy for intent.
 private struct ConversationLiveScrollProbe: NSViewRepresentable {
+    let scroller: ConversationScroller
     let onLiveScrollChange: (Bool) -> Void
 
     func makeNSView(context: Context) -> NSView {
         let view = ProbeView()
+        view.scroller = scroller
         view.onLiveScrollChange = onLiveScrollChange
         return view
     }
@@ -402,6 +457,7 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
 
     private final class ProbeView: NSView {
         var onLiveScrollChange: ((Bool) -> Void)?
+        var scroller: ConversationScroller?
         // `deinit` is nonisolated, so these tokens are `nonisolated(unsafe)`: removal is thread-safe
         // and they are opaque and never mutated concurrently.
         nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
@@ -440,35 +496,16 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
             bindScrollViewIfNeeded()
         }
 
-        /// The `NSScrollView` this probe belongs to.
-        ///
-        /// The probe is a `.background` of the SwiftUI `ScrollView` and is sized to fill it, so it is a
-        /// SIBLING of the scroll view, not a descendant: walking up its superviews never reaches an
-        /// `NSScrollView`. Instead take the smallest scroll view in the window whose frame contains
-        /// the probe's centre.
+        /// The `NSScrollView` this probe belongs to: the one it is inside. The probe is a background of the scroll CONTENT, so
+        /// `enclosingScrollView` is the conversation's own scroller, never a scroller nested in a row (WOR-553).
         private func resolveScrollView() -> NSScrollView? {
-            if let foundScrollView { return foundScrollView }
-            guard let content = window?.contentView else { return nil }
-            let centre = convert(NSPoint(x: bounds.midX, y: bounds.midY), to: nil)
-            var best: NSScrollView?
-            var bestArea = CGFloat.infinity
-            func visit(_ view: NSView) {
-                if let scroll = view as? NSScrollView {
-                    let frame = scroll.convert(scroll.bounds, to: nil)
-                    if frame.contains(centre), frame.width * frame.height < bestArea {
-                        best = scroll
-                        bestArea = frame.width * frame.height
-                    }
-                }
-                view.subviews.forEach(visit)
-            }
-            visit(content)
-            return best
+            foundScrollView ?? enclosingScrollView
         }
 
         private func bindScrollViewIfNeeded() {
             guard foundScrollView == nil, let scrollView = resolveScrollView() else { return }
             foundScrollView = scrollView
+            scroller?.scrollView = scrollView
             let center = NotificationCenter.default
             observers = [
                 center.addObserver(
@@ -525,27 +562,189 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
     }
 }
 
+/// Where the host hears about page loads (the app writes them to its perf log); nil elsewhere.
+public enum ConversationDiagnostics {
+    nonisolated(unsafe) public static var sink: ((String) -> Void)?
+    static func note(_ message: @autoclosure () -> String) { sink?(message()) }
+
+    /// Where the host hears how long the conversation's own main-thread work took, as (name, ms); nil when nobody listens
+    /// (the app feeds its chat frame ledger from here while a stretch runs, WOR-555). One nil check otherwise.
+    nonisolated(unsafe) public static var timingSink: ((String, Double) -> Void)?
+
+    /// How many rows the conversation has laid out right now, for the hitch record.
+    nonisolated(unsafe) public static var windowRows = 0
+
+    static func timed<T>(_ name: String, _ body: () -> T) -> T {
+        guard let timingSink else { return body() }
+        let start = DispatchTime.now().uptimeNanoseconds
+        let result = body()
+        timingSink(name, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+        return result
+    }
+}
+
+/// Holds the reader's place while an older page lands above the viewport (WOR-553).
+///
+/// The old restore captured AFTER the window had changed, found its scroll view by searching the view tree (it could pick
+/// a scroller nested in a row), applied once, and let a timer count a failure as success. This holds the distance from the
+/// bottom of the content through EVERY layout of the load: it is captured synchronously, before the window grows, from the
+/// scroll view the probe sits in; it is re-applied the moment the document's frame changes (KVO, so in the same pass as the
+/// layout, before the next display) and by a per-frame loop for as long as the content keeps changing; it ends only when the
+/// content has been still after at least one correction (`ConversationHold`), and it says so in the diagnostics when it
+/// could not hold the place.
+@MainActor
+private final class ConversationScroller {
+    weak var scrollView: NSScrollView?
+    private var distanceFromBottom: CGFloat?
+    private var lastHeight: CGFloat = 0
+    private var applied = 0
+    private var idleTicks = 0
+    private var startedAt: CFTimeInterval = 0
+    private var generation = 0
+    private var onFinish: ((Int, String) -> Void)?
+    private var frameObservation: NSKeyValueObservation?
+    private var frameObserver: (any NSObjectProtocol)?
+    private var loop: Task<Void, Never>?
+
+    var isHolding: Bool { distanceFromBottom != nil }
+
+    private func offsetFromTop(_ scrollView: NSScrollView, _ doc: NSView) -> CGFloat {
+        let clip = scrollView.contentView
+        // Flipped documents measure the offset from the top; unflipped ones from the bottom.
+        return doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
+    }
+
+    /// Call synchronously, BEFORE the window grows. False when there is no scroll view to hold the place in.
+    @discardableResult
+    func begin(generation: Int, onFinish: @escaping (Int, String) -> Void) -> Bool {
+        finish(outcome: nil)
+        guard let scrollView, let doc = scrollView.documentView else {
+            ConversationDiagnostics.note("page load #\(generation): failed: no scroll view to hold the place")
+            return false
+        }
+        let clip = scrollView.contentView
+        let top = offsetFromTop(scrollView, doc)
+        self.generation = generation
+        self.onFinish = onFinish
+        distanceFromBottom = doc.frame.height - (top + clip.bounds.height)
+        lastHeight = doc.frame.height
+        applied = 0
+        idleTicks = 0
+        startedAt = CACurrentMediaTime()
+        doc.postsFrameChangedNotifications = true
+        // The document's frame is key-value observable and set synchronously by layout: this runs in the same pass.
+        frameObservation = doc.observe(\.frame, options: [.new]) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.contentChanged() }
+        }
+        frameObserver = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification, object: doc, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.contentChanged() }
+        }
+        loop = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(16))
+                if Task.isCancelled { return }
+                self?.tick()
+            }
+        }
+        ConversationDiagnostics.note(
+            "page load #\(generation): capture doc=\(Int(doc.frame.height)) offset=\(Int(top)) view=\(Int(clip.bounds.height)) "
+            + "fromBottom=\(Int(distanceFromBottom ?? 0))")
+        return true
+    }
+
+    /// The reader started a new gesture: stop holding.
+    func readerBegan() {
+        guard isHolding else { return }
+        finish(outcome: "cancelled: the reader scrolled")
+    }
+
+    func cancel() {
+        finish(outcome: nil)
+    }
+
+    private func contentChanged() {
+        guard isHolding, let scrollView, let doc = scrollView.documentView, doc.frame.height != lastHeight else { return }
+        apply(scrollView, doc)
+    }
+
+    private func apply(_ scrollView: NSScrollView, _ doc: NSView) {
+        ConversationDiagnostics.timed("chat.hold.apply") { applyNow(scrollView, doc) }
+    }
+
+    private func applyNow(_ scrollView: NSScrollView, _ doc: NSView) {
+        guard let distance = distanceFromBottom else { return }
+        let clip = scrollView.contentView
+        let height = doc.frame.height
+        let wanted = ConversationHold.offset(documentHeight: height, viewportHeight: clip.bounds.height, distanceFromBottom: distance)
+        let current = offsetFromTop(scrollView, doc)
+        let y = doc.isFlipped ? wanted : height - clip.bounds.height - wanted
+        if abs(current - wanted) > 0.5 {
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+            scrollView.reflectScrolledClipView(clip)
+        }
+        applied += 1
+        idleTicks = 0
+        ConversationDiagnostics.note(
+            "page load #\(generation): apply \(applied) doc \(Int(lastHeight))->\(Int(height)) offset \(Int(current))->\(Int(wanted))")
+        lastHeight = height
+    }
+
+    private func tick() {
+        guard isHolding, let scrollView, let doc = scrollView.documentView else { return }
+        let changed = doc.frame.height != lastHeight
+        if !changed { idleTicks += 1 }
+        switch ConversationHold.step(
+            contentChanged: changed, applied: applied, idleTicks: idleTicks,
+            elapsed: CACurrentMediaTime() - startedAt, readerScrolling: false
+        ) {
+        case .apply: apply(scrollView, doc)
+        case .keepWaiting: break
+        case .settled: finish(outcome: "settled after \(applied) apply, error \(Int(abs(currentDistanceError(scrollView, doc))))")
+        case .gaveUp: finish(outcome: "failed: no layout change arrived, the place was not held")
+        case .cancelled: finish(outcome: "cancelled")
+        }
+    }
+
+    /// How far the distance from the bottom is from the held one now (0 when the hold is exact).
+    private func currentDistanceError(_ scrollView: NSScrollView, _ doc: NSView) -> CGFloat {
+        guard let distance = distanceFromBottom else { return 0 }
+        let now = doc.frame.height - (offsetFromTop(scrollView, doc) + scrollView.contentView.bounds.height)
+        return now - distance
+    }
+
+    /// End the hold. `outcome` nil is a silent end (a new hold starts, or the conversation was reset).
+    private func finish(outcome: String?) {
+        guard isHolding || loop != nil else { return }
+        loop?.cancel()
+        loop = nil
+        frameObservation?.invalidate()
+        frameObservation = nil
+        if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
+        frameObserver = nil
+        distanceFromBottom = nil
+        let done = onFinish
+        onFinish = nil
+        if let outcome {
+            ConversationDiagnostics.note("page load #\(generation): \(outcome)")
+            done?(generation, outcome)
+        }
+    }
+}
+
 /// Latest probe readings, kept off `@State` so a scroll does not re-evaluate the body each frame.
 @MainActor
 private final class ConversationScrollMetrics {
+    let scroller = ConversationScroller()
     var bottomDistance: CGFloat = .infinity
     var topOffset: CGFloat = .infinity
-    /// False while a page load is in flight: every trigger that arrives meanwhile is DROPPED, not
-    /// queued. Re-armed only once the page has landed (see `pageLanded`).
-    var loadArmed = true
-    /// Set when the new page's rows and re-anchor were applied; the next top-offset report (which
-    /// comes after that layout) re-arms loading. Re-arming any earlier let a scroll event in the
-    /// same frame start a second load before the first one had laid out.
-    var pageLanded = false
-    /// The `renderCount` an append-driven growth is about to set. The re-anchor that keeps a reader's
-    /// place is for older PAGES loading above the viewport; growth from appended lines must not
-    /// re-anchor (it would scroll to the top of the window and cascade into page loads).
+    /// When older pages may load (WOR-554): one per reader arrival at the top.
+    var paging = ConversationPaging()
+    /// The `renderCount` an append-driven growth is about to set. Growth from appended lines is not a page load.
     var appendGrowthTarget: Int?
     /// The pending trim back to one page after re-pinning; cancelled when the reader scrolls again.
     var trimTask: Task<Void, Never>?
-    /// True once the user has scrolled by hand. The first layout pass reports the top before the
-    /// bottom anchor applies, so without this a fresh open would load a page it does not need.
-    var userHasScrolled = false
 }
 
 // MARK: - Labels
@@ -609,8 +808,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         pageSize: Int,
         resetKey: AnyHashable = 0,
         scrollToBottomTrigger: Int = 0,
-        rowSpacing: CGFloat = 12,
-        runSpacing: CGFloat? = nil,
+        rowSpacing: CGFloat = ChatMetrics.turnSpacing,
+        runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,
@@ -647,6 +846,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     /// land when it ends: inserting rows mid-gesture re-lays out the stack and fights the scroll.
     @State private var heldCount: Int?
     @State private var metrics = ScrollMetrics()
+    private var scroller: ConversationScroller { metrics.scroller }
 
     /// How many items are on screen: all of them, or the count held while the user scrolls.
     private var shownCount: Int { min(items.count, heldCount ?? items.count) }
@@ -656,7 +856,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     private static var scrollSpace: String { "conversationScroll" }
     private static var bottomAnchorID: String { "conversation-bottom-anchor" }
     /// Within this many points of the bottom edge counts as "at the bottom".
-    private static var bottomPinThreshold: CGFloat { 24 }
+    private static var bottomPinThreshold: CGFloat { ConversationPinning.threshold }
 
     // MARK: Layout
 
@@ -710,6 +910,27 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         )
     }
 
+    // MARK: Keeping the reader's place
+
+    /// A page may load: hold the reader's place (captured now, before the window grows), then grow the window. With no
+    /// scroll view to hold the place in, the paging state treats the page as finished.
+    private func loadOlderPage(generation: Int) {
+        let started = scroller.begin(generation: generation) { done, outcome in
+            metrics.paging.pageDone(
+                generation: done, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                placed: outcome.hasPrefix("settled"))
+        }
+        if !started {
+            metrics.paging.pageDone(
+                generation: generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight, placed: false)
+        }
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx) {
+            renderCount = ConversationLayout.grownRenderCount(current: renderCount, pageSize: pageSize)
+        }
+    }
+
     // MARK: Body
 
     public var body: some View {
@@ -720,7 +941,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         // the data element on every placement pass, and for a multi-word enum that copy plus its
         // ARC traffic dominated a fast scroll in the agent chat. The row looks its item up.
         let rowKeys = (windowStart..<shown).map { RowKey(index: $0, id: items[$0].id) }
-        let layout = layout(windowStart: windowStart)
+        let layout = ConversationDiagnostics.timed("chat.windowLayout") { self.layout(windowStart: windowStart) }
+        ConversationDiagnostics.windowRows = rowKeys.count
 
         return ScrollViewReader { proxy in
             ScrollView {
@@ -766,7 +988,11 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                             labelsMe: labels == .always
                         ))
                         .id(item.id)
-                        .padding(.top, isFirst ? 0 : spacing(before: isRunStart, hasDivider: layout.dividers.contains(item.id)))
+                        .padding(.top, isFirst ? 0 : ConversationLayout.gapBefore(
+                            hasDivider: layout.dividers.contains(item.id), hasActor: actor != nil,
+                            isRunStart: isRunStart,
+                            previousIsMe: layout.actors[items[key.index - 1].id]?.isMe ?? false,
+                            rowSpacing: rowSpacing, runSpacing: runSpacing))
                         // Rows land instantly: no insert/remove animation inside the list.
                         .transition(.identity)
                     }
@@ -783,10 +1009,25 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                             }
                         )
                 }
+                // The probe sits INSIDE the scroll content so it finds its own scroll view (WOR-553).
+                .background(
+                    ConversationLiveScrollProbe(scroller: scroller) { scrolling in
+                        isLiveScrolling = scrolling
+                        if scrolling {
+                            scroller.readerBegan()
+                            metrics.trimTask?.cancel()
+                            heldCount = items.count
+                        } else {
+                            heldCount = nil
+                            // A re-pin during the gesture left its trim for later.
+                            if isPinnedToBottom { scheduleTrim() }
+                        }
+                    }
+                )
                 // The row width every bubble may use, measured once here (the content padding is 18 a
                 // side), so bubbles do not each measure and re-layout on every append.
                 .environment(\.chatBubbleContainerWidth, max(0, viewportWidth - 36))
-                .padding(.horizontal, 18)
+                .padding(.horizontal, ChatMetrics.sideMargin)
                 .padding(.vertical, 18)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -802,60 +1043,34 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                         .onChange(of: viewport.size.width) { _, w in viewportWidth = w }
                 }
             )
-            .background(
-                ConversationLiveScrollProbe { scrolling in
-                    isLiveScrolling = scrolling
-                    if scrolling {
-                        metrics.userHasScrolled = true
-                        metrics.trimTask?.cancel()
-                        heldCount = items.count
-                    } else {
-                        heldCount = nil
-                        // A re-pin during the gesture left its trim for later.
-                        if isPinnedToBottom { scheduleTrim() }
-                    }
-                }
-            )
             // Distance may RE-pin (arriving back at the bottom is unambiguous, whatever the cause)
             // but may UNPIN only during a real gesture: content insertion, an animation settling
             // or our own scrollTo must never take the view away from the bottom.
-            .onPreferenceChange(ConversationBottomDistanceKey.self) { distance in
+            .onPreferenceChange(ConversationBottomDistanceKey.self) { distance in ConversationDiagnostics.timed("chat.pref.bottom") {
                 guard distance.isFinite else { return }
                 metrics.bottomDistance = distance
-                let pinned = distance <= Self.bottomPinThreshold
-                if pinned {
-                    if !isPinnedToBottom { isPinnedToBottom = true }
-                } else if isLiveScrolling, isPinnedToBottom {
-                    isPinnedToBottom = false
-                }
-            }
-            // Automatic older-page loading, once per arrival near the top.
-            .onPreferenceChange(ConversationTopOffsetKey.self) { top in
+                let outcome = ConversationPinning.resolve(
+                    pinned: isPinnedToBottom, distance: distance, isUserScrolling: isLiveScrolling)
+                if outcome.pinned != isPinnedToBottom { isPinnedToBottom = outcome.pinned }
+                // The content grew under a pinned reader (a row opened, an image landed, the working
+                // indicator appeared): follow it, frame by frame while it animates.
+                if outcome.follow { scrollToBottom(proxy, animated: false) }
+            } }
+            // Older pages load only on the reader's own upward scroll into the top threshold, once per arrival (WOR-554):
+            // a layout change, one of our own offsets or a downward move never loads anything.
+            .onPreferenceChange(ConversationTopOffsetKey.self) { top in ConversationDiagnostics.timed("chat.pref.top") {
                 guard top.isFinite else { return }
+                let previous = metrics.topOffset
                 metrics.topOffset = top
-                if !metrics.loadArmed {
-                    // The in-flight page has landed: this report comes from the layout that placed
-                    // it. Re-arm, but let the NEXT scroll frame decide whether another page is due.
-                    if metrics.pageLanded {
-                        metrics.pageLanded = false
-                        metrics.loadArmed = true
-                    }
-                    return
-                }
+                guard isLiveScrolling, !isPinnedToBottom else { return }
+                let direction: ConversationPaging.Direction =
+                    !previous.isFinite || top == previous ? .none : (top > previous ? .up : .down)
                 let hidden = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: renderCount)
-                guard hidden > 0 else { return }
-                // Older pages load only while the reader is scrolling UP through history, never while
-                // the view is following the bottom: the newest items are always laid out already.
-                // An underfilled window does not load by itself (AC5): pages come only from scrolling up.
-                let nearTop = metrics.userHasScrolled && !isPinnedToBottom && top > -viewportHeight
-                guard nearTop else { return }
-                metrics.loadArmed = false
-                var tx = Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) {
-                    renderCount = ConversationLayout.grownRenderCount(current: renderCount, pageSize: pageSize)
-                }
-            }
+                guard let generation = metrics.paging.readerMoved(
+                    offsetFromTop: max(0, -top), direction: direction, viewportHeight: viewportHeight, hasOlder: hidden > 0
+                ) else { return }
+                loadOlderPage(generation: generation)
+            } }
             // The scroll view starts at the bottom and STAYS there while content grows, as long as
             // the user has not scrolled away: following needs no scrollTo at all.
             .defaultScrollAnchor(.bottom)
@@ -886,40 +1101,34 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     renderCount += count - lastItemCount
                 }
             }
-            // A page was added above the viewport: keep the user's place by re-anchoring on the
-            // previously topmost row. Synchronous handler, so the proxy is live.
+            // Appended lines are not a page load. A page's hold was begun before the window grew (`loadOlderPage`).
             .onChange(of: renderCount) { oldCount, newCount in
-                guard newCount > oldCount else { return }
-                // Appended lines are not a page load: they neither land nor re-arm one in flight.
-                if metrics.appendGrowthTarget == newCount {
-                    metrics.appendGrowthTarget = nil
-                    return
-                }
-                // The page's rows are in this update; the next top-offset report re-arms loading.
-                if !metrics.loadArmed { metrics.pageLanded = true }
-                let previousTop = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: oldCount)
-                guard items.indices.contains(previousTop) else { return }
-                var tx = Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) {
-                    proxy.scrollTo(items[previousTop].id, anchor: .top)
-                }
+                guard newCount > oldCount, metrics.appendGrowthTarget == newCount else { return }
+                metrics.appendGrowthTarget = nil
             }
             .onChange(of: resetKey) { _, _ in
                 isPinnedToBottom = true
                 heldCount = nil
                 renderCount = pageSize
+                metrics.scroller.cancel()
                 lastItemCount = items.count
                 seenCount = items.count
-                metrics.userHasScrolled = false
-                metrics.loadArmed = true
-                metrics.pageLanded = false
+                metrics.paging.reset()
                 scrollToBottom(proxy, animated: false)
             }
             .onChange(of: scrollToBottomTrigger) { _, _ in
+                let wasPinned = isPinnedToBottom
                 isPinnedToBottom = true
                 heldCount = nil
                 seenCount = items.count
+                if wasPinned {
+                    // Already at the bottom (a send, a finished turn): the bottom anchor and the pinned follow
+                    // carry the new content. An animated scroll of our own fought them every frame, and an
+                    // immediate trim re-laid out the whole window while the new row appeared (WOR-558).
+                    scrollToBottom(proxy, animated: false)
+                    scheduleTrim()
+                    return
+                }
                 // Order matters (a chat bug fixed the hard way): scroll to the bottom of the CURRENT,
                 // not-yet-trimmed content first, THEN trim the window. Dropping rows above the
                 // viewport once we are at the bottom is invisible; trimming before or together with
@@ -941,8 +1150,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 ZStack {
                     if !isPinnedToBottom {
                         jumpToLatest(proxy)
-                            .padding(.bottom, 14)
-                            .transition(.opacity)
+                            .padding(.bottom, 12)
+                            .transition(.opacity.combined(with: .offset(y: 6)))
                     }
                 }
                 // Scoped to the pill. On the whole list it made every row change in the re-pin
@@ -974,15 +1183,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         withTransaction(tx) { renderCount = pageSize }
     }
 
-    private func spacing(before isRunStart: Bool, hasDivider: Bool) -> CGFloat {
-        if hasDivider { return rowSpacing }
-        if let runSpacing, !isRunStart { return runSpacing }
-        return rowSpacing
-    }
-
     private func jumpToLatest(_ proxy: ScrollViewProxy) -> some View {
-        let unseen = max(0, items.count - seenCount)
-        return Button {
+        Button {
             // Synchronous button action: a safe scroll site.
             trimWindow()
             isPinnedToBottom = true
@@ -990,23 +1192,20 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             scrollToBottom(proxy, animated: true)
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.down")
+                Image(systemName: "arrow.down")
                     .font(.system(size: DT.f11, weight: .semibold))
-                Text("Jump to latest")
-                    .font(.system(size: DT.f12, weight: .medium))
-                if unseen > 0 {
-                    Text("\(unseen)")
-                        .font(.system(size: DT.f10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(DT.systemAccent))
-                }
+                Text("Latest")
+                    .font(.system(size: DT.f13, weight: .medium))
             }
-            .padding(.horizontal, 4)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .glassCapsuleSurface()
+            .contentShape(Capsule())
         }
-        .glassSubtleCapsule(tint: DT.systemAccent)
+        .buttonStyle(.plain)
         .help("Scroll to the newest message")
+        .accessibilityLabel("Scroll to latest")
     }
 
     /// Scroll to the bottom anchor. MUST be called from a synchronous SwiftUI context (an
@@ -1035,8 +1234,8 @@ extension ConversationView where Footer == EmptyView {
         pageSize: Int,
         resetKey: AnyHashable = 0,
         scrollToBottomTrigger: Int = 0,
-        rowSpacing: CGFloat = 12,
-        runSpacing: CGFloat? = nil,
+        rowSpacing: CGFloat = ChatMetrics.turnSpacing,
+        runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
         actor: @escaping (Item) -> ConversationActor?,

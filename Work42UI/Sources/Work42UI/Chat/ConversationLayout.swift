@@ -6,6 +6,7 @@
 // goes, and the load-more window math. No SwiftUI, no isolation: callable from any context
 // and covered by `ConversationLayoutTests`.
 
+import CoreGraphics
 import Foundation
 
 /// One item of a conversation, reduced to what layout needs.
@@ -79,6 +80,19 @@ public nonisolated enum ConversationLayout {
             previousDate = date
         }
         return dividers
+    }
+
+    /// The gap above a row (WOR-557). A date divider keeps the row gap. A row with an actor takes the run gap
+    /// when it continues that actor's run. A row with no actor (tool activity, stage and switch lines) belongs
+    /// to the turn it sits in, so it takes the run gap too, unless the row before it is the local user's
+    /// message: that is a turn boundary and keeps the row gap.
+    public static func gapBefore(
+        hasDivider: Bool, hasActor: Bool, isRunStart: Bool, previousIsMe: Bool,
+        rowSpacing: CGFloat, runSpacing: CGFloat?
+    ) -> CGFloat {
+        guard !hasDivider, let runSpacing else { return rowSpacing }
+        if hasActor { return isRunStart ? rowSpacing : runSpacing }
+        return previousIsMe ? rowSpacing : runSpacing
     }
 
     // MARK: Load-more window
