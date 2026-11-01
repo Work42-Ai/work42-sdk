@@ -566,6 +566,21 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
 public enum ConversationDiagnostics {
     nonisolated(unsafe) public static var sink: ((String) -> Void)?
     static func note(_ message: @autoclosure () -> String) { sink?(message()) }
+
+    /// Where the host hears how long the conversation's own main-thread work took, as (name, ms); nil when nobody listens
+    /// (the app feeds its chat frame ledger from here while a stretch runs, WOR-555). One nil check otherwise.
+    nonisolated(unsafe) public static var timingSink: ((String, Double) -> Void)?
+
+    /// How many rows the conversation has laid out right now, for the hitch record.
+    nonisolated(unsafe) public static var windowRows = 0
+
+    static func timed<T>(_ name: String, _ body: () -> T) -> T {
+        guard let timingSink else { return body() }
+        let start = DispatchTime.now().uptimeNanoseconds
+        let result = body()
+        timingSink(name, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+        return result
+    }
 }
 
 /// Holds the reader's place while an older page lands above the viewport (WOR-553).
@@ -655,6 +670,10 @@ private final class ConversationScroller {
     }
 
     private func apply(_ scrollView: NSScrollView, _ doc: NSView) {
+        ConversationDiagnostics.timed("chat.hold.apply") { applyNow(scrollView, doc) }
+    }
+
+    private func applyNow(_ scrollView: NSScrollView, _ doc: NSView) {
         guard let distance = distanceFromBottom else { return }
         let clip = scrollView.contentView
         let height = doc.frame.height
@@ -921,7 +940,8 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         // the data element on every placement pass, and for a multi-word enum that copy plus its
         // ARC traffic dominated a fast scroll in the agent chat. The row looks its item up.
         let rowKeys = (windowStart..<shown).map { RowKey(index: $0, id: items[$0].id) }
-        let layout = layout(windowStart: windowStart)
+        let layout = ConversationDiagnostics.timed("chat.windowLayout") { self.layout(windowStart: windowStart) }
+        ConversationDiagnostics.windowRows = rowKeys.count
 
         return ScrollViewReader { proxy in
             ScrollView {
@@ -1021,7 +1041,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             // Distance may RE-pin (arriving back at the bottom is unambiguous, whatever the cause)
             // but may UNPIN only during a real gesture: content insertion, an animation settling
             // or our own scrollTo must never take the view away from the bottom.
-            .onPreferenceChange(ConversationBottomDistanceKey.self) { distance in
+            .onPreferenceChange(ConversationBottomDistanceKey.self) { distance in ConversationDiagnostics.timed("chat.pref.bottom") {
                 guard distance.isFinite else { return }
                 metrics.bottomDistance = distance
                 let outcome = ConversationPinning.resolve(
@@ -1030,10 +1050,10 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // The content grew under a pinned reader (a row opened, an image landed, the working
                 // indicator appeared): follow it, frame by frame while it animates.
                 if outcome.follow { scrollToBottom(proxy, animated: false) }
-            }
+            } }
             // Older pages load only on the reader's own upward scroll into the top threshold, once per arrival (WOR-554):
             // a layout change, one of our own offsets or a downward move never loads anything.
-            .onPreferenceChange(ConversationTopOffsetKey.self) { top in
+            .onPreferenceChange(ConversationTopOffsetKey.self) { top in ConversationDiagnostics.timed("chat.pref.top") {
                 guard top.isFinite else { return }
                 let previous = metrics.topOffset
                 metrics.topOffset = top
@@ -1045,7 +1065,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     offsetFromTop: max(0, -top), direction: direction, viewportHeight: viewportHeight, hasOlder: hidden > 0
                 ) else { return }
                 loadOlderPage(generation: generation)
-            }
+            } }
             // The scroll view starts at the bottom and STAYS there while content grows, as long as
             // the user has not scrolled away: following needs no scrollTo at all.
             .defaultScrollAnchor(.bottom)
