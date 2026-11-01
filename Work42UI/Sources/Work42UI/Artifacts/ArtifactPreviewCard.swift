@@ -74,8 +74,29 @@ public struct ArtifactCardAppearance: Equatable, Sendable {
 @MainActor
 public struct ArtifactPreviewCard: View {
 
-    /// The two homes of the card (the tile card's size modes).
-    public typealias SizeMode = PreviewTileSizeMode
+    /// The two homes of a tile card. Chat resolves an explicit width upstream; a list tile fills the list's width. Both
+    /// have the same fixed height, so a card can never churn list layout.
+    ///
+    /// It stays nested here, where SDK 2.10 declared it, and `PreviewTileSizeMode` names it: moving it would change
+    /// the symbols of this card's initializer and break plugins built for ABI 14.
+    public enum SizeMode: Equatable {
+        case chat(width: CGFloat)
+        case thumbnail
+
+        public var cardWidth: CGFloat? {
+            switch self {
+            case .chat(let width): width
+            case .thumbnail: nil
+            }
+        }
+
+        public var height: CGFloat {
+            switch self {
+            case .chat: 100
+            case .thumbnail: 100
+            }
+        }
+    }
 
     public let appearance: ArtifactCardAppearance?
     public let title: String
