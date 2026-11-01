@@ -1117,9 +1117,18 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 scrollToBottom(proxy, animated: false)
             }
             .onChange(of: scrollToBottomTrigger) { _, _ in
+                let wasPinned = isPinnedToBottom
                 isPinnedToBottom = true
                 heldCount = nil
                 seenCount = items.count
+                if wasPinned {
+                    // Already at the bottom (a send, a finished turn): the bottom anchor and the pinned follow
+                    // carry the new content. An animated scroll of our own fought them every frame, and an
+                    // immediate trim re-laid out the whole window while the new row appeared (WOR-558).
+                    scrollToBottom(proxy, animated: false)
+                    scheduleTrim()
+                    return
+                }
                 // Order matters (a chat bug fixed the hard way): scroll to the bottom of the CURRENT,
                 // not-yet-trimmed content first, THEN trim the window. Dropping rows above the
                 // viewport once we are at the bottom is invisible; trimming before or together with
