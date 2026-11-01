@@ -33,8 +33,8 @@ public nonisolated struct ConversationPaging: Equatable {
 
     /// Within this many viewports of the top counts as "at the top" (a load is due).
     public static let arrivalViewports: CGFloat = 1
-    /// Past this many viewports from the top the reader has left, and the next arrival may load.
-    public static let departureViewports: CGFloat = 2
+    /// Past this many viewports from the top the reader has left (a move down also leaves), and the next arrival may load.
+    public static let departureViewports: CGFloat = 1.5
 
     /// The reader moved the content (a live scroll, never one of ours). Returns the generation of the page to load, or nil.
     public mutating func readerMoved(
@@ -47,17 +47,21 @@ public nonisolated struct ConversationPaging: Equatable {
             phase = .inserting(generation: generation)
             return generation
         case .waitingForDeparture:
-            if offsetFromTop > viewportHeight * Self.departureViewports { phase = .armed }
+            // The reader has left the top: any move DOWN does (so a short window, where the margin below can never be
+            // reached, is never stuck), as does being far from it. Moves up while still at the top load nothing.
+            if direction == .down || offsetFromTop > viewportHeight * Self.departureViewports { phase = .armed }
             return nil
         case .inserting:
             return nil
         }
     }
 
-    /// The page of `generation` is in place (or its hold ended). A stale generation is ignored.
-    public mutating func pageDone(generation done: Int, offsetFromTop: CGFloat, viewportHeight: CGFloat) {
+    /// The page of `generation` is finished. `placed` false means the hold could not keep the reader's place: the reader
+    /// may be left at the top with the page above them, so the next upward move must be allowed to load, not wait for a
+    /// departure that cannot happen. A stale generation is ignored.
+    public mutating func pageDone(generation done: Int, offsetFromTop: CGFloat, viewportHeight: CGFloat, placed: Bool = true) {
         guard phase == .inserting(generation: done) else { return }
-        phase = offsetFromTop > viewportHeight * Self.departureViewports ? .armed : .waitingForDeparture
+        phase = !placed || offsetFromTop > viewportHeight * Self.departureViewports ? .armed : .waitingForDeparture
     }
 
     /// A different conversation, or the view went back to the bottom: start again.

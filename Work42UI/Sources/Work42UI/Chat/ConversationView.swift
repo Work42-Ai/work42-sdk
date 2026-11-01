@@ -915,13 +915,14 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     /// A page may load: hold the reader's place (captured now, before the window grows), then grow the window. With no
     /// scroll view to hold the place in, the paging state treats the page as finished.
     private func loadOlderPage(generation: Int) {
-        let started = scroller.begin(generation: generation) { done, _ in
+        let started = scroller.begin(generation: generation) { done, outcome in
             metrics.paging.pageDone(
-                generation: done, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight)
+                generation: done, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                placed: outcome.hasPrefix("settled"))
         }
         if !started {
             metrics.paging.pageDone(
-                generation: generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight)
+                generation: generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight, placed: false)
         }
         var tx = Transaction()
         tx.disablesAnimations = true

@@ -21,20 +21,37 @@ struct ConversationPagingTests {
         #expect(paging.phase == .inserting(generation: 1))
     }
 
-    @Test("after the page lands the reader must leave past the margin before another can load")
+    @Test("after the page lands the reader must leave the top before another can load: any move down, or far away")
     func needsDeparture() {
         var paging = ConversationPaging()
         _ = paging.readerMoved(offsetFromTop: 500, direction: .up, viewportHeight: viewport, hasOlder: true)
         paging.pageDone(generation: 1, offsetFromTop: 1200, viewportHeight: viewport)
         #expect(paging.phase == .waitingForDeparture)
-        // Still within two viewports: small flicks up load nothing.
+        // Flicking up while still near the top loads nothing.
         #expect(paging.readerMoved(offsetFromTop: 900, direction: .up, viewportHeight: viewport, hasOlder: true) == nil)
-        #expect(paging.readerMoved(offsetFromTop: 1900, direction: .down, viewportHeight: viewport, hasOlder: true) == nil)
         #expect(paging.phase == .waitingForDeparture)
-        // Past two viewports: armed again, and the next arrival loads.
-        #expect(paging.readerMoved(offsetFromTop: 2600, direction: .down, viewportHeight: viewport, hasOlder: true) == nil)
+        // Any move down leaves the top (a short window can never reach a far margin): armed, and the next arrival loads.
+        #expect(paging.readerMoved(offsetFromTop: 1000, direction: .down, viewportHeight: viewport, hasOlder: true) == nil)
         #expect(paging.phase == .armed)
         #expect(paging.readerMoved(offsetFromTop: 800, direction: .up, viewportHeight: viewport, hasOlder: true) == 2)
+    }
+
+    @Test("being far from the top also arms, without a move down")
+    func farAway() {
+        var paging = ConversationPaging()
+        _ = paging.readerMoved(offsetFromTop: 500, direction: .up, viewportHeight: viewport, hasOlder: true)
+        paging.pageDone(generation: 1, offsetFromTop: 1200, viewportHeight: viewport)
+        #expect(paging.readerMoved(offsetFromTop: 1600, direction: .up, viewportHeight: viewport, hasOlder: true) == nil)
+        #expect(paging.phase == .armed)
+    }
+
+    @Test("a page whose place could not be held never leaves the reader stuck at the top")
+    func failedHoldDoesNotStick() {
+        var paging = ConversationPaging()
+        _ = paging.readerMoved(offsetFromTop: 500, direction: .up, viewportHeight: viewport, hasOlder: true)
+        paging.pageDone(generation: 1, offsetFromTop: 0, viewportHeight: viewport, placed: false)
+        #expect(paging.phase == .armed)
+        #expect(paging.readerMoved(offsetFromTop: 0, direction: .up, viewportHeight: viewport, hasOlder: true) == 2)
     }
 
     @Test("a page that lands already far from the top arms at once; a stale generation is ignored")
