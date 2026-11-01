@@ -496,30 +496,10 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
             bindScrollViewIfNeeded()
         }
 
-        /// The `NSScrollView` this probe belongs to.
-        ///
-        /// The probe is a `.background` of the SwiftUI `ScrollView` and is sized to fill it, so it is a
-        /// SIBLING of the scroll view, not a descendant: walking up its superviews never reaches an
-        /// `NSScrollView`. Instead take the smallest scroll view in the window whose frame contains
-        /// the probe's centre.
+        /// The `NSScrollView` this probe belongs to: the one it is inside. The probe is a background of the scroll CONTENT, so
+        /// `enclosingScrollView` is the conversation's own scroller, never a scroller nested in a row (WOR-553).
         private func resolveScrollView() -> NSScrollView? {
-            if let foundScrollView { return foundScrollView }
-            guard let content = window?.contentView else { return nil }
-            let centre = convert(NSPoint(x: bounds.midX, y: bounds.midY), to: nil)
-            var best: NSScrollView?
-            var bestArea = CGFloat.infinity
-            func visit(_ view: NSView) {
-                if let scroll = view as? NSScrollView {
-                    let frame = scroll.convert(scroll.bounds, to: nil)
-                    if frame.contains(centre), frame.width * frame.height < bestArea {
-                        best = scroll
-                        bestArea = frame.width * frame.height
-                    }
-                }
-                view.subviews.forEach(visit)
-            }
-            visit(content)
-            return best
+            foundScrollView ?? enclosingScrollView
         }
 
         private func bindScrollViewIfNeeded() {
@@ -588,72 +568,149 @@ public enum ConversationDiagnostics {
     static func note(_ message: @autoclosure () -> String) { sink?(message()) }
 }
 
-/// Keeps the reader's place when a page lands above the viewport, by holding the distance from the
-/// bottom of the content. `scrollTo(firstRow, anchor: .top)` was wrong: loading starts up to a
-/// viewport BEFORE the top, so the old first row sits above the viewport and pinning it to the top
-/// edge moved the reader by up to a screen ("jumps to other content").
+/// Holds the reader's place while an older page lands above the viewport (WOR-553).
+///
+/// The old restore captured AFTER the window had changed, found its scroll view by searching the view tree (it could pick
+/// a scroller nested in a row), applied once, and let a timer count a failure as success. This holds the distance from the
+/// bottom of the content through EVERY layout of the load: it is captured synchronously, before the window grows, from the
+/// scroll view the probe sits in; it is re-applied the moment the document's frame changes (KVO, so in the same pass as the
+/// layout, before the next display) and by a per-frame loop for as long as the content keeps changing; it ends only when the
+/// content has been still after at least one correction (`ConversationHold`), and it says so in the diagnostics when it
+/// could not hold the place.
 @MainActor
 private final class ConversationScroller {
     weak var scrollView: NSScrollView?
     private var distanceFromBottom: CGFloat?
-    private var documentHeight: CGFloat = 0
+    private var lastHeight: CGFloat = 0
+    private var applied = 0
+    private var idleTicks = 0
+    private var startedAt: CFTimeInterval = 0
+    private var generation = 0
+    private var onFinish: ((Int, String) -> Void)?
+    private var frameObservation: NSKeyValueObservation?
+    private var frameObserver: (any NSObjectProtocol)?
+    private var loop: Task<Void, Never>?
 
-    /// Call just before the page's rows are laid out.
-    func capture() {
-        guard let scrollView, let doc = scrollView.documentView else {
-            ConversationDiagnostics.note("page load: no scroll view to hold the place")
-            distanceFromBottom = nil
-            return
-        }
+    var isHolding: Bool { distanceFromBottom != nil }
+
+    private func offsetFromTop(_ scrollView: NSScrollView, _ doc: NSView) -> CGFloat {
         let clip = scrollView.contentView
         // Flipped documents measure the offset from the top; unflipped ones from the bottom.
-        let offsetFromTop = doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
-        distanceFromBottom = doc.frame.height - (offsetFromTop + clip.bounds.height)
-        documentHeight = doc.frame.height
-        // The page's layout can take longer than any timer guess: restore the moment the content resizes.
-        stopObserving()
+        return doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
+    }
+
+    /// Call synchronously, BEFORE the window grows. False when there is no scroll view to hold the place in.
+    @discardableResult
+    func begin(generation: Int, onFinish: @escaping (Int, String) -> Void) -> Bool {
+        finish(outcome: nil)
+        guard let scrollView, let doc = scrollView.documentView else {
+            ConversationDiagnostics.note("page load #\(generation): failed: no scroll view to hold the place")
+            return false
+        }
+        let clip = scrollView.contentView
+        let top = offsetFromTop(scrollView, doc)
+        self.generation = generation
+        self.onFinish = onFinish
+        distanceFromBottom = doc.frame.height - (top + clip.bounds.height)
+        lastHeight = doc.frame.height
+        applied = 0
+        idleTicks = 0
+        startedAt = CACurrentMediaTime()
         doc.postsFrameChangedNotifications = true
+        // The document's frame is key-value observable and set synchronously by layout: this runs in the same pass.
+        frameObservation = doc.observe(\.frame, options: [.new]) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.contentChanged() }
+        }
         frameObserver = NotificationCenter.default.addObserver(
             forName: NSView.frameDidChangeNotification, object: doc, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { _ = self?.restore() }
+            MainActor.assumeIsolated { self?.contentChanged() }
+        }
+        loop = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(16))
+                if Task.isCancelled { return }
+                self?.tick()
+            }
         }
         ConversationDiagnostics.note(
-            "page load: capture flipped=\(doc.isFlipped) doc=\(Int(doc.frame.height)) offset=\(Int(offsetFromTop)) "
-            + "view=\(Int(clip.bounds.height)) fromBottom=\(Int(distanceFromBottom ?? 0))")
-    }
-
-    /// Call once the page is laid out. Returns false while the content has not grown yet.
-    @discardableResult
-    func restore() -> Bool {
-        guard let distance = distanceFromBottom else { return true }
-        guard let scrollView, let doc = scrollView.documentView else { distanceFromBottom = nil; return true }
-        guard doc.frame.height != documentHeight else { return false }
-        let clip = scrollView.contentView
-        let wantedFromTop = max(0, doc.frame.height - clip.bounds.height - distance)
-        let currentFromTop = doc.isFlipped ? clip.bounds.origin.y : doc.frame.height - clip.bounds.maxY
-        distanceFromBottom = nil
-        stopObserving()
-        let y = doc.isFlipped ? wantedFromTop : doc.frame.height - clip.bounds.height - wantedFromTop
-        ConversationDiagnostics.note(
-            "page load: restore doc \(Int(documentHeight))->\(Int(doc.frame.height)) offset \(Int(currentFromTop))->\(Int(wantedFromTop))")
-        if abs(currentFromTop - wantedFromTop) > 0.5 {
-            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
-            scrollView.reflectScrolledClipView(clip)
-        }
+            "page load #\(generation): capture doc=\(Int(doc.frame.height)) offset=\(Int(top)) view=\(Int(clip.bounds.height)) "
+            + "fromBottom=\(Int(distanceFromBottom ?? 0))")
         return true
     }
 
-    func cancel() {
-        distanceFromBottom = nil
-        stopObserving()
+    /// The reader started a new gesture: stop holding.
+    func readerBegan() {
+        guard isHolding else { return }
+        finish(outcome: "cancelled: the reader scrolled")
     }
 
-    private var frameObserver: (any NSObjectProtocol)?
+    func cancel() {
+        finish(outcome: nil)
+    }
 
-    private func stopObserving() {
+    private func contentChanged() {
+        guard isHolding, let scrollView, let doc = scrollView.documentView, doc.frame.height != lastHeight else { return }
+        apply(scrollView, doc)
+    }
+
+    private func apply(_ scrollView: NSScrollView, _ doc: NSView) {
+        guard let distance = distanceFromBottom else { return }
+        let clip = scrollView.contentView
+        let height = doc.frame.height
+        let wanted = ConversationHold.offset(documentHeight: height, viewportHeight: clip.bounds.height, distanceFromBottom: distance)
+        let current = offsetFromTop(scrollView, doc)
+        let y = doc.isFlipped ? wanted : height - clip.bounds.height - wanted
+        if abs(current - wanted) > 0.5 {
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+            scrollView.reflectScrolledClipView(clip)
+        }
+        applied += 1
+        idleTicks = 0
+        ConversationDiagnostics.note(
+            "page load #\(generation): apply \(applied) doc \(Int(lastHeight))->\(Int(height)) offset \(Int(current))->\(Int(wanted))")
+        lastHeight = height
+    }
+
+    private func tick() {
+        guard isHolding, let scrollView, let doc = scrollView.documentView else { return }
+        let changed = doc.frame.height != lastHeight
+        if !changed { idleTicks += 1 }
+        switch ConversationHold.step(
+            contentChanged: changed, applied: applied, idleTicks: idleTicks,
+            elapsed: CACurrentMediaTime() - startedAt, readerScrolling: false
+        ) {
+        case .apply: apply(scrollView, doc)
+        case .keepWaiting: break
+        case .settled: finish(outcome: "settled after \(applied) apply, error \(Int(abs(currentDistanceError(scrollView, doc))))")
+        case .gaveUp: finish(outcome: "failed: no layout change arrived, the place was not held")
+        case .cancelled: finish(outcome: "cancelled")
+        }
+    }
+
+    /// How far the distance from the bottom is from the held one now (0 when the hold is exact).
+    private func currentDistanceError(_ scrollView: NSScrollView, _ doc: NSView) -> CGFloat {
+        guard let distance = distanceFromBottom else { return 0 }
+        let now = doc.frame.height - (offsetFromTop(scrollView, doc) + scrollView.contentView.bounds.height)
+        return now - distance
+    }
+
+    /// End the hold. `outcome` nil is a silent end (a new hold starts, or the conversation was reset).
+    private func finish(outcome: String?) {
+        guard isHolding || loop != nil else { return }
+        loop?.cancel()
+        loop = nil
+        frameObservation?.invalidate()
+        frameObservation = nil
         if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
         frameObserver = nil
+        distanceFromBottom = nil
+        let done = onFinish
+        onFinish = nil
+        if let outcome {
+            ConversationDiagnostics.note("page load #\(generation): \(outcome)")
+            done?(generation, outcome)
+        }
     }
 }
 
@@ -663,25 +720,12 @@ private final class ConversationScrollMetrics {
     let scroller = ConversationScroller()
     var bottomDistance: CGFloat = .infinity
     var topOffset: CGFloat = .infinity
-    /// False while a page load is in flight: every trigger that arrives meanwhile is DROPPED, not
-    /// queued. Re-armed only once the page has landed (see `pageLanded`).
-    var loadArmed = true
-    /// Set when the new page's rows and re-anchor were applied; the next top-offset report (which
-    /// comes after that layout) re-arms loading. Re-arming any earlier let a scroll event in the
-    /// same frame start a second load before the first one had laid out.
-    var pageLanded = false
-    /// The `renderCount` an append-driven growth is about to set. The re-anchor that keeps a reader's
-    /// place is for older PAGES loading above the viewport; growth from appended lines must not
-    /// re-anchor (it would scroll to the top of the window and cascade into page loads).
+    /// When older pages may load (WOR-554): one per reader arrival at the top.
+    var paging = ConversationPaging()
+    /// The `renderCount` an append-driven growth is about to set. Growth from appended lines is not a page load.
     var appendGrowthTarget: Int?
     /// The pending trim back to one page after re-pinning; cancelled when the reader scrolls again.
     var trimTask: Task<Void, Never>?
-    /// True once the user has scrolled by hand. The first layout pass reports the top before the
-    /// bottom anchor applies, so without this a fresh open would load a page it does not need.
-    var userHasScrolled = false
-    /// True from the moment a page lands until the reader starts a NEW scroll: a page never triggers
-    /// the next one by itself, so loads cannot cascade up the history.
-    var awaitingScroll = false
 }
 
 // MARK: - Labels
@@ -849,30 +893,22 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
 
     // MARK: Keeping the reader's place
 
-    /// A page is about to be laid out above the viewport: remember the distance from the bottom and put
-    /// it back once the rows are in. Reports only fire when a value changes, so it also retries on the
-    /// next run-loop turns, and gives up after 0.4s so loading is never left disarmed.
-    private func keepPlaceForPage() {
-        let scroller = metrics.scroller
-        scroller.capture()
-        // The restore itself runs when the content resizes; this only gives up if it never does.
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            scroller.cancel()
+    /// A page may load: hold the reader's place (captured now, before the window grows), then grow the window. With no
+    /// scroll view to hold the place in, the paging state treats the page as finished.
+    private func loadOlderPage(generation: Int) {
+        let started = scroller.begin(generation: generation) { done, _ in
+            metrics.paging.pageDone(
+                generation: done, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight)
         }
-    }
-
-    private func restorePlaceIfPageLanded() {
-        guard metrics.pageLanded else { return }
-        _ = metrics.scroller.restore()
-    }
-
-    /// The page's layout reported: put the reader back where they were, then allow the next page.
-    private func rearmAfterPage() {
-        guard metrics.pageLanded, metrics.scroller.restore() else { return }
-        metrics.pageLanded = false
-        metrics.loadArmed = true
-        metrics.awaitingScroll = true
+        if !started {
+            metrics.paging.pageDone(
+                generation: generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight)
+        }
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx) {
+            renderCount = ConversationLayout.grownRenderCount(current: renderCount, pageSize: pageSize)
+        }
     }
 
     // MARK: Body
@@ -948,6 +984,21 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                             }
                         )
                 }
+                // The probe sits INSIDE the scroll content so it finds its own scroll view (WOR-553).
+                .background(
+                    ConversationLiveScrollProbe(scroller: scroller) { scrolling in
+                        isLiveScrolling = scrolling
+                        if scrolling {
+                            scroller.readerBegan()
+                            metrics.trimTask?.cancel()
+                            heldCount = items.count
+                        } else {
+                            heldCount = nil
+                            // A re-pin during the gesture left its trim for later.
+                            if isPinnedToBottom { scheduleTrim() }
+                        }
+                    }
+                )
                 // The row width every bubble may use, measured once here (the content padding is 18 a
                 // side), so bubbles do not each measure and re-layout on every append.
                 .environment(\.chatBubbleContainerWidth, max(0, viewportWidth - 36))
@@ -967,27 +1018,11 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                         .onChange(of: viewport.size.width) { _, w in viewportWidth = w }
                 }
             )
-            .background(
-                ConversationLiveScrollProbe(scroller: scroller) { scrolling in
-                    isLiveScrolling = scrolling
-                    if scrolling {
-                        metrics.userHasScrolled = true
-                        metrics.awaitingScroll = false
-                        metrics.trimTask?.cancel()
-                        heldCount = items.count
-                    } else {
-                        heldCount = nil
-                        // A re-pin during the gesture left its trim for later.
-                        if isPinnedToBottom { scheduleTrim() }
-                    }
-                }
-            )
             // Distance may RE-pin (arriving back at the bottom is unambiguous, whatever the cause)
             // but may UNPIN only during a real gesture: content insertion, an animation settling
             // or our own scrollTo must never take the view away from the bottom.
             .onPreferenceChange(ConversationBottomDistanceKey.self) { distance in
                 guard distance.isFinite else { return }
-                restorePlaceIfPageLanded()
                 metrics.bottomDistance = distance
                 let outcome = ConversationPinning.resolve(
                     pinned: isPinnedToBottom, distance: distance, isUserScrolling: isLiveScrolling)
@@ -996,30 +1031,20 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 // indicator appeared): follow it, frame by frame while it animates.
                 if outcome.follow { scrollToBottom(proxy, animated: false) }
             }
-            // Automatic older-page loading, once per arrival near the top.
+            // Older pages load only on the reader's own upward scroll into the top threshold, once per arrival (WOR-554):
+            // a layout change, one of our own offsets or a downward move never loads anything.
             .onPreferenceChange(ConversationTopOffsetKey.self) { top in
                 guard top.isFinite else { return }
+                let previous = metrics.topOffset
                 metrics.topOffset = top
-                if !metrics.loadArmed {
-                    // The in-flight page has landed: this report comes from the layout that placed
-                    // it. Re-arm, but let the NEXT scroll frame decide whether another page is due.
-                    rearmAfterPage()
-                    return
-                }
+                guard isLiveScrolling, !isPinnedToBottom else { return }
+                let direction: ConversationPaging.Direction =
+                    !previous.isFinite || top == previous ? .none : (top > previous ? .up : .down)
                 let hidden = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: renderCount)
-                guard hidden > 0 else { return }
-                // Older pages load only while the reader is scrolling UP through history, never while
-                // the view is following the bottom: the newest items are always laid out already.
-                // An underfilled window does not load by itself (AC5): pages come only from scrolling up.
-                let nearTop = metrics.userHasScrolled && !metrics.awaitingScroll && !isPinnedToBottom
-                    && top > -viewportHeight
-                guard nearTop else { return }
-                metrics.loadArmed = false
-                var tx = Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) {
-                    renderCount = ConversationLayout.grownRenderCount(current: renderCount, pageSize: pageSize)
-                }
+                guard let generation = metrics.paging.readerMoved(
+                    offsetFromTop: max(0, -top), direction: direction, viewportHeight: viewportHeight, hasOlder: hidden > 0
+                ) else { return }
+                loadOlderPage(generation: generation)
             }
             // The scroll view starts at the bottom and STAYS there while content grows, as long as
             // the user has not scrolled away: following needs no scrollTo at all.
@@ -1051,20 +1076,10 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     renderCount += count - lastItemCount
                 }
             }
-            // A page was added above the viewport: keep the user's place by re-anchoring on the
-            // previously topmost row. Synchronous handler, so the proxy is live.
+            // Appended lines are not a page load. A page's hold was begun before the window grew (`loadOlderPage`).
             .onChange(of: renderCount) { oldCount, newCount in
-                guard newCount > oldCount else { return }
-                // Appended lines are not a page load: they neither land nor re-arm one in flight.
-                if metrics.appendGrowthTarget == newCount {
-                    metrics.appendGrowthTarget = nil
-                    return
-                }
-                // The page's rows are in this update; the next top-offset report re-arms loading.
-                if !metrics.loadArmed { metrics.pageLanded = true }
-                // The rows are not laid out yet: remember the distance from the bottom now, restore
-                // it from the first top-offset report after that layout.
-                keepPlaceForPage()
+                guard newCount > oldCount, metrics.appendGrowthTarget == newCount else { return }
+                metrics.appendGrowthTarget = nil
             }
             .onChange(of: resetKey) { _, _ in
                 isPinnedToBottom = true
@@ -1073,9 +1088,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 metrics.scroller.cancel()
                 lastItemCount = items.count
                 seenCount = items.count
-                metrics.userHasScrolled = false
-                metrics.loadArmed = true
-                metrics.pageLanded = false
+                metrics.paging.reset()
                 scrollToBottom(proxy, animated: false)
             }
             .onChange(of: scrollToBottomTrigger) { _, _ in

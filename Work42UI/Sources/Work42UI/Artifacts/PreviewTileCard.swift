@@ -45,11 +45,14 @@ public struct PreviewTileCard<Accessory: View>: View {
     public let onPrimary: () -> Void
     /// Shown before the primary button (an export button); `EmptyView()` for none.
     public let accessory: Accessory
+    /// The subtitle's colour; nil is the quiet secondary colour (an amber "needs you" line passes its own).
+    public let subtitleColor: Color?
 
     public init(
         appearance: ArtifactCardAppearance,
         title: String,
         subtitle: String,
+        subtitleColor: Color? = nil,
         seed: String,
         sizeMode: PreviewTileSizeMode,
         primaryTitle: String = "Open",
@@ -59,6 +62,7 @@ public struct PreviewTileCard<Accessory: View>: View {
         self.appearance = appearance
         self.title = title
         self.subtitle = subtitle
+        self.subtitleColor = subtitleColor
         self.seed = seed
         self.sizeMode = sizeMode
         self.primaryTitle = primaryTitle
@@ -84,7 +88,7 @@ public struct PreviewTileCard<Accessory: View>: View {
                     .multilineTextAlignment(.leading)
                 Text(subtitle)
                     .font(.system(size: DT.f12))
-                    .foregroundStyle(DT.textSecondary)
+                    .foregroundStyle(subtitleColor ?? DT.textSecondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
