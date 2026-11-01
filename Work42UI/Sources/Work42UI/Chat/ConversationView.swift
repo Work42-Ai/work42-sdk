@@ -194,6 +194,9 @@ public enum ConversationMetrics {
 public struct ConversationMessageRow<Content: View>: View {
     let context: ConversationRowContext
     let logo: Image?
+    let detail: AnyView?
+    let bubble: Bool
+    let onOpenName: (() -> Void)?
     @ViewBuilder let content: () -> Content
 
     @Environment(\.colorScheme) private var colorScheme
@@ -209,8 +212,29 @@ public struct ConversationMessageRow<Content: View>: View {
         logo: Image? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
+        self.init(context: context, logo: logo, detail: nil, bubble: false, onOpenName: nil, content: content)
+    }
+
+    /// A message from another participant, captioned and set apart from this chat's own agent.
+    ///
+    /// - Parameters:
+    ///   - detail: Drawn between the name and the time, in the header: where the message came from (the model,
+    ///     and the session when it is another one).
+    ///   - bubble: Sets the body in the neutral leading bubble the meeting transcript uses for another speaker.
+    ///   - onOpenName: Makes the name a plain button (it opens whatever the participant is).
+    public init(
+        context: ConversationRowContext,
+        logo: Image?,
+        detail: AnyView?,
+        bubble: Bool,
+        onOpenName: (() -> Void)?,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.context = context
         self.logo = logo
+        self.detail = detail
+        self.bubble = bubble
+        self.onOpenName = onOpenName
         self.content = content
     }
 
@@ -230,8 +254,22 @@ public struct ConversationMessageRow<Content: View>: View {
             } else {
                 VStack(alignment: .leading, spacing: ConversationMetrics.headerToBody) {
                     if context.isRunStart { header(actor) }
-                    content()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if bubble {
+                        // The same neutral tint and 12 pt corner as `ChatBubble` (`.neutral`), hugging its
+                        // text up to 85% of the row, so another participant reads apart from this chat's agent.
+                        content()
+                            .padding(.horizontal, ConversationMetrics.cardHorizontalPadding)
+                            .padding(.vertical, ConversationMetrics.cardVerticalPadding)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.secondary.opacity(0.10))
+                            )
+                            .frame(maxWidth: containerWidth > 0 ? containerWidth * 0.85 : nil, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        content()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
         } else {
@@ -243,15 +281,28 @@ public struct ConversationMessageRow<Content: View>: View {
         HStack(spacing: ConversationMetrics.avatarGap) {
             ConversationAvatar(actor: actor, logo: logo)
             // The name in the actor's colour, like the avatar (resolved so near-black stays legible).
-            Text(actor.name)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(DT.resolveChipTint(actor.color, colorScheme: colorScheme).foreground)
-                .lineLimit(1)
+            nameView(actor)
+            if let detail { detail }
             if let date = context.date {
                 Text(conversationTimeFormatter.string(from: date))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
+        }
+    }
+
+    /// The actor's name; a plain button when the host says what opening it does.
+    @ViewBuilder
+    private func nameView(_ actor: ConversationActor) -> some View {
+        let name = Text(actor.name)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(DT.resolveChipTint(actor.color, colorScheme: colorScheme).foreground)
+            .lineLimit(1)
+        if let onOpenName {
+            Button(action: onOpenName) { name }
+                .buttonStyle(.plain)
+        } else {
+            name
         }
     }
 }
