@@ -203,8 +203,8 @@ public struct BrowserChromeRow: View {
         HStack(spacing: DT.s8) {
             // Widget label (icon + name) — compact left anchor
             HStack(spacing: 4) {
-                if let data = iconImageData, let image = NSImage(data: data) {
-                    Image(nsImage: image)
+                if let data = iconImageData, let image = PlatformImage(data: data) {
+                    Image(platformImage: image)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 11, height: 11)

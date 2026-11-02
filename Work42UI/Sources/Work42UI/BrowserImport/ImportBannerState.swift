@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // ImportBannerState.swift - the one shared state behind every sign-in import banner (WOR-418).
 //
 // A single @Observable instance drives the banner in every persistent web view, so all of them show the same
@@ -180,3 +182,4 @@ public final class ImportBannerState {
         await resolveTask?.value
     }
 }
+#endif

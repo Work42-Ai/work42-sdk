@@ -43,7 +43,7 @@ public final class AutoHeightModel: ObservableObject {
 /// wires a `ResizeObserver` on `document.body` so any dynamic content
 /// expansion (mermaid diagrams, lazy images) triggers a re-measurement.
 @MainActor
-public struct AutoHeightWebView: NSViewRepresentable {
+public struct AutoHeightWebView: PlatformViewRepresentable {
 
     /// The artifact URL to load.
     public let url: URL
@@ -62,9 +62,23 @@ public struct AutoHeightWebView: NSViewRepresentable {
         self.reloadToken = reloadToken
     }
 
-    // MARK: NSViewRepresentable
+    // MARK: Platform view representable
 
-    public func makeNSView(context: Context) -> WKWebView {
+    #if canImport(AppKit)
+    public func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+    public func updateNSView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #else
+    public func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    public func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    public static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #endif
+
+    private func makeWebView(context: Context) -> WKWebView {
         let coordinator = context.coordinator
         let ucc = WKUserContentController()
         ucc.add(coordinator, name: Coordinator.handlerName)
@@ -78,11 +92,20 @@ public struct AutoHeightWebView: NSViewRepresentable {
         // Use OverscrollPassthroughWebView in .alwaysPassThrough mode: the
         // card is sized to its content height so there is nothing to scroll
         // internally — all wheel events must chain to the parent chat scroll.
+        #if canImport(AppKit)
         let webView = Work42WebView.make(OverscrollPassthroughWebView.self, configuration: config, role: .offscreen)
         webView.overscrollMode = .alwaysPassThrough
         webView.navigationDelegate = coordinator
         // Transparent: card background shows through
         webView.setValue(false, forKey: "drawsBackground")
+        #else
+        // The card is sized to its content, so the web view itself never scrolls; the outer scroll view does.
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = coordinator
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.isScrollEnabled = false
+        #endif
         webView.load(URLRequest(url: url))
         coordinator.lastURL = url
         // Re-fetch on theme change: the artifact server bakes the ACTIVE
@@ -97,7 +120,7 @@ public struct AutoHeightWebView: NSViewRepresentable {
         return webView
     }
 
-    public func updateNSView(_ webView: WKWebView, context: Context) {
+    private func updateWebView(_ webView: WKWebView, context: Context) {
         let coordinator = context.coordinator
         coordinator.model = model
         // URL changed → full load. Same URL but a new content token → reload in
@@ -114,7 +137,7 @@ public struct AutoHeightWebView: NSViewRepresentable {
 
     public func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
-    public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+    private static func dismantleWebView(_ webView: WKWebView, coordinator: Coordinator) {
         webView.configuration.userContentController
             .removeScriptMessageHandler(forName: Coordinator.handlerName)
         if let observer = coordinator.themeObserver {

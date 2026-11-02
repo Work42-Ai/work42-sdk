@@ -17,6 +17,7 @@
 import SwiftUI
 import WebKit
 
+#if canImport(AppKit)
 public extension View {
     /// Wire the in-page diagrams of a cached `WebSectionLiveView` (artifact /
     /// spec surfaces) to present the native expand dialog when a diagram's
@@ -62,6 +63,7 @@ struct LiveDiagramOverlay: ViewModifier {
         }
     }
 }
+#endif
 
 /// Weak-free forwarding handler: the `WKUserContentController` retains it
 /// strongly, and it holds only a value-closure (`onExpand`) — no back-reference
@@ -219,8 +221,13 @@ struct DiagramExpandDialog: View {
 /// NSViewRepresentable that displays a caller-owned `WKWebView` (the dialog's
 /// diagram body — in-page gestures, no native overlay; the dialog owns the
 /// header).
-struct DiagramWebHost: NSViewRepresentable {
+struct DiagramWebHost: PlatformViewRepresentable {
     let webView: WKWebView
+    #if canImport(AppKit)
     func makeNSView(context: Context) -> WKWebView { webView }
     func updateNSView(_ nsView: WKWebView, context: Context) {}
+    #else
+    func makeUIView(context: Context) -> WKWebView { webView }
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    #endif
 }

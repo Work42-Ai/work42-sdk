@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: window-state diagnostics, AppKit dialogs and the cached live web view. iPadOS uses WebSectionView+iOS.swift.
 // WebSectionView.swift - Reusable embedded web section (NSViewRepresentable).
 //
 // Wraps a WKWebView so a real web app can be embedded as a native
@@ -38,27 +40,6 @@ import Observation
 import OSLog
 import SwiftUI
 import WebKit
-
-// MARK: - WebSectionStatus
-
-/// Navigation lifecycle status for an embedded web section.
-///
-/// Published by `WebSectionLiveView.status` and set from the `Coordinator`'s
-/// `WKNavigationDelegate` callbacks so consumers (e.g. `CachedWebSectionView`,
-/// `BrowserChromeRow`) can show a loading indicator or an error+Retry state
-/// without any per-site branching. (Decision 6, lanky-pine.3)
-public enum WebSectionStatus: Equatable {
-    /// A navigation is in progress (provisional navigation started but not
-    /// yet finished or failed).
-    case loading
-    /// The last navigation finished successfully.
-    case loaded
-    /// The last navigation failed.
-    ///
-    /// - Parameter description: `error.localizedDescription` from the failing
-    ///   `WKNavigationDelegate` callback. Shown verbatim in the error view.
-    case failed(description: String)
-}
 
 /// Embeds one section of a web app as a native view, configured by a
 /// `WebSectionSpec`. See file header for the subtask boundaries.
@@ -2504,3 +2485,4 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         var wasVisible: Bool?
     }
 }
+#endif

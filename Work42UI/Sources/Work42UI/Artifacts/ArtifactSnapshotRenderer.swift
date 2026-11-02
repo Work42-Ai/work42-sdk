@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: scroll-wheel chaining and AppKit snapshotting.
 // ArtifactSnapshotRenderer.swift — AC2/AC3/AC4 infrastructure
 // (feat/chat-performance-improvements.2).
 //
@@ -329,3 +331,4 @@ extension ArtifactSnapshotRenderer: WKNavigationDelegate {
         failNavigation(with: ArtifactSnapshotError.navigationFailed(error.localizedDescription))
     }
 }
+#endif

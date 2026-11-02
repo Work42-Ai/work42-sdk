@@ -57,6 +57,7 @@ public struct MarkdownCommentRange: Equatable, Sendable {
 private final class PassthroughScrollWebView: PolicyWebView {
     var forwardsScrollEvents = false
 
+    #if canImport(AppKit)
     override func scrollWheel(with event: NSEvent) {
         if forwardsScrollEvents {
             nextResponder?.scrollWheel(with: event)
@@ -64,12 +65,16 @@ private final class PassthroughScrollWebView: PolicyWebView {
             super.scrollWheel(with: event)
         }
     }
+    #else
+    /// On iPadOS an auto-height web view must not scroll on its own; the outer ScrollView does.
+    var forwardsScrollEvents_: Bool { forwardsScrollEvents }
+    #endif
 }
 
 /// Internal rendering engine for `MarkdownPreview`. Keeping this type out of
 /// Work42UI's public API prevents document widgets from bypassing the shared
 /// theme, navigation, selection, and resource policies owned by the preview.
-struct MarkdownWebView: NSViewRepresentable {
+struct MarkdownWebView: PlatformViewRepresentable {
 
     private let text: String
     /// The doc's own URL — the base for resolving relative image/link paths and
@@ -81,8 +86,8 @@ struct MarkdownWebView: NSViewRepresentable {
     /// rect so the caller can present an NSPopover next to it.
     private let commentsEnabled: Bool
     private let comments: [MarkdownCommentRange]
-    private let onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)?
-    private let onViewComment: ((NSView, CGRect, Int) -> Void)?
+    private let onAddComment: ((PlatformView, CGRect, Int, Int, String) -> Void)?
+    private let onViewComment: ((PlatformView, CGRect, Int) -> Void)?
     /// Fired when a live text selection appears / clears (1-based line span +
     /// excerpt), so the host can publish it for dictation-to-comment.
     private let onSelectionChanged: ((Int, Int, String) -> Void)?
@@ -116,7 +121,7 @@ struct MarkdownWebView: NSViewRepresentable {
     /// plus the webview + view-space rect so the host can anchor native UI
     /// (menus, popovers) at the click point — the same anchoring pattern as
     /// the comment layer.
-    private let onBridgeMessage: ((_ payload: [String: Any], _ view: NSView, _ rect: CGRect) -> Void)?
+    private let onBridgeMessage: ((_ payload: [String: Any], _ view: PlatformView, _ rect: CGRect) -> Void)?
     /// Fired with a diagram's SVG when its card-header Expand button is pressed,
     /// so the host can present the native expand dialog. Every markdown surface
     /// gets this (the diagram bridge is always injected).
@@ -133,15 +138,15 @@ struct MarkdownWebView: NSViewRepresentable {
         baseURL: URL? = nil,
         commentsEnabled: Bool = false,
         comments: [MarkdownCommentRange] = [],
-        onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)? = nil,
-        onViewComment: ((NSView, CGRect, Int) -> Void)? = nil,
+        onAddComment: ((PlatformView, CGRect, Int, Int, String) -> Void)? = nil,
+        onViewComment: ((PlatformView, CGRect, Int) -> Void)? = nil,
         onSelectionChanged: ((Int, Int, String) -> Void)? = nil,
         onSelectionCleared: (() -> Void)? = nil,
         artifactURLResolver: ((String) -> URL?)? = nil,
         artifactTitleResolver: ((String) -> String?)? = nil,
         onContentHeight: ((CGFloat) -> Void)? = nil,
         trailingHTML: String = "",
-        onBridgeMessage: ((_ payload: [String: Any], _ view: NSView, _ rect: CGRect) -> Void)? = nil,
+        onBridgeMessage: ((_ payload: [String: Any], _ view: PlatformView, _ rect: CGRect) -> Void)? = nil,
         onDiagramExpand: ((String) -> Void)? = nil,
         onArtifactExpand: ((String) -> Void)? = nil
     ) {
@@ -162,7 +167,21 @@ struct MarkdownWebView: NSViewRepresentable {
         self.onArtifactExpand = onArtifactExpand
     }
 
-    public func makeNSView(context: Context) -> WKWebView {
+    #if canImport(AppKit)
+    public func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+    public func updateNSView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #else
+    public func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    public func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    public static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #endif
+
+    private func makeWebView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         // Serve local images + the bundled mermaid library over the w42res://
         // scheme (WKWebView blocks direct file loads under loadHTMLString).
@@ -211,7 +230,14 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.forwardsScrollEvents = onContentHeight != nil
         webView.navigationDelegate = context.coordinator
         // Transparent background so the doc sits on the tile surface.
+        #if canImport(AppKit)
         webView.setValue(false, forKey: "drawsBackground")
+        #else
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        webView.scrollView.isScrollEnabled = onContentHeight == nil
+        #endif
         context.coordinator.baseURL = baseURL
         context.coordinator.commentsEnabled = commentsEnabled
         context.coordinator.comments = comments
@@ -226,7 +252,7 @@ struct MarkdownWebView: NSViewRepresentable {
         return webView
     }
 
-    public func updateNSView(_ webView: WKWebView, context: Context) {
+    private func updateWebView(_ webView: WKWebView, context: Context) {
         context.coordinator.onAddComment = onAddComment
         context.coordinator.onViewComment = onViewComment
         context.coordinator.onSelectionChanged = onSelectionChanged
@@ -255,7 +281,7 @@ struct MarkdownWebView: NSViewRepresentable {
         )
     }
 
-    public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+    private static func dismantleWebView(_ webView: WKWebView, coordinator: Coordinator) {
         coordinator.hideCapsule(animated: false)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.messageName)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.heightMessageName)
@@ -290,7 +316,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         static let bridgeMessageName = "w42bridge"
         /// Generic page → host bridge callback (payload, webview, view rect).
-        var onBridgeMessage: ((_ payload: [String: Any], _ view: NSView, _ rect: CGRect) -> Void)?
+        var onBridgeMessage: ((_ payload: [String: Any], _ view: PlatformView, _ rect: CGRect) -> Void)?
 
         /// Diagram-bridge expand handler (`w42Diagram`). Matches
         /// `DiagramMessageProxy.name`. Fired with the diagram's SVG after
@@ -304,8 +330,8 @@ struct MarkdownWebView: NSViewRepresentable {
         /// Raw HTML appended after the markdown fragment at load time.
         var trailingHTML = ""
 
-        var onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)?
-        var onViewComment: ((NSView, CGRect, Int) -> Void)?
+        var onAddComment: ((PlatformView, CGRect, Int, Int, String) -> Void)?
+        var onViewComment: ((PlatformView, CGRect, Int) -> Void)?
         /// A live text selection appeared (1-based line span + excerpt) — used to
         /// publish it for dictation-to-comment. Fired on selection, not "+"-click.
         var onSelectionChanged: ((Int, Int, String) -> Void)?
@@ -322,8 +348,8 @@ struct MarkdownWebView: NSViewRepresentable {
         private var lastCommentsKey: String?
 
         init(
-            onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)?,
-            onViewComment: ((NSView, CGRect, Int) -> Void)?,
+            onAddComment: ((PlatformView, CGRect, Int, Int, String) -> Void)?,
+            onViewComment: ((PlatformView, CGRect, Int) -> Void)?,
             artifactURLResolver: ((String) -> URL?)? = nil,
             artifactTitleResolver: ((String) -> String?)? = nil
         ) {
@@ -437,6 +463,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         // MARK: Native comment capsule
 
+        #if canImport(AppKit)
         /// The add-comment capsule currently drawn over the web view, and the selection it is for.
         private(set) var capsuleHost: NSHostingView<Work42CommentCapsule>?
         private var capsuleSelection: (startLine: Int, endLine: Int, excerpt: String)?
@@ -482,6 +509,14 @@ struct MarkdownWebView: NSViewRepresentable {
             web.evaluateJavaScript("(function(){var s=window.getSelection(); if(s){ s.removeAllRanges(); }})()", completionHandler: nil)
             onAddComment?(web, anchor, selection.startLine, selection.endLine, selection.excerpt)
         }
+        #else
+        // The floating add-comment capsule is a macOS affordance; iPadOS comments go through the
+        // host's own UI, so these are no-ops there.
+        private var capsuleSelection: (startLine: Int, endLine: Int, excerpt: String)?
+        func showCapsule(on web: WKWebView, selection: CGRect, startLine: Int, endLine: Int, excerpt: String) {}
+        func hideCapsule(animated: Bool = true) { capsuleSelection = nil }
+        func commitCapsule() {}
+        #endif
 
         // MARK: Script messages (add / view comment)
 
@@ -527,9 +562,7 @@ struct MarkdownWebView: NSViewRepresentable {
                     let h = (r["h"] as? NSNumber)?.doubleValue ?? 0
                     // Same coordinate mapping as the comment layer: JS rects
                     // are viewport-top-left; WKWebView is a flipped NSView.
-                    rect = web.isFlipped
-                        ? NSRect(x: x, y: y, width: w, height: h)
-                        : NSRect(x: x, y: web.bounds.height - y - h, width: w, height: h)
+                    rect = Self.viewRect(x: x, y: y, w: w, h: h, in: web)
                 }
                 onBridgeMessage?(dict, web, rect)
                 return
@@ -553,9 +586,7 @@ struct MarkdownWebView: NSViewRepresentable {
                     let y = (r["y"] as? NSNumber)?.doubleValue ?? 0
                     let w = (r["w"] as? NSNumber)?.doubleValue ?? 0
                     let h = (r["h"] as? NSNumber)?.doubleValue ?? 0
-                    let viewRect = web.isFlipped
-                        ? NSRect(x: x, y: y, width: w, height: h)
-                        : NSRect(x: x, y: web.bounds.height - y - h, width: w, height: h)
+                    let viewRect = Self.viewRect(x: x, y: y, w: w, h: h, in: web)
                     showCapsule(on: web, selection: viewRect, startLine: s, endLine: e, excerpt: excerpt)
                 }
                 return
@@ -572,14 +603,23 @@ struct MarkdownWebView: NSViewRepresentable {
             // a *flipped* NSView, so those coordinates map straight through; only
             // flip y for the (rare) non-flipped case to anchor the popover right
             // at the selection instead of far down the view.
-            let viewRect = web.isFlipped
-                ? NSRect(x: cx, y: cy, width: cw, height: ch)
-                : NSRect(x: cx, y: web.bounds.height - cy - ch, width: cw, height: ch)
+            let viewRect = Self.viewRect(x: cx, y: cy, w: cw, h: ch, in: web)
             switch type {
             case "add": onAddComment?(web, viewRect, startLine, endLine, excerpt)
             case "view": onViewComment?(web, viewRect, startLine)
             default: break
             }
+        }
+
+        /// A rect the page reported (CSS px, top-left origin) in the web view's coordinates.
+        static func viewRect(x: Double, y: Double, w: Double, h: Double, in web: WKWebView) -> CGRect {
+            #if canImport(AppKit)
+            web.isFlipped
+                ? CGRect(x: x, y: y, width: w, height: h)
+                : CGRect(x: x, y: web.bounds.height - y - h, width: w, height: h)
+            #else
+            CGRect(x: x, y: y, width: w, height: h)
+            #endif
         }
 
         // MARK: Accent
@@ -590,11 +630,11 @@ struct MarkdownWebView: NSViewRepresentable {
         /// space; falling back to system blue would violate custom themes.
         static func accent(dark: Bool) -> MarkdownDocumentTemplate.Accent {
             let raw = DT.resolvedAccent(isDark: dark)
-            let c = raw.usingColorSpace(.sRGB) ?? raw
+            let c = raw.rgbaComponents
             return MarkdownDocumentTemplate.Accent(
-                r: Int((c.redComponent * 255).rounded()),
-                g: Int((c.greenComponent * 255).rounded()),
-                b: Int((c.blueComponent * 255).rounded())
+                r: Int((c.red * 255).rounded()),
+                g: Int((c.green * 255).rounded()),
+                b: Int((c.blue * 255).rounded())
             )
         }
 

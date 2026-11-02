@@ -43,3 +43,14 @@ public struct PlatformAppearance: Sendable {
     }
 }
 #endif
+
+public enum PlatformApplication {
+    /// Posted when the app becomes active (foreground).
+    public static var didBecomeActive: Notification.Name {
+        #if canImport(AppKit)
+        NSApplication.didBecomeActiveNotification
+        #else
+        UIApplication.didBecomeActiveNotification
+        #endif
+    }
+}

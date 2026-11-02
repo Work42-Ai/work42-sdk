@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // ImportBannerView.swift - the sign-in import banner (WOR-418, redesigned in WOR-419).
 //
 // One card pinned above the page in every persistent web view, drawn as regular Liquid Glass in every state: no
@@ -314,3 +316,4 @@ private struct WrappingRow: Layout {
         return (CGSize(width: usedWidth, height: y + rowHeight), origins)
     }
 }
+#endif

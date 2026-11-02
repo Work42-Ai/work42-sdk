@@ -165,6 +165,16 @@ public final class MarkdownPreviewCommentPresenter {
         popover.show(relativeTo: anchorRect, of: anchorView, preferredEdge: .maxX)
         activePopover = popover
     }
+    #else
+    // The AppKit popovers have no iPadOS equivalent; the iPad host presents its own comment UI.
+    public func presentComposer(
+        anchorView: PlatformView, anchorRect: CGRect, target: Target, store: PendingCommentsStore,
+        startLine: Int, endLine: Int, excerpt rawExcerpt: String
+    ) {}
+
+    public func presentViewer(
+        anchorView: PlatformView, anchorRect: CGRect, target: Target, store: PendingCommentsStore, line: Int
+    ) {}
     #endif
 
     private static func firstLines(_ text: String, _ n: Int) -> String {

@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: scroll-wheel chaining and AppKit snapshotting.
 // OverscrollPassthroughWebView.swift — bug/weird-scrolling-thing-that-doesn-t-allow-vertical
 //
 // A WKWebView subclass that chains NSEvent.scrollWheel to the parent AppKit
@@ -431,3 +433,4 @@ public enum OverscrollInstaller {
         controller.removeScriptMessageHandler(forName: handlerName)
     }
 }
+#endif

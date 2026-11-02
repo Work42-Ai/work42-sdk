@@ -31,7 +31,7 @@ public enum ChatMetrics {
     public static let paragraphSpacing: CGFloat = 14
     /// Extra space between wrapped lines that brings the body font to `bodyLineHeight`.
     public static var bodyLineSpacing: CGFloat {
-        max(0, bodyLineHeight - NSFont.systemFont(ofSize: bodyFontSize).boundingRectForFont.height.rounded())
+        max(0, bodyLineHeight - PlatformFontMetrics.systemLineBoundsHeight(ofSize: bodyFontSize).rounded())
     }
 
     /// Padding inside my message card.

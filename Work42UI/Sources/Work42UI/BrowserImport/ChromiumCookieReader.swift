@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // ChromiumCookieReader.swift - cookies from Chrome, Arc, Brave, Edge and Chromium (WOR-417).
 //
 // A Chromium browser keeps cookies in a SQLite file and encrypts each value with AES-128-CBC. The key is derived
@@ -158,3 +160,4 @@ public nonisolated enum ChromiumCookieReader {
         }
     }
 }
+#endif

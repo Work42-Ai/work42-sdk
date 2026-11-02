@@ -130,8 +130,8 @@ struct LocalFileImageProvider: ImageProvider {
 
     @ViewBuilder
     nonisolated private func localImage(url: URL?) -> some View {
-        if let url, url.isFileURL, let nsImage = NSImage(contentsOf: url) {
-            Image(nsImage: nsImage)
+        if let url, url.isFileURL, let platformImage = PlatformImage.loadFile(at: url) {
+            Image(platformImage: platformImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
         } else {

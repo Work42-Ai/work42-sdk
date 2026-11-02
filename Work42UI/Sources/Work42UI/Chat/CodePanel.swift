@@ -163,8 +163,7 @@ struct CodePanelCopyButton: View {
 
     var body: some View {
         Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            PlatformPasteboard.copy(text)
             copied = true
             Task {
                 try? await Task.sleep(for: .milliseconds(1500))
