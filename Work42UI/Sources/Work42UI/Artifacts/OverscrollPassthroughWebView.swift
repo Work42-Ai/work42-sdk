@@ -57,7 +57,11 @@
 //   OverscrollInstaller.teardown(from: controller, proxy: coordinator.overscrollProxy)
 //   coordinator.overscrollProxy = nil
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import OSLog
 import WebKit
 

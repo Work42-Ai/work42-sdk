@@ -6,7 +6,11 @@
 // Every browser button carries that browser's real logo, read from the installed app. There is deliberately no
 // "Not now". Behaviour lives in ImportBannerState; this file only draws it.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 public struct ImportBannerView: View {

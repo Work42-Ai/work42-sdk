@@ -17,19 +17,23 @@
 //   * a `@media (prefers-color-scheme: dark) { :root { … } }` block that
 //     overrides the color tokens with their DARK values.
 //
-// DT colors are SwiftUI `Color`s wrapping name-based dynamic `NSColor`s
-// (`NSColor(name:dynamicProvider:)`) — they pick light vs dark at
+// DT colors are SwiftUI `Color`s wrapping name-based dynamic `PlatformColor`s
+// (`PlatformColor(name:dynamicProvider:)`) — they pick light vs dark at
 // draw-time via `appearance.bestMatch(from: [.darkAqua, .vibrantDark])`.
 // To pull a concrete hex out of one we resolve it *inside* a specific
-// `NSAppearance` drawing context (see `hex(_:under:)`).
+// `PlatformAppearance` drawing context (see `hex(_:under:)`).
 //
-// Isolation: color resolution touches NSColor / NSAppearance (AppKit,
+// Isolation: color resolution touches PlatformColor / PlatformAppearance (AppKit,
 // main-actor), and the system accent is read live at generation time.
 // They are therefore `@MainActor static func`s. Its only consumers —
 // the canvas server + template composition — run app-side on the main
 // actor, so this is the natural and correct isolation.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 public enum CanvasTheme {
@@ -39,7 +43,7 @@ public enum CanvasTheme {
     /// Pure and deterministic for a given appearance pair + system
     /// accent: the same tokens always produce the same CSS. Resolves
     /// each adaptive color under light (`.aqua`) and dark (`.darkAqua`)
-    /// `NSAppearance`s and the live system accent, emitting light values
+    /// `PlatformAppearance`s and the live system accent, emitting light values
     /// in `:root` and dark values under `@media (prefers-color-scheme:
     /// dark)`.
     ///
@@ -62,8 +66,7 @@ public enum CanvasTheme {
     /// WHICH accent (light/dark hex pair), as in `DT.onAccent`.
     @MainActor
     static var onAccentFilled: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+        Color(platform: .dynamicColor { isDark in
             let luminance = DT.relativeLuminance(of: DT.resolvedAccent(isDark: isDark))
             return luminance > 0.6 ? .black : .white
         })
@@ -157,7 +160,7 @@ public enum CanvasTheme {
     /// push), so the two can never drift.
     @MainActor
     static func resolvedColorTokens(
-        light: NSAppearance, dark: NSAppearance, legacy: Bool = false
+        light: PlatformAppearance, dark: PlatformAppearance, legacy: Bool = false
     ) -> [ColorToken] {
         var out: [ColorToken] = colorTokenList(legacy: legacy).map {
             ColorToken(name: $0.name,
@@ -184,13 +187,13 @@ public enum CanvasTheme {
 
     /// `DT.resolveChipTint(...).foreground` for one scheme, resolved to hex
     /// under the matching appearance (the formula reads the tint's live
-    /// NSColor, so it has to run inside that appearance).
+    /// PlatformColor, so it has to run inside that appearance).
     @MainActor
     private static func chipForegroundHex(
-        _ tint: Color, appearance: NSAppearance, scheme: ColorScheme
+        _ tint: Color, appearance: PlatformAppearance, scheme: ColorScheme
     ) -> String {
         var result = "#000000"
-        appearance.performAsCurrentDrawingAppearance {
+        appearance.perform {
             let foreground = DT.resolveChipTint(tint, colorScheme: scheme).foreground
             result = hex(foreground, under: appearance)
         }
@@ -205,10 +208,9 @@ public enum CanvasTheme {
     /// appearance-independent.
     @MainActor
     public static func currentColorTokens() -> [String: String] {
-        let appearance = NSApplication.shared.effectiveAppearance
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let light = NSAppearance(named: .aqua) ?? appearance
-        let dark = NSAppearance(named: .darkAqua) ?? appearance
+        let isDark = PlatformAppearance.current.isDarkAppearance
+        let light = PlatformAppearance.light
+        let dark = PlatformAppearance.dark
         var out: [String: String] = [:]
         for token in resolvedColorTokens(light: light, dark: dark) {
             out[token.name] = isDark ? token.dark : token.light
@@ -228,8 +230,8 @@ public enum CanvasTheme {
     /// `legacy` selects the pre-kit `--w42-on-accent` (see `colorTokenList(legacy:)`).
     @MainActor
     private static func tokenBlocks(legacy: Bool) -> (root: String, darkRoot: String) {
-        let light = NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing()
-        let dark = NSAppearance(named: .darkAqua) ?? light
+        let light = PlatformAppearance.light
+        let dark = PlatformAppearance.dark
 
         // Color tokens: light + dark hex per token (shared with the live
         // theme push in `currentColorTokens()`, so the two stay in lock-step).
@@ -478,24 +480,24 @@ public enum CanvasTheme {
     // MARK: - Color resolution
 
     /// Resolves a (possibly appearance-adaptive) SwiftUI `Color` to a
-    /// concrete `#rrggbb` hex string under the given `NSAppearance`.
+    /// concrete `#rrggbb` hex string under the given `PlatformAppearance`.
     ///
-    /// DT colors wrap name-based dynamic `NSColor`s that pick their value
+    /// DT colors wrap name-based dynamic `PlatformColor`s that pick their value
     /// from the *current drawing appearance*. Setting that appearance for
     /// the duration of the resolution forces the dynamic provider down
     /// the light or dark branch, so we read the right concrete RGB.
     @MainActor
-    private static func hex(_ color: Color, under appearance: NSAppearance) -> String {
-        let dynamic = NSColor(color)
+    private static func hex(_ color: Color, under appearance: PlatformAppearance) -> String {
+        let dynamic = PlatformColor(color)
         var resolved = dynamic
-        appearance.performAsCurrentDrawingAppearance {
-            resolved = dynamic.usingColorSpace(.sRGB) ?? dynamic
+        appearance.perform {
+            resolved = dynamic.srgb
         }
-        let srgb = resolved.usingColorSpace(.sRGB) ?? resolved
-        let r = Int((srgb.redComponent * 255).rounded())
-        let g = Int((srgb.greenComponent * 255).rounded())
-        let b = Int((srgb.blueComponent * 255).rounded())
-        let a = Int((srgb.alphaComponent * 255).rounded())
+        let srgb = resolved.srgb
+        let r = Int((srgb.rgbaComponents.red * 255).rounded())
+        let g = Int((srgb.rgbaComponents.green * 255).rounded())
+        let b = Int((srgb.rgbaComponents.blue * 255).rounded())
+        let a = Int((srgb.rgbaComponents.alpha * 255).rounded())
         let clamp: (Int) -> Int = { Swift.max(0, Swift.min(255, $0)) }
         // Opaque colors stay `#rrggbb`; translucent ones (chip fills, glass) keep
         // their alpha as `#rrggbbaa` so the web token matches the native one.

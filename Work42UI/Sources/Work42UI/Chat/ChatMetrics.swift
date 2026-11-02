@@ -4,7 +4,11 @@
 // (artifact `chat-spacing`): one side margin, a clear gap between turns, a smaller one between the blocks of a
 // turn, and an airy reply text. `ConversationMetrics` and the app's chat and composer read from here.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 public enum ChatMetrics {

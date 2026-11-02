@@ -22,7 +22,11 @@
 // to `ArtifactPreviewCache.write` (Flow42Core). This module never imports
 // Flow42Core (module boundary), so the cache write stays with the caller.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import WebKit
 
 /// Errors a snapshot render can end in.

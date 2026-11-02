@@ -27,7 +27,11 @@
 // Reduced motion: renders the fully-painted static mark.
 
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 // MARK: - Public SwiftUI wrapper
 
@@ -59,6 +63,7 @@ public struct Loader42: View {
     }
 }
 
+#if canImport(AppKit)
 private struct Loader42Representable: NSViewRepresentable {
     let style: Loader42.Style
 
@@ -72,10 +77,31 @@ private struct Loader42Representable: NSViewRepresentable {
         view.style = style
     }
 }
+#else
+private struct Loader42Representable: UIViewRepresentable {
+    let style: Loader42.Style
+
+    func makeUIView(context: Context) -> Loader42View {
+        let view = Loader42View()
+        view.style = style
+        return view
+    }
+
+    func updateUIView(_ view: Loader42View, context: Context) {
+        view.style = style
+    }
+}
+#endif
 
 // MARK: - Layer-backed view
 
-public final class Loader42View: NSView {
+#if canImport(AppKit)
+public typealias Loader42BaseView = NSView
+#else
+public typealias Loader42BaseView = UIView
+#endif
+
+public final class Loader42View: Loader42BaseView {
 
     public var style: Loader42.Style = .brand {
         didSet { if style != oldValue { applyColors() } }
@@ -95,15 +121,19 @@ public final class Loader42View: NSView {
 
     // MARK: Init
 
-    public override init(frame: NSRect) {
+    public override init(frame: CGRect) {
         super.init(frame: frame)
+        #if canImport(AppKit)
         wantsLayer = true
+        #endif
         buildLayerTree()
     }
 
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
+        #if canImport(AppKit)
         wantsLayer = true
+        #endif
         buildLayerTree()
     }
 
@@ -237,8 +267,11 @@ public final class Loader42View: NSView {
 
     // MARK: Layer tree
 
+    /// `NSView.layer` is optional, `UIView.layer` is not; both promote to this.
+    private var rootLayer: CALayer? { layer }
+
     private func buildLayerTree() {
-        guard let root = layer else { return }
+        guard let root = rootLayer else { return }
         container.isGeometryFlipped = true // SVG/top-left coordinate space
         container.bounds = CGRect(x: 0, y: 0, width: Self.designSize, height: Self.designSize)
         root.addSublayer(container)
@@ -294,7 +327,7 @@ public final class Loader42View: NSView {
             let pencil = CAShapeLayer()
             pencil.path = spec.path
             pencil.lineWidth = spec.width
-            pencil.strokeColor = NSColor.white.cgColor
+            pencil.strokeColor = PlatformColor.white.cgColor
             pencil.fillColor = nil
             pencil.lineCap = .butt
             pencil.lineJoin = .round
@@ -323,39 +356,48 @@ public final class Loader42View: NSView {
     // MARK: Colors
 
     private func applyColors() {
-        let appearance = effectiveAppearance
-        var orange = NSColor(srgbRed: 1.0, green: 0.541, blue: 0.239, alpha: 1) // #FF8A3D
-        var violet = NSColor(srgbRed: 0.357, green: 0.129, blue: 0.714, alpha: 1) // #5B21B6
-        var isDark = false
-        appearance.performAsCurrentDrawingAppearance {
-            isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
-        }
+        var orange = PlatformColor(srgbRed: 1.0, green: 0.541, blue: 0.239, alpha: 1) // #FF8A3D
+        var violet = PlatformColor(srgbRed: 0.357, green: 0.129, blue: 0.714, alpha: 1) // #5B21B6
+        let isDark = Self.isDark(self)
         if isDark {
-            orange = NSColor(srgbRed: 1.0, green: 0.627, blue: 0.376, alpha: 1) // #FFA060
-            violet = NSColor(srgbRed: 0.478, green: 0.286, blue: 0.882, alpha: 1) // #7A49E1
+            orange = PlatformColor(srgbRed: 1.0, green: 0.627, blue: 0.376, alpha: 1) // #FFA060
+            violet = PlatformColor(srgbRed: 0.478, green: 0.286, blue: 0.882, alpha: 1) // #7A49E1
         }
         if case .mono(let color) = style {
-            let mono = NSColor(color)
+            let mono = PlatformColor(color)
             orange = mono
             violet = mono
         }
+        #if canImport(AppKit)
         let shade = NSColor.labelColor.withAlphaComponent(0.14)
-        appearance.performAsCurrentDrawingAppearance {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
             for layer in shadeLayers { layer.fillColor = shade.cgColor }
             orangeFill.fillColor = orange.cgColor
             for layer in violetFills { layer.fillColor = violet.cgColor }
         }
+        #else
+        let shade = UIColor.label.withAlphaComponent(0.14)
+        traitCollection.performAsCurrent {
+            for layer in shadeLayers { layer.fillColor = shade.cgColor }
+            orangeFill.fillColor = orange.cgColor
+            for layer in violetFills { layer.fillColor = violet.cgColor }
+        }
+        #endif
     }
 
-    public override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        applyColors()
+    private static func isDark(_ view: Loader42BaseView) -> Bool {
+        #if canImport(AppKit)
+        var dark = false
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
+            dark = view.effectiveAppearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+        }
+        return dark
+        #else
+        return view.traitCollection.userInterfaceStyle == .dark
+        #endif
     }
 
-    // MARK: Layout
-
-    public override func layout() {
-        super.layout()
+    private func applyScale() {
         let scale = min(bounds.width, bounds.height) / Self.designSize
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -364,16 +406,47 @@ public final class Loader42View: NSView {
         CATransaction.commit()
     }
 
-    // MARK: Animation
-
     private var reduceMotion: Bool {
+        #if canImport(AppKit)
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        #else
+        UIAccessibility.isReduceMotionEnabled
+        #endif
+    }
+
+    #if canImport(AppKit)
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyColors()
+    }
+
+    public override func layout() {
+        super.layout()
+        applyScale()
     }
 
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         restartAnimationsIfNeeded()
     }
+    #else
+    public override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        applyColors()
+    }
+
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        applyScale()
+    }
+
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        restartAnimationsIfNeeded()
+    }
+    #endif
+
+    // MARK: Animation
 
     private func restartAnimationsIfNeeded() {
         guard window != nil else { return }

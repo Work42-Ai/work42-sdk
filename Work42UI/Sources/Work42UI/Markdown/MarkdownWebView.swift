@@ -9,7 +9,11 @@
 
 import SwiftUI
 import WebKit
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Where the native add-comment capsule sits over a markdown web view (WOR-216): just above the
 /// start of the selection, or just below when there is no room, kept inside the view. The frame

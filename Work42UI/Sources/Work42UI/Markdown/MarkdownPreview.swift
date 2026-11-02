@@ -8,7 +8,11 @@
 // The chat keeps using MarkdownUI directly.
 
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// The policy boundary for every Work42-owned markdown/HTML document.
 ///

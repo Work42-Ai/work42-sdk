@@ -37,7 +37,11 @@
 //   - Optional `isFocused` binding so the parent can draw a focus
 //     ring around the surrounding surface.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 public struct ChatTextInput: View {

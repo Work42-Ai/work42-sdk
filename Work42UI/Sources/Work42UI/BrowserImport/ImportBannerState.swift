@@ -4,7 +4,11 @@
 // step and hiding it is immediate everywhere. `resolved` (an import succeeded, or "Don't show again") is stored
 // in UserDefaults and survives relaunch. A failed or cancelled import never sets it: the banner stays up.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 import Observation
 

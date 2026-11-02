@@ -10,7 +10,11 @@
 
 internal import MarkdownUI
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// The markdown themes Work42 ships. Both render identically today; `.flow42`
 /// is the pre-redesign name kept for the app's existing call sites.

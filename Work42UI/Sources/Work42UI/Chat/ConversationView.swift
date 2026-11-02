@@ -14,7 +14,11 @@
 // The scroll machinery is lifted from `Flow42ChatView` (the plain-VStack, `defaultScrollAnchor`,
 // live-scroll-gesture design and its hard-won lessons are preserved on purpose).
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 // MARK: - Public model

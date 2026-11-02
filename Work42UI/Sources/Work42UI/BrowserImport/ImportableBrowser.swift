@@ -4,7 +4,11 @@
 // description of where a browser keeps its data and what its Keychain entry is called; reading the data is
 // done by the readers next to this file.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 
 public nonisolated enum ImportableBrowser: String, CaseIterable, Sendable {

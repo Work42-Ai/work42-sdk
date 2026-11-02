@@ -15,7 +15,11 @@
 //
 // All of it is `@_spi(Work42Host)`: plugins render prose with `Work42MarkdownText` and never see these types.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 internal import cmark_gfm
 internal import cmark_gfm_extensions

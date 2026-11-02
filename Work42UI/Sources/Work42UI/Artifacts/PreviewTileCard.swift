@@ -5,7 +5,11 @@
 // card surface; an optional accessory (the artifact's export button) and one primary glass button that is also the whole
 // tile's tap. It draws what it is given and knows nothing about artifacts or sessions.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// The two homes of a tile card: `ArtifactPreviewCard.SizeMode`, where the type has lived since SDK 2.10 (keeping it

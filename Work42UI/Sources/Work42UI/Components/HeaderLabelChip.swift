@@ -7,7 +7,11 @@
 // labels (Work42PluginKit.WidgetHeaderLabel) after the session-provided ones;
 // reusable anywhere a chip row needs the same language.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// The tint role vocabulary, mirrored from the widget SDK so Work42UI stays
@@ -174,8 +178,8 @@ struct HeaderLabelLeadingIcon: View {
     var monochromeTint: Color? = nil
 
     var body: some View {
-        if let iconImageData, let nsImage = NSImage(data: iconImageData) {
-            markImage(nsImage)
+        if let iconImageData, let platformImage = PlatformImage(data: iconImageData) {
+            markImage(platformImage)
         } else if let iconURL {
             AsyncImage(url: iconURL) { img in
                 img.resizable().scaledToFill()
@@ -207,9 +211,8 @@ struct HeaderLabelLeadingIcon: View {
     /// `NSImage(data:)` decode (never template-flagged), the modifier alone is
     /// unreliable and can render nothing at all. Setting the flag explicitly
     /// makes the tint apply consistently.
-    private func markImage(_ nsImage: NSImage) -> some View {
-        nsImage.isTemplate = monochromeTint != nil
-        return Image(nsImage: nsImage)
+    private func markImage(_ platformImage: PlatformImage) -> some View {
+        Image(platformImage: platformImage.asTemplate(monochromeTint != nil))
             .renderingMode(monochromeTint == nil ? .original : .template)
             .resizable()
             .interpolation(.high)

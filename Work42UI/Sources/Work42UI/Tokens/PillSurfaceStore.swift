@@ -21,7 +21,11 @@
 // `NSHomeDirectory()` directly, like `ThemeStore.swift`.
 
 import Combine
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 import SwiftUI
 import notify
@@ -216,6 +220,7 @@ public final class PillSurfaceRuntime: ObservableObject {
 
 // MARK: - Always-active vibrancy (the "solid" style's material)
 
+#if canImport(AppKit)
 /// The NSVisualEffectView behind the "solid" surface, with diagnostic logging on
 /// window attach so we can verify its pinned `.active` state on-device.
 public final class PillVibrancyNSView: NSVisualEffectView {
@@ -246,6 +251,16 @@ public struct AlwaysActiveVibrancy: NSViewRepresentable {
         v.state = .active
     }
 }
+#else
+/// iPadOS: a system blur material stands in for the always-active AppKit vibrancy.
+public struct AlwaysActiveVibrancy: UIViewRepresentable {
+    public init() {}
+    public func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    }
+    public func updateUIView(_ view: UIVisualEffectView, context: Context) {}
+}
+#endif
 
 public extension View {
     /// Keeps the configured tint visible after Liquid Glass has composited its

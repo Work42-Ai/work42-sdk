@@ -7,7 +7,11 @@
 // surface, and how its buttons look (a glass capsule or circle with a subtle tint of the system accent, so they stand
 // out on the neutral surface without turning it into a coloured one).
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// Where a panel sits, which decides its edge.

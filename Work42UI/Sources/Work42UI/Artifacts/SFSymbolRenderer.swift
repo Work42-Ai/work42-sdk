@@ -7,7 +7,11 @@
 // glyphs are drawn at runtime, never shipped as files. The PNG is a black glyph on
 // clear; the page uses only its alpha as a mask, so any text colour tints it.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 
 public enum SFSymbolRenderer {

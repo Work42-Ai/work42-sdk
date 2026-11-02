@@ -4,7 +4,11 @@
 // colour. No gradient, no white ring, no drop shadow. `ChatBubble`, `ConversationView` and
 // meet42's `MeetAvatarView` all draw through this, so a person looks the same everywhere.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// A liquid-glass circle in one plain colour with the initials in that colour, or a photo.

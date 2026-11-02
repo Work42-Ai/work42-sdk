@@ -36,7 +36,11 @@
 // sites continue to compile. It renders nothing.
 
 import Combine
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 // WebSectionStatus is declared in Work42UI (WebSectionView.swift, lanky-pine.3)
 

@@ -8,12 +8,16 @@
 // the look and the motion.
 
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// The 42 brand mark (tile removed), loaded once from the Work42UI bundle.
-private let work42Mark42Image: NSImage? = {
+private let work42Mark42Image: PlatformImage? = {
     guard let url = Bundle.module.url(forResource: "work42-mark42", withExtension: "png") else { return nil }
-    return NSImage(contentsOf: url)
+    return PlatformImage.loadFile(at: url)
 }()
 
 public struct Work42CommentCapsule: View {
@@ -68,7 +72,7 @@ public struct Work42CommentCapsule: View {
         Button(action: action) {
             HStack(spacing: revealed && label != nil ? 7 : 0) {
                 if let image = work42Mark42Image {
-                    Image(nsImage: image)
+                    Image(platformImage: image)
                         .resizable()
                         .interpolation(.high)
                         .aspectRatio(contentMode: .fit)

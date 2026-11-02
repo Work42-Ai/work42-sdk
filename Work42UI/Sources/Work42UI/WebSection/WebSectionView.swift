@@ -28,7 +28,11 @@
 //        don't reload. This file deliberately creates a fresh webview
 //        per `makeNSView`; caching is wired by the widget owner later.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 import Observation
 import OSLog

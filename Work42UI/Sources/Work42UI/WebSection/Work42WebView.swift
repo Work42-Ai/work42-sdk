@@ -15,7 +15,11 @@
 //                    the opener, so sign-in windows keep their `window.opener`.
 // Everything else (redirects, form posts, reloads, back/forward, subframes) is left alone.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 import OSLog
 import SwiftUI
