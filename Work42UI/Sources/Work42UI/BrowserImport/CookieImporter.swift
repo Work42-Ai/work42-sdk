@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // CookieImporter.swift - brings a browser's sign-in cookies into every persistent web view (WOR-417).
 //
 // All or nothing: the cookies are read first (on a background task, since the Keychain prompt and the file
@@ -51,3 +53,4 @@ public enum CookieImporter {
         }
     }
 }
+#endif

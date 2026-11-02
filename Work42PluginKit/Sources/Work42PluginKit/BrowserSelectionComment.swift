@@ -26,7 +26,11 @@
 // the optional plugin resolver applied at submit time.
 
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Work42UI
 
 @MainActor
@@ -189,7 +193,11 @@ struct BrowserSelectionCommentLayer: ViewModifier {
     private func webViewScreenRect() -> CGRect? {
         let v = live.webView
         guard let window = v.window else { return nil }
+        #if canImport(AppKit)
         return window.convertToScreen(v.convert(v.bounds, to: nil))
+        #else
+        return window.screen.coordinateSpace.convert(v.bounds, from: v)
+        #endif
     }
 
     /// The default (no-resolver) source label — page title, else URL host,

@@ -1,4 +1,8 @@
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// Stable geometry shared by stateful two-row pill accessories.
@@ -12,11 +16,11 @@ nonisolated public enum WidgetPillAccessoryMetrics {
 
 /// A native application icon with a consistent fallback and footprint.
 public struct WidgetPillAppIcon: View {
-    private let image: NSImage?
+    private let image: PlatformImage?
     private let fallbackSymbol: String
     private let tint: Color
 
-    public init(image: NSImage?, fallbackSymbol: String = "video.fill", tint: Color) {
+    public init(image: PlatformImage?, fallbackSymbol: String = "video.fill", tint: Color) {
         self.image = image
         self.fallbackSymbol = fallbackSymbol
         self.tint = tint
@@ -25,7 +29,7 @@ public struct WidgetPillAppIcon: View {
     public var body: some View {
         Group {
             if let image {
-                Image(nsImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .scaledToFit()
                     .padding(4)
@@ -108,7 +112,9 @@ public struct WidgetPillAccessoryShell<ActionRow: View, ProgressRail: View>: Vie
             alignment: .leading
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        #if canImport(AppKit)
         .environment(\.controlActiveState, .active)
+        #endif
     }
 }
 

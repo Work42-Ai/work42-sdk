@@ -10,7 +10,11 @@
 
 internal import MarkdownUI
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// The markdown themes Work42 ships. Both render identically today; `.flow42`
 /// is the pre-redesign name kept for the app's existing call sites.
@@ -126,8 +130,8 @@ struct LocalFileImageProvider: ImageProvider {
 
     @ViewBuilder
     nonisolated private func localImage(url: URL?) -> some View {
-        if let url, url.isFileURL, let nsImage = NSImage(contentsOf: url) {
-            Image(nsImage: nsImage)
+        if let url, url.isFileURL, let platformImage = PlatformImage.loadFile(at: url) {
+            Image(platformImage: platformImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
         } else {

@@ -32,6 +32,7 @@ let package = Package(
     name: "Work42UI",
     platforms: [
         .macOS(.v15),
+        .iOS(.v26),
     ],
     products: [
         .library(name: "Work42UI", type: .dynamic, targets: ["Work42UI"]),

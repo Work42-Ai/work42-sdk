@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // CookieImportSupport.swift - what the three cookie readers share (WOR-417): the error type, building an
 // HTTPCookie, a read-only SQLite wrapper and the temp copy of a browser's database.
 //
@@ -132,3 +134,4 @@ nonisolated final class SQLiteDatabase {
         }
     }
 }
+#endif

@@ -202,6 +202,7 @@ public struct FindBar<Backend: FindBarBackend>: View {
     }
 }
 
+#if canImport(AppKit)
 // MARK: - EscapeKeyCapture
 
 /// A zero-size background view that installs a local NSEvent monitor to
@@ -296,3 +297,21 @@ public struct ShiftKeyTracker: NSViewRepresentable {
         }
     }
 }
+#else
+// iPadOS has no local key-event monitor; Escape and Shift are read where the find bar is hosted
+// (`onKeyPress`). These keep the same API as no-ops so shared call sites compile.
+
+public struct EscapeKeyCapture: UIViewRepresentable {
+    public let onEscape: () -> Void
+    public init(onEscape: @escaping () -> Void) { self.onEscape = onEscape }
+    public func makeUIView(context: Context) -> UIView { UIView() }
+    public func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+public struct ShiftKeyTracker: UIViewRepresentable {
+    @Binding public var isShiftDown: Bool
+    public init(isShiftDown: Binding<Bool>) { self._isShiftDown = isShiftDown }
+    public func makeUIView(context: Context) -> UIView { UIView() }
+    public func updateUIView(_ uiView: UIView, context: Context) {}
+}
+#endif

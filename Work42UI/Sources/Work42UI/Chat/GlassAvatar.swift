@@ -4,7 +4,11 @@
 // colour. No gradient, no white ring, no drop shadow. `ChatBubble`, `ConversationView` and
 // meet42's `MeetAvatarView` all draw through this, so a person looks the same everywhere.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// A liquid-glass circle in one plain colour with the initials in that colour, or a photo.
@@ -23,7 +27,7 @@ public struct GlassAvatar: View {
     let imageURL: URL?
 
     @Environment(\.colorScheme) private var colorScheme
-    @State private var photo: NSImage?
+    @State private var photo: PlatformImage?
 
     public init(initials: String, color: Color, size: CGFloat = 32) {
         self.init(initials: initials, color: color, size: size, imageURL: nil)
@@ -54,7 +58,7 @@ public struct GlassAvatar: View {
                 .minimumScaleFactor(0.6)
                 .opacity(photo == nil ? 1 : 0)
             if let photo {
-                Image(nsImage: photo)
+                Image(platformImage: photo)
                     .resizable()
                     .scaledToFill()
                     .frame(width: size - ring * 2, height: size - ring * 2)
@@ -79,24 +83,24 @@ public final class GlassAvatarImageCache {
 
     public static let shared = GlassAvatarImageCache()
 
-    private var images: [URL: NSImage] = [:]
+    private var images: [URL: PlatformImage] = [:]
     private var failed: Set<URL> = []
-    private var inFlight: [URL: Task<NSImage?, Never>] = [:]
+    private var inFlight: [URL: Task<PlatformImage?, Never>] = [:]
 
     public init() {}
 
     /// The cached image for `url` if it has loaded already.
-    public func cachedImage(for url: URL) -> NSImage? { images[url] }
+    public func cachedImage(for url: URL) -> PlatformImage? { images[url] }
 
     /// The image at `url`: from the cache, else loaded once (concurrent callers share one request).
     /// nil if it cannot be loaded; that outcome is cached too.
-    public func image(for url: URL) async -> NSImage? {
+    public func image(for url: URL) async -> PlatformImage? {
         if let image = images[url] { return image }
         if failed.contains(url) { return nil }
         if let running = inFlight[url] { return await running.value }
-        let task = Task<NSImage?, Never> {
+        let task = Task<PlatformImage?, Never> {
             guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
-            return NSImage(data: data)
+            return PlatformImage(data: data)
         }
         inFlight[url] = task
         let image = await task.value

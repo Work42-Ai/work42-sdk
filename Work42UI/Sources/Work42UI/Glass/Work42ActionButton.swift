@@ -5,7 +5,11 @@
 // decisions here prevents built-in and plugin widgets from drifting to subtly
 // different heights while preserving glass, solid, and bordered treatments.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// The two supported action-area label shapes. Callers supply the label's
@@ -175,6 +179,7 @@ public struct Work42ActionButton<Label: View>: View {
 
 // MARK: - Native menu
 
+#if canImport(AppKit)
 /// Shows an action-area menu as an `NSMenu` at the pointer (the click that opened it), checkmarking the
 /// selected option and calling `onSelect` with the picked option's id.
 @MainActor
@@ -213,6 +218,17 @@ public enum Work42ActionMenuPresenter {
         }
     }
 }
+#else
+/// On iPadOS the menu is a SwiftUI `Menu`; the AppKit pop-up at the pointer has no equivalent, so this
+/// does nothing there.
+@MainActor
+public enum Work42ActionMenuPresenter {
+    public static func present(
+        options: [Work42ActionMenuOption],
+        onSelect: @escaping @MainActor @Sendable (String) -> Void
+    ) {}
+}
+#endif
 
 // MARK: - Segmented group
 

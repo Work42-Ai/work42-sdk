@@ -1,10 +1,16 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // ImportBannerState.swift - the one shared state behind every sign-in import banner (WOR-418).
 //
 // A single @Observable instance drives the banner in every persistent web view, so all of them show the same
 // step and hiding it is immediate everywhere. `resolved` (an import succeeded, or "Don't show again") is stored
 // in UserDefaults and survives relaunch. A failed or cancelled import never sets it: the banner stays up.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 import Observation
 
@@ -176,3 +182,4 @@ public final class ImportBannerState {
         await resolveTask?.value
     }
 }
+#endif

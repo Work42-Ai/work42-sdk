@@ -15,7 +15,11 @@
 //                    the opener, so sign-in windows keep their `window.opener`.
 // Everything else (redirects, form posts, reloads, back/forward, subframes) is left alone.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 import OSLog
 import SwiftUI
@@ -37,9 +41,9 @@ public struct WebLinkRequest {
     /// The page the link was found on.
     public let pageURL: URL?
     public let kind: WebLinkKind
-    public weak var window: NSWindow?
+    public weak var window: PlatformWindow?
 
-    public init(url: URL, source: String?, pageURL: URL?, kind: WebLinkKind, window: NSWindow?) {
+    public init(url: URL, source: String?, pageURL: URL?, kind: WebLinkKind, window: PlatformWindow?) {
         self.url = url
         self.source = source
         self.pageURL = pageURL
@@ -190,11 +194,13 @@ public class PolicyWebView: WKWebView {
 
     /// A link the source widget owns gets "Open in New Tab in <widget>" first in its context menu (see
     /// `LinkPolicyProxy.customizeMenu`). Everything else about the menu is WebKit's.
+    #if canImport(AppKit)
     public override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
         guard policyActive else { return }
         policy.customizeMenu(menu, source: linkSource)
     }
+    #endif
 
     public override var navigationDelegate: (any WKNavigationDelegate)? {
         get { policyActive ? callerNavigation : super.navigationDelegate }
@@ -244,6 +250,7 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// "Open in New Tab in <widget>" for. One-shot.
     var openSeparatelyLink: URL?
 
+    #if canImport(AppKit)
     private static let openLinkInNewWindowItem = NSUserInterfaceItemIdentifier("WKMenuItemIdentifierOpenLinkInNewWindow")
 
     /// Retitles WebKit's "Open Link in New Window" item to "Open in New Tab in <widget>", moves it first and arms
@@ -262,6 +269,7 @@ final class LinkPolicyProxy: NSObject, WKNavigationDelegate, WKUIDelegate {
         menu.insertItem(.separator(), at: 1)
         openSeparatelyLink = link
     }
+    #endif
 
     /// A link the host kept in place is let through once: its replayed click (or load) must not be asked again.
     private var allowedOnce: [String: Date] = [:]

@@ -14,7 +14,11 @@
 // The scroll machinery is lifted from `Flow42ChatView` (the plain-VStack, `defaultScrollAnchor`,
 // live-scroll-gesture design and its hard-won lessons are preserved on purpose).
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 // MARK: - Public model
@@ -430,6 +434,7 @@ private struct ConversationTopOffsetKey: PreferenceKey {
     }
 }
 
+#if canImport(AppKit)
 /// Tells the view when the USER is scrolling, as opposed to our own `scrollTo` or content changes
 /// shifting the distance: only a real gesture may unpin the view or arm the older-page load.
 ///
@@ -561,6 +566,73 @@ private struct ConversationLiveScrollProbe: NSViewRepresentable {
         }
     }
 }
+#else
+private struct ConversationLiveScrollProbe: UIViewRepresentable {
+    let scroller: ConversationScroller
+    let onLiveScrollChange: (Bool) -> Void
+
+    func makeUIView(context: Context) -> ProbeView {
+        let view = ProbeView()
+        view.scroller = scroller
+        view.onLiveScrollChange = onLiveScrollChange
+        return view
+    }
+
+    func updateUIView(_ view: ProbeView, context: Context) {
+        view.onLiveScrollChange = onLiveScrollChange
+    }
+
+    /// Reports a finger on the conversation's own scroll view (drag, then the fling that follows), and nothing
+    /// for our own `scrollTo` or content changes, so only a real gesture can unpin the view.
+    final class ProbeView: UIView {
+        var onLiveScrollChange: ((Bool) -> Void)?
+        var scroller: ConversationScroller?
+        private weak var scrollView: UIScrollView?
+        private var tracking = false
+        private var rest: Task<Void, Never>?
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
+        override func didMoveToWindow() { super.didMoveToWindow(); bind() }
+        override func layoutSubviews() { super.layoutSubviews(); bind() }
+
+        private func bind() {
+            guard scrollView == nil else { return }
+            var view: UIView? = superview
+            while let candidate = view, !(candidate is UIScrollView) { view = candidate.superview }
+            guard let scroll = view as? UIScrollView else { return }
+            scrollView = scroll
+            scroller?.scrollView = scroll
+            scroll.panGestureRecognizer.addTarget(self, action: #selector(panChanged(_:)))
+        }
+
+        @objc private func panChanged(_ gesture: UIPanGestureRecognizer) {
+            switch gesture.state {
+            case .began:
+                rest?.cancel()
+                if !tracking { tracking = true; onLiveScrollChange?(true) }
+            case .ended, .cancelled, .failed:
+                waitForRest()
+            default:
+                break
+            }
+        }
+
+        private func waitForRest() {
+            rest?.cancel()
+            rest = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    guard let self, let scroll = self.scrollView else { return }
+                    if !(scroll.isDragging || scroll.isDecelerating) { break }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                guard !Task.isCancelled, let self, self.tracking else { return }
+                self.tracking = false
+                self.onLiveScrollChange?(false)
+            }
+        }
+    }
+}
+#endif
 
 /// Where the host hears about page loads (the app writes them to its perf log); nil elsewhere.
 public enum ConversationDiagnostics {
@@ -583,6 +655,7 @@ public enum ConversationDiagnostics {
     }
 }
 
+#if canImport(AppKit)
 /// Holds the reader's place while an older page lands above the viewport (WOR-553).
 ///
 /// The old restore captured AFTER the window had changed, found its scroll view by searching the view tree (it could pick
@@ -732,6 +805,106 @@ private final class ConversationScroller {
         }
     }
 }
+#else
+@MainActor
+private final class ConversationScroller {
+    weak var scrollView: UIScrollView?
+    private var distanceFromBottom: CGFloat?
+    private var lastHeight: CGFloat = 0
+    private var applied = 0
+    private var idleTicks = 0
+    private var startedAt: CFTimeInterval = 0
+    private var generation = 0
+    private var onFinish: ((Int, String) -> Void)?
+    private var observation: NSKeyValueObservation?
+    private var loop: Task<Void, Never>?
+
+    var isHolding: Bool { distanceFromBottom != nil }
+
+    @discardableResult
+    func begin(generation: Int, onFinish: @escaping (Int, String) -> Void) -> Bool {
+        finish(outcome: nil)
+        guard let scrollView else {
+            ConversationDiagnostics.note("page load #\(generation): failed: no scroll view to hold the place")
+            return false
+        }
+        self.generation = generation
+        self.onFinish = onFinish
+        distanceFromBottom = scrollView.contentSize.height - (scrollView.contentOffset.y + scrollView.bounds.height)
+        lastHeight = scrollView.contentSize.height
+        applied = 0
+        idleTicks = 0
+        startedAt = CACurrentMediaTime()
+        observation = scrollView.observe(\.contentSize, options: [.new]) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.contentChanged() }
+        }
+        loop = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(16))
+                if Task.isCancelled { return }
+                self?.tick()
+            }
+        }
+        return true
+    }
+
+    func readerBegan() {
+        guard isHolding else { return }
+        finish(outcome: "cancelled: the reader scrolled")
+    }
+
+    func cancel() { finish(outcome: nil) }
+
+    private func contentChanged() {
+        guard isHolding, let scrollView, scrollView.contentSize.height != lastHeight else { return }
+        apply(scrollView)
+    }
+
+    private func apply(_ scrollView: UIScrollView) {
+        guard let distance = distanceFromBottom else { return }
+        let height = scrollView.contentSize.height
+        let wanted = ConversationHold.offset(
+            documentHeight: height, viewportHeight: scrollView.bounds.height, distanceFromBottom: distance)
+        if abs(scrollView.contentOffset.y - wanted) > 0.5 {
+            scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: wanted)
+        }
+        applied += 1
+        idleTicks = 0
+        lastHeight = height
+    }
+
+    private func tick() {
+        guard isHolding, let scrollView else { return }
+        let changed = scrollView.contentSize.height != lastHeight
+        if !changed { idleTicks += 1 }
+        switch ConversationHold.step(
+            contentChanged: changed, applied: applied, idleTicks: idleTicks,
+            elapsed: CACurrentMediaTime() - startedAt, readerScrolling: false
+        ) {
+        case .apply: apply(scrollView)
+        case .keepWaiting: break
+        case .settled: finish(outcome: "settled after \(applied) apply")
+        case .gaveUp: finish(outcome: "failed: no layout change arrived, the place was not held")
+        case .cancelled: finish(outcome: "cancelled")
+        }
+    }
+
+    private func finish(outcome: String?) {
+        guard isHolding || loop != nil else { return }
+        loop?.cancel()
+        loop = nil
+        observation?.invalidate()
+        observation = nil
+        distanceFromBottom = nil
+        let done = onFinish
+        onFinish = nil
+        if let outcome {
+            ConversationDiagnostics.note("page load #\(generation): \(outcome)")
+            done?(generation, outcome)
+        }
+    }
+}
+#endif
 
 /// Latest probe readings, kept off `@State` so a scroll does not re-evaluate the body each frame.
 @MainActor
@@ -1139,7 +1312,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
             }
             // A turn can finish while the app is in the background, where the scroll cannot apply.
             // Re-pin on return, but only when already pinned so a deliberate scroll-up is kept.
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: PlatformApplication.didBecomeActive)) { _ in
                 if isPinnedToBottom { scrollToBottom(proxy, animated: false) }
             }
             .onAppear {

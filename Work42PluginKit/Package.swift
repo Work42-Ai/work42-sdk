@@ -30,6 +30,7 @@ let package = Package(
     name: "Work42PluginKit",
     platforms: [
         .macOS(.v15),
+        .iOS(.v26),
     ],
     products: [
         .library(name: "Work42PluginKit", type: .dynamic, targets: ["Work42PluginKit"]),

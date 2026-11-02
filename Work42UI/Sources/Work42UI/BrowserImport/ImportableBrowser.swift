@@ -1,10 +1,16 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // ImportableBrowser.swift - the browsers whose sign-in cookies Work42 can import (WOR-417).
 //
 // Safari, the Chromium family (Chrome, Arc, Brave, Edge, Chromium) and Firefox. Everything here is a pure
 // description of where a browser keeps its data and what its Keychain entry is called; reading the data is
 // done by the readers next to this file.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 
 public nonisolated enum ImportableBrowser: String, CaseIterable, Sendable {
@@ -107,3 +113,4 @@ public nonisolated enum ImportableBrowser: String, CaseIterable, Sendable {
 private enum ImportableBrowserIcons {
     static var icons: [ImportableBrowser: NSImage?] = [:]
 }
+#endif

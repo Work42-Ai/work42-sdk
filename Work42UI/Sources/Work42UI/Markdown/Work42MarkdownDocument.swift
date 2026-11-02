@@ -29,7 +29,11 @@
 // resolve the directory regardless of which widget mounted first.
 
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// A themed markdown document with inline `[[artifact:id]]` embeds and a
 /// shared, session-scoped comment layer — the spec/testing-plan shape. For

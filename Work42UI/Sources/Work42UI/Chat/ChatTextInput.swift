@@ -37,7 +37,11 @@
 //   - Optional `isFocused` binding so the parent can draw a focus
 //     ring around the surrounding surface.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 public struct ChatTextInput: View {
@@ -55,7 +59,7 @@ public struct ChatTextInput: View {
     /// `nil`, image paste falls through to the normal NSTextView paste
     /// behaviour (usually a no-op for image-only pasteboards on a
     /// plain-text field).
-    public var onPasteImage: ((NSImage) -> Void)?
+    public var onPasteImage: ((PlatformImage) -> Void)?
     /// Called when the user presses Cmd-V and the pasteboard carries a
     /// one or more `public.file-url` items pointing at image files —
     /// e.g. Cmd-C on one or several screenshot files in Finder. Checked
@@ -74,7 +78,7 @@ public struct ChatTextInput: View {
         maxLines: Int = 10,
         fontSize: CGFloat = 16,
         isFocused: Binding<Bool> = .constant(false),
-        onPasteImage: ((NSImage) -> Void)? = nil,
+        onPasteImage: ((PlatformImage) -> Void)? = nil,
         onPasteFiles: (([URL]) -> Void)? = nil,
         onSubmit: @escaping () -> Void
     ) {
@@ -116,6 +120,7 @@ public struct ChatTextInput: View {
     }
 }
 
+#if canImport(AppKit)
 // MARK: - AppKit core
 
 private struct ChatTextInputCore: NSViewRepresentable {
@@ -503,3 +508,98 @@ private final class ChatScrollView: NSScrollView {
         return max(minHeight, min(maxHeight, contentHeight))
     }
 }
+
+#else
+// MARK: - UIKit core (iPadOS)
+
+private struct ChatTextInputCore: UIViewRepresentable {
+
+    @Binding var text: String
+    let minLines: Int
+    let maxLines: Int
+    let fontSize: CGFloat
+    @Binding var isFocused: Bool
+    var onPasteImage: ((PlatformImage) -> Void)?
+    var onPasteFiles: (([URL]) -> Void)?
+    let onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> ComposerTextView {
+        let view = ComposerTextView()
+        view.font = .systemFont(ofSize: fontSize)
+        view.backgroundColor = .clear
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.autocorrectionType = .default
+        view.smartQuotesType = .no
+        view.smartDashesType = .no
+        view.smartInsertDeleteType = .no
+        view.delegate = context.coordinator
+        view.onSubmit = onSubmit
+        view.onPasteImage = onPasteImage
+        view.onPasteFiles = onPasteFiles
+        return view
+    }
+
+    func updateUIView(_ view: ComposerTextView, context: Context) {
+        context.coordinator.parent = self
+        view.onSubmit = onSubmit
+        view.onPasteImage = onPasteImage
+        view.onPasteFiles = onPasteFiles
+        if view.text != text { view.text = text }
+        let lineHeight = (view.font ?? .systemFont(ofSize: fontSize)).lineHeight
+        view.isScrollEnabled = view.contentSize.height > lineHeight * CGFloat(maxLines) + 1
+        if isFocused, !view.isFirstResponder {
+            DispatchQueue.main.async { view.becomeFirstResponder() }
+        } else if !isFocused, view.isFirstResponder {
+            DispatchQueue.main.async { view.resignFirstResponder() }
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView view: ComposerTextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? 320
+        let lineHeight = (view.font ?? .systemFont(ofSize: fontSize)).lineHeight
+        let content = view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        let height = min(max(content, lineHeight * CGFloat(minLines)), lineHeight * CGFloat(maxLines))
+        return CGSize(width: width, height: height)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: ChatTextInputCore
+        init(_ parent: ChatTextInputCore) { self.parent = parent }
+
+        func textViewDidChange(_ textView: UITextView) { parent.text = textView.text }
+        func textViewDidBeginEditing(_ textView: UITextView) { parent.isFocused = true }
+        func textViewDidEndEditing(_ textView: UITextView) { parent.isFocused = false }
+    }
+}
+
+/// Return submits and Shift+Return inserts a newline (hardware keyboard); paste hands images and files to the host.
+private final class ComposerTextView: UITextView {
+    var onSubmit: (() -> Void)?
+    var onPasteImage: ((PlatformImage) -> Void)?
+    var onPasteFiles: (([URL]) -> Void)?
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if let press = presses.first, let key = press.key,
+           key.keyCode == .keyboardReturnOrEnter, !key.modifierFlags.contains(.shift),
+           markedTextRange == nil {
+            onSubmit?()
+            return
+        }
+        super.pressesBegan(presses, with: event)
+    }
+
+    override func paste(_ sender: Any?) {
+        let board = UIPasteboard.general
+        if let urls = board.urls?.filter(\.isFileURL), !urls.isEmpty, let onPasteFiles {
+            onPasteFiles(urls)
+        } else if board.hasImages, let image = board.image, let onPasteImage {
+            onPasteImage(image)
+        } else {
+            super.paste(sender)
+        }
+    }
+}
+#endif

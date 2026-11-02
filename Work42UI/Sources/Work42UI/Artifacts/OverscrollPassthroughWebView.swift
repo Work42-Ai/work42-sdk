@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: scroll-wheel chaining and AppKit snapshotting.
 // OverscrollPassthroughWebView.swift — bug/weird-scrolling-thing-that-doesn-t-allow-vertical
 //
 // A WKWebView subclass that chains NSEvent.scrollWheel to the parent AppKit
@@ -57,7 +59,11 @@
 //   OverscrollInstaller.teardown(from: controller, proxy: coordinator.overscrollProxy)
 //   coordinator.overscrollProxy = nil
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import OSLog
 import WebKit
 
@@ -427,3 +433,33 @@ public enum OverscrollInstaller {
         controller.removeScriptMessageHandler(forName: handlerName)
     }
 }
+
+#else
+// iPadOS: touch scrolling already chains to the enclosing scroll view, so the macOS wheel-chaining web view keeps
+// its API here as no-ops and the shared web-section code needs no changes.
+import WebKit
+
+public enum OverscrollMode { case normal, alwaysPassThrough, passthroughAtBoundary }
+
+@MainActor
+public final class OverscrollPassthroughWebView: PolicyWebView {
+    public var overscrollMode: OverscrollMode = .normal
+    var hasDeferredLoad: Bool { false }
+    var hierarchyDescription: String { "iOS web view" }
+    func replayDeferredLoadIfAttached() -> Bool { false }
+}
+
+@MainActor
+public final class OverscrollHandlerProxy: NSObject, WKScriptMessageHandler {
+    public func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {}
+}
+
+public enum OverscrollInstaller {
+    public static let handlerName = "w42overscroll"
+    public static let scrollStateScript: String = ""
+    @MainActor
+    public static func wireProxy(webView: OverscrollPassthroughWebView, controller: WKUserContentController) -> OverscrollHandlerProxy? { nil }
+    @MainActor
+    public static func teardown(from controller: WKUserContentController, proxy: OverscrollHandlerProxy?) {}
+}
+#endif

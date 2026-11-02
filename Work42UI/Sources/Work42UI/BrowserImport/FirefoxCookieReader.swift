@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // FirefoxCookieReader.swift - cookies from a Firefox profile's cookies.sqlite (WOR-417). Firefox does not encrypt them.
 
 import Foundation
@@ -42,3 +44,4 @@ public nonisolated enum FirefoxCookieReader {
         }
     }
 }
+#endif

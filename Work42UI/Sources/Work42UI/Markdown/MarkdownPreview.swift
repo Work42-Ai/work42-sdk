@@ -8,7 +8,11 @@
 // The chat keeps using MarkdownUI directly.
 
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// The policy boundary for every Work42-owned markdown/HTML document.
 ///
@@ -24,8 +28,8 @@ public struct MarkdownPreview: View {
     private let baseURL: URL?
     private let commentsEnabled: Bool
     private let comments: [MarkdownCommentRange]
-    private let onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)?
-    private let onViewComment: ((NSView, CGRect, Int) -> Void)?
+    private let onAddComment: ((PlatformView, CGRect, Int, Int, String) -> Void)?
+    private let onViewComment: ((PlatformView, CGRect, Int) -> Void)?
     /// Fired when a live text selection appears / clears — lets the host publish
     /// it for dictation-to-comment (highlight → push-to-talk → comment).
     private let onSelectionChanged: ((Int, Int, String) -> Void)?
@@ -54,7 +58,7 @@ public struct MarkdownPreview: View {
     private let trailingHTML: String
     /// Page → host bridge for anchoring native UI from in-document controls.
     /// See `MarkdownWebView.onBridgeMessage`.
-    private let onBridgeMessage: ((_ payload: [String: Any], _ view: NSView, _ rect: CGRect) -> Void)?
+    private let onBridgeMessage: ((_ payload: [String: Any], _ view: PlatformView, _ rect: CGRect) -> Void)?
 
     @State private var measuredHeight: CGFloat = 0
 
@@ -70,8 +74,8 @@ public struct MarkdownPreview: View {
         baseURL: URL? = nil,
         commentsEnabled: Bool = false,
         comments: [MarkdownCommentRange] = [],
-        onAddComment: ((NSView, CGRect, Int, Int, String) -> Void)? = nil,
-        onViewComment: ((NSView, CGRect, Int) -> Void)? = nil,
+        onAddComment: ((PlatformView, CGRect, Int, Int, String) -> Void)? = nil,
+        onViewComment: ((PlatformView, CGRect, Int) -> Void)? = nil,
         onSelectionChanged: ((Int, Int, String) -> Void)? = nil,
         onSelectionCleared: (() -> Void)? = nil,
         artifactURLResolver: ((String) -> URL?)? = nil,
@@ -79,7 +83,7 @@ public struct MarkdownPreview: View {
         onArtifactExpand: ((String) -> Void)? = nil,
         autoHeight: Bool = false,
         trailingHTML: String = "",
-        onBridgeMessage: ((_ payload: [String: Any], _ view: NSView, _ rect: CGRect) -> Void)? = nil
+        onBridgeMessage: ((_ payload: [String: Any], _ view: PlatformView, _ rect: CGRect) -> Void)? = nil
     ) {
         self.text = text
         self.baseURL = baseURL

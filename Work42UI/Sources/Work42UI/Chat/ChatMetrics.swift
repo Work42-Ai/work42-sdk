@@ -4,7 +4,11 @@
 // (artifact `chat-spacing`): one side margin, a clear gap between turns, a smaller one between the blocks of a
 // turn, and an airy reply text. `ConversationMetrics` and the app's chat and composer read from here.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 public enum ChatMetrics {
@@ -27,7 +31,7 @@ public enum ChatMetrics {
     public static let paragraphSpacing: CGFloat = 14
     /// Extra space between wrapped lines that brings the body font to `bodyLineHeight`.
     public static var bodyLineSpacing: CGFloat {
-        max(0, bodyLineHeight - NSFont.systemFont(ofSize: bodyFontSize).boundingRectForFont.height.rounded())
+        max(0, bodyLineHeight - PlatformFontMetrics.systemLineBoundsHeight(ofSize: bodyFontSize).rounded())
     }
 
     /// Padding inside my message card.

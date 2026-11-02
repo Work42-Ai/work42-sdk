@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: scroll-wheel chaining and AppKit snapshotting.
 // ArtifactSnapshotRenderer.swift — AC2/AC3/AC4 infrastructure
 // (feat/chat-performance-improvements.2).
 //
@@ -22,7 +24,11 @@
 // to `ArtifactPreviewCache.write` (Flow42Core). This module never imports
 // Flow42Core (module boundary), so the cache write stays with the caller.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import WebKit
 
 /// Errors a snapshot render can end in.
@@ -325,3 +331,4 @@ extension ArtifactSnapshotRenderer: WKNavigationDelegate {
         failNavigation(with: ArtifactSnapshotError.navigationFailed(error.localizedDescription))
     }
 }
+#endif

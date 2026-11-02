@@ -9,7 +9,11 @@
 //
 // quiet-lark.19
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 // MARK: - ChatBubble public types

@@ -15,7 +15,11 @@
 //
 // All of it is `@_spi(Work42Host)`: plugins render prose with `Work42MarkdownText` and never see these types.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 internal import cmark_gfm
 internal import cmark_gfm_extensions
@@ -40,6 +44,7 @@ public enum Work42MarkdownSegments {
 
     /// Splits `markdown` into segments. Prose is styled for `bodyFontSize` the way `MarkdownUI.Theme.work42` styles it.
     public static func split(_ markdown: String, bodyFontSize: CGFloat) -> [Work42MarkdownSegment] {
+        #if canImport(AppKit)
         cmark_gfm_core_extensions_ensure_registered()
         guard let parser = cmark_parser_new(CMARK_OPT_SOURCEPOS) else { return fallback(markdown) }
         defer { cmark_parser_free(parser) }
@@ -59,6 +64,11 @@ public enum Work42MarkdownSegments {
             child = cmark_node_next(node)
         }
         return builder.finish()
+    
+        #else
+        // iPadOS has no TextKit table/quote-bar blocks, so the whole reply renders through Work42MarkdownText.
+        return markdown.isEmpty ? [] : [.markdown(markdown)]
+        #endif
     }
 
     private static func fallback(_ markdown: String) -> [Work42MarkdownSegment] {
@@ -66,6 +76,7 @@ public enum Work42MarkdownSegments {
     }
 }
 
+#if canImport(AppKit)
 // MARK: - Building
 
 private typealias CmarkNode = UnsafeMutablePointer<cmark_node>
@@ -454,6 +465,7 @@ private final class ProseBuilder {
         }
     }
 }
+#endif
 
 // MARK: - Cache
 
@@ -495,6 +507,7 @@ public final class Work42MarkdownSegmentCache {
     public var count: Int { entries.count }
 }
 
+#if canImport(AppKit)
 // MARK: - Selectable prose view
 
 // MARK: - Copy text
@@ -733,3 +746,82 @@ public final class SelectableProseTextView: NSTextView {
         return (text, rect.offsetBy(dx: origin.x, dy: origin.y))
     }
 }
+#else
+// MARK: - iPadOS
+
+/// The plain text of a selection in a prose run (no table cells on iPadOS).
+@_spi(Work42Host)
+public enum ProseCopyText {
+    public static func plainText(of text: NSAttributedString, range: NSRange) -> String {
+        let full = text.string as NSString
+        let range = NSIntersectionRange(range, NSRange(location: 0, length: full.length))
+        return range.length > 0 ? full.substring(with: range) : ""
+    }
+}
+
+/// One run of prose in a read-only, selectable text view.
+@_spi(Work42Host)
+public struct Work42SelectableProse: UIViewRepresentable {
+    private let text: NSAttributedString
+    private let onOpenLink: ((URL) -> Void)?
+    private let onSelectionChange: ((String, CGRect) -> Void)?
+
+    public init(
+        _ text: NSAttributedString,
+        onOpenLink: ((URL) -> Void)? = nil,
+        onSelectionChange: ((String, CGRect) -> Void)? = nil
+    ) {
+        self.text = text
+        self.onOpenLink = onOpenLink
+        self.onSelectionChange = onSelectionChange
+    }
+
+    public func makeCoordinator() -> Coordinator { Coordinator() }
+
+    public func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.isEditable = false
+        view.isSelectable = true
+        view.isScrollEnabled = false
+        view.backgroundColor = .clear
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.delegate = context.coordinator
+        return view
+    }
+
+    public func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.onOpenLink = onOpenLink
+        context.coordinator.onSelectionChange = onSelectionChange
+        if view.attributedText != text { view.attributedText = text }
+    }
+
+    public func sizeThatFits(_ proposal: ProposedViewSize, uiView view: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? 320
+        return view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    }
+
+    public final class Coordinator: NSObject, UITextViewDelegate {
+        var onOpenLink: ((URL) -> Void)?
+        var onSelectionChange: ((String, CGRect) -> Void)?
+
+        public func textView(
+            _ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange,
+            interaction: UITextItemInteraction
+        ) -> Bool {
+            guard let onOpenLink else { return true }
+            onOpenLink(URL)
+            return false
+        }
+
+        public func textViewDidChangeSelection(_ textView: UITextView) {
+            guard let range = textView.selectedTextRange, !range.isEmpty,
+                  let selected = textView.text(in: range) else {
+                onSelectionChange?("", .zero)
+                return
+            }
+            onSelectionChange?(selected, textView.firstRect(for: range))
+        }
+    }
+}
+#endif

@@ -17,7 +17,11 @@
 // surface. The closure carries both the payload and the destination store, so
 // multi-window "which composer?" needs no routing — the closure captured it.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 
 /// A live, commentable selection published by a surface.

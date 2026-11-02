@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // BrowserProfile.swift - the profiles a browser has, and where each keeps its cookies (WOR-417).
 
 import Foundation
@@ -107,3 +109,4 @@ public nonisolated struct BrowserProfile: Identifiable, Hashable, Sendable {
         return stat(url.path, &info) != 0 && errno == ENOENT
     }
 }
+#endif

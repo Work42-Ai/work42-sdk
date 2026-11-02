@@ -16,7 +16,11 @@
 //   appearance == nil — the artifact has no content: the fail-loud "not found" card,
 //                       naming the artifact id.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 // MARK: - Appearance

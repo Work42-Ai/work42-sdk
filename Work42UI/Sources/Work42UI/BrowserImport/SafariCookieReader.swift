@@ -1,3 +1,5 @@
+#if canImport(AppKit)
+// MAC-ONLY: importing another browser's profile reads Mac app bundles and home folders.
 // SafariCookieReader.swift - cookies from Safari's Cookies.binarycookies (WOR-417).
 //
 // The file is a small binary format: the magic "cook", a big-endian page count and page sizes, then the pages.
@@ -86,3 +88,4 @@ public nonisolated enum SafariCookieReader {
         return String(decoding: bytes[offset..<end], as: UTF8.self)
     }
 }
+#endif

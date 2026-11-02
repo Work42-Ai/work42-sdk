@@ -20,7 +20,11 @@
 // plugin's own — commits `.spec`), so a single instance serves all
 // commentable markdown previews.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 @MainActor
@@ -72,7 +76,9 @@ public final class MarkdownPreviewCommentPresenter {
         }
     }
 
+    #if canImport(AppKit)
     private var activePopover: NSPopover?
+    #endif
 
     public init() {}
 
@@ -84,6 +90,7 @@ public final class MarkdownPreviewCommentPresenter {
         }
     }
 
+    #if canImport(AppKit)
     /// The floating "add comment" button was clicked over a selection spanning
     /// `start…end` (1-based source lines). Open the composer next to it.
     public func presentComposer(
@@ -158,6 +165,17 @@ public final class MarkdownPreviewCommentPresenter {
         popover.show(relativeTo: anchorRect, of: anchorView, preferredEdge: .maxX)
         activePopover = popover
     }
+    #else
+    // The AppKit popovers have no iPadOS equivalent; the iPad host presents its own comment UI.
+    public func presentComposer(
+        anchorView: PlatformView, anchorRect: CGRect, target: Target, store: PendingCommentsStore,
+        startLine: Int, endLine: Int, excerpt rawExcerpt: String
+    ) {}
+
+    public func presentViewer(
+        anchorView: PlatformView, anchorRect: CGRect, target: Target, store: PendingCommentsStore, line: Int
+    ) {}
+    #endif
 
     private static func firstLines(_ text: String, _ n: Int) -> String {
         text.components(separatedBy: "\n").prefix(n).joined(separator: "\n")

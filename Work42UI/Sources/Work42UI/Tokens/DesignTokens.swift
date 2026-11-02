@@ -9,20 +9,19 @@
 // `DT.aMode`. Long names like `Tokens.spacingMedium` get noisy.
 //
 // Light/dark colors: each color is built from hand-tuned light + dark
-// hex pairs via `NSColor(name:dynamicProvider:)`. We do NOT directly
+// hex pairs via `PlatformColor(name:dynamicProvider:)`. We do NOT directly
 // invert RGB values for dark mode — accents stay the same hue, only
 // luminance shifts to keep them readable in both contexts.
 //
 // Theme-aware tokens (feat/theme-customization.8):
 // The themable color tokens (`backdrop`, `surface`, `elevated`, `sidebar`,
 // `titlebar`, `textPrimary`, `textSecondary`, `textTertiary`, `systemAccent`)
-// are `static var` computed properties whose `NSColor(name:nil,dynamicProvider:)`
+// are `static var` computed properties whose `PlatformColor(name:nil,dynamicProvider:)`
 // closures read `ThemeRuntime.current` on every draw pass, so a theme
 // switch re-resolves every surface token without any call-site changes.
 // Non-themable tokens (status: green/red/amber; brand: orange/magenta/cyan)
 // remain `static let` adaptive pairs — they carry fixed semantic meaning.
 
-import AppKit
 import SwiftUI
 
 public enum DT {
@@ -106,7 +105,7 @@ public enum DT {
     /// every "click me" affordance across the main app.
     ///
     /// For the built-in System palette (`accent: .system`), this follows
-    /// `NSColor.controlAccentColor` — the color the user picked in
+    /// `PlatformColor.platformAccent` — the color the user picked in
     /// System Settings → Appearance → Accent — matching the rest of
     /// macOS instead of imposing a brand violet.
     ///
@@ -119,13 +118,12 @@ public enum DT {
     /// reserved for state-signal visuals (recording edge-glow, menu-bar
     /// orb) where the brand identity carries a specific meaning.
     public static var systemAccent: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+        Color(platform: .dynamicColor { isDark in
             let snap = ThemeRuntime.current
             let tokens = isDark ? snap.spec.dark : snap.spec.light
             switch tokens.accent {
-            case .system:   return NSColor.controlAccentColor
-            case .hex(let h): return NSColor(hexString: h)
+            case .system:   return PlatformColor.platformAccent
+            case .hex(let h): return PlatformColor(hexString: h)
             }
         })
     }
@@ -214,7 +212,7 @@ public enum DT {
     // can each carry their own distinct surface color.
     //
     // All surface tokens are `static var` computed properties that read
-    // `ThemeRuntime.current` inside an `NSColor(name:nil,dynamicProvider:)`
+    // `ThemeRuntime.current` inside an `PlatformColor(name:nil,dynamicProvider:)`
     // closure. The System palette hard-codes the same hex values the old
     // `static let adaptive(...)` calls used, so AC1 (zero visual change
     // on first launch) holds exactly.
@@ -285,18 +283,18 @@ public enum DT {
     // luminance math. Use these instead of hardcoding
     // `.white` / `.black` / `.primary` for on-color text.
 
-    /// WCAG relative luminance (Rec. 709) for an NSColor. 0 = black,
+    /// WCAG relative luminance (Rec. 709) for an PlatformColor. 0 = black,
     /// 1 = white. Used to decide whether the foreground should be
     /// light or dark on top of a given background.
-    public static func relativeLuminance(of color: NSColor) -> Double {
-        let resolved = color.usingColorSpace(.sRGB) ?? color
+    public static func relativeLuminance(of color: PlatformColor) -> Double {
+        let resolved = color.rgbaComponents
         func channel(_ c: CGFloat) -> Double {
             let v = Double(c)
             return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
         }
-        let r = channel(resolved.redComponent)
-        let g = channel(resolved.greenComponent)
-        let b = channel(resolved.blueComponent)
+        let r = channel(resolved.red)
+        let g = channel(resolved.green)
+        let b = channel(resolved.blue)
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
     }
 
@@ -305,8 +303,8 @@ public enum DT {
     ///
     /// This is a **pure function of the background's own luminance** — the ONLY
     /// input Yan's rule allows. It takes a concrete, already-resolved sRGB
-    /// NSColor and does plain arithmetic: no appearance argument, no drawing
-    /// context, no dynamic `NSColor(name:)` provider. That is deliberate. The
+    /// PlatformColor and does plain arithmetic: no appearance argument, no drawing
+    /// context, no dynamic `PlatformColor(name:)` provider. That is deliberate. The
     /// old `contrastingForeground` wrapped this decision in a dynamic provider
     /// that AppKit/SwiftUI re-resolved against whatever drawing appearance was
     /// in effect, so a transient appearance during a view/tab transition could
@@ -315,7 +313,7 @@ public enum DT {
     /// the result is stable across tab switches, focus, and re-mounts.
     ///
     /// Black wins ties (`>=`), matching the standard L ≈ 0.179 crossover.
-    public static func foreground(on background: NSColor) -> Color {
+    public static func foreground(on background: PlatformColor) -> Color {
         let l = relativeLuminance(of: background)
         let contrastVsWhite = 1.05 / (l + 0.05)
         let contrastVsBlack = (l + 0.05) / 0.05
@@ -323,11 +321,11 @@ public enum DT {
     }
 
     /// SwiftUI-friendly overload. Resolves the SwiftUI `Color` into its concrete
-    /// NSColor **once, eagerly** (at the call site, not inside a dynamic
+    /// PlatformColor **once, eagerly** (at the call site, not inside a dynamic
     /// provider), then decides. The returned color is a plain `.black`/`.white`
     /// that never re-resolves on a later drawing-appearance change.
     public static func foreground(on background: Color) -> Color {
-        foreground(on: NSColor(background))
+        foreground(on: PlatformColor(background))
     }
 
     /// Below this WCAG relative luminance, a tint reads as "black" rather than
@@ -365,7 +363,7 @@ public enum DT {
         _ tint: Color, colorScheme: ColorScheme
     ) -> (fill: Color, foreground: Color, stroke: Color) {
         if colorScheme == .dark {
-            if relativeLuminance(of: NSColor(tint)) < nearBlackLuminance {
+            if relativeLuminance(of: PlatformColor(tint)) < nearBlackLuminance {
                 return (Color.white.opacity(0.16), .white, Color.white.opacity(0.24))
             }
             return (tint.opacity(0.16), tint, tint.opacity(0.24))
@@ -378,11 +376,9 @@ public enum DT {
     /// light-mode rule: preserve hue, increase saturation slightly, and lower
     /// brightness with a cap that keeps light yellows/cyans from washing out.
     private static func lightChipForeground(for tint: Color) -> Color {
-        let raw = NSColor(tint)
-        let color = raw.usingColorSpace(.sRGB) ?? raw
-        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        return Color(nsColor: NSColor(
+        let raw = PlatformColor(tint)
+        let (hue, saturation, brightness, alpha) = raw.hsbaComponents
+        return Color(platform: PlatformColor(
             hue: hue,
             saturation: min(1.0, saturation * 1.12),
             brightness: max(0.0, min(0.62, brightness * 0.72)),
@@ -390,19 +386,19 @@ public enum DT {
         ))
     }
 
-    /// The ACTIVE THEME's accent as a concrete NSColor for one mode —
+    /// The ACTIVE THEME's accent as a concrete PlatformColor for one mode —
     /// the theme's pinned hex, or the live macOS accent when the palette
     /// declares `accent: system` (built-in System palette only). This is
     /// the single accent source for every derived-accent helper below;
-    /// deriving from `NSColor.controlAccentColor` directly is a theming
+    /// deriving from `PlatformColor.platformAccent` directly is a theming
     /// bug (the app would follow the macOS accent even under a custom
     /// theme — observed live as purple chat-bubble text under Ayu).
-    public nonisolated static func resolvedAccent(isDark: Bool) -> NSColor {
+    public nonisolated static func resolvedAccent(isDark: Bool) -> PlatformColor {
         let snap = ThemeRuntime.current
         let tokens = isDark ? snap.spec.dark : snap.spec.light
         switch tokens.accent {
-        case .system:     return NSColor.controlAccentColor
-        case .hex(let h): return NSColor(hexString: h)
+        case .system:     return PlatformColor.platformAccent
+        case .hex(let h): return PlatformColor(hexString: h)
         }
     }
 
@@ -419,8 +415,7 @@ public enum DT {
         // theme/appearance-follows path: a dark-mode toggle can change the
         // accent (hence its foreground), but nothing about tab/view lifecycle
         // does, so accent chrome does not flicker on tab switches.
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+        Color(platform: .dynamicColor { isDark in
             let accent = resolvedAccent(isDark: isDark)
             let l = relativeLuminance(of: accent)
             return (l + 0.05) / 0.05 >= 1.05 / (l + 0.05) ? .black : .white
@@ -436,7 +431,7 @@ public enum DT {
     /// Unlike `adaptive(light:dark:)`, the accent has no light/dark hex
     /// pair — it's whatever `controlAccentColor` the user picked. So this
     /// behaves like a **macOS dynamic system color**: a name-based
-    /// `NSColor` dynamic provider resolves at draw-time against the
+    /// `PlatformColor` dynamic provider resolves at draw-time against the
     /// current appearance, takes the live accent, and shifts only its
     /// **luminance** (via HSB) while keeping the hue:
     ///
@@ -454,12 +449,10 @@ public enum DT {
     /// this dynamic-system-color behavior; for now only the user
     /// message bubble is wired to it.
     public static var accentForeground: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+        Color(platform: .dynamicColor { isDark in
             let raw = resolvedAccent(isDark: isDark)
-            let accent = raw.usingColorSpace(.sRGB) ?? raw
-            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            accent.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            var (h, s, b, a) = raw.hsbaComponents
+            _ = a
             if isDark {
                 // Brighten + slightly desaturate so the hue lifts off a
                 // dark tint without going neon. Floor on brightness keeps
@@ -473,21 +466,20 @@ public enum DT {
                 b = max(0.0, min(0.62, b * 0.72))
                 s = min(1.0, s * 1.12)
             }
-            return NSColor(hue: h, saturation: s, brightness: b, alpha: 1)
+            return PlatformColor(hue: h, saturation: s, brightness: b, alpha: 1)
         })
     }
 
     // MARK: - Helpers
 
     /// Builds a SwiftUI `Color` that resolves to the right hex per the
-    /// current system appearance. Uses NSColor's name-based dynamic
+    /// current system appearance. Uses PlatformColor's name-based dynamic
     /// provider so the choice happens at draw-time, not init-time —
     /// users toggling Dark Mode mid-session see colors update without
     /// us having to rebuild views.
     public static func adaptive(light: UInt32, dark: UInt32) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
-            return NSColor(rgb: isDark ? dark : light)
+        Color(platform: .dynamicColor { isDark in
+            return PlatformColor(rgb: isDark ? dark : light)
         })
     }
 
@@ -495,16 +487,15 @@ public enum DT {
     /// `keyPath` on the active `ThemeTokenSet` (light or dark) from
     /// `ThemeRuntime.current` on every draw pass.
     ///
-    /// The closure runs inside `NSColor(name:nil,dynamicProvider:)` which
+    /// The closure runs inside `PlatformColor(name:nil,dynamicProvider:)` which
     /// AppKit calls on the draw thread — NOT on the main actor. Only
-    /// nonisolated state (`ThemeRuntime.current`, `NSColor(hexString:)`,
+    /// nonisolated state (`ThemeRuntime.current`, `PlatformColor(hexString:)`,
     /// and the captured key-path) is accessed inside the closure.
     private static func themeColor(_ keyPath: KeyPath<ThemeTokenSet, String>) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+        Color(platform: .dynamicColor { isDark in
             let snap = ThemeRuntime.current
             let tokens = isDark ? snap.spec.dark : snap.spec.light
-            return NSColor(hexString: tokens[keyPath: keyPath])
+            return PlatformColor(hexString: tokens[keyPath: keyPath])
         })
     }
 }
@@ -517,9 +508,9 @@ public extension Color {
     /// foreground "empty" and get a legible label automatically.
     ///
     /// Thin sugar over the single `DT.foreground(on:)` primitive: the background
-    /// is resolved to a concrete sRGB NSColor once, then the black/white decision
+    /// is resolved to a concrete sRGB PlatformColor once, then the black/white decision
     /// is plain luminance arithmetic. Unlike the former implementation, this is
-    /// NOT a dynamic `NSColor(name:)` provider — so it cannot flip black↔white on
+    /// NOT a dynamic `PlatformColor(name:)` provider — so it cannot flip black↔white on
     /// a tab switch, focus change, or re-mount. The foreground follows ONLY the
     /// background color's luminance, exactly as intended.
     var contrastingForeground: Color {
@@ -527,10 +518,10 @@ public extension Color {
     }
 }
 
-// MARK: - NSColor hex helpers
+// MARK: - PlatformColor hex helpers
 
-private extension NSColor {
-    /// `0xRRGGBB` → NSColor (sRGB, alpha 1).
+private extension PlatformColor {
+    /// `0xRRGGBB` → PlatformColor (sRGB, alpha 1).
     convenience init(rgb hex: UInt32) {
         self.init(
             srgbRed: CGFloat((hex >> 16) & 0xFF) / 255.0,
@@ -540,7 +531,7 @@ private extension NSColor {
         )
     }
 
-    /// `"#rrggbb"` hex string → NSColor (sRGB, alpha 1).
+    /// `"#rrggbb"` hex string → PlatformColor (sRGB, alpha 1).
     ///
     /// The `#` prefix is optional; letters may be upper- or lower-case.
     /// Falls back to magenta on malformed input so any theme token
@@ -550,7 +541,7 @@ private extension NSColor {
     /// normalised by `ThemeYAML.validateHex` at load time, so the
     /// fallback should never fire in production.
     ///
-    /// Called from `NSColor(name:nil,dynamicProvider:)` closures on the
+    /// Called from `PlatformColor(name:nil,dynamicProvider:)` closures on the
     /// draw thread — no actor isolation required (pure arithmetic + init).
     nonisolated convenience init(hexString hex: String) {
         let stripped = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex

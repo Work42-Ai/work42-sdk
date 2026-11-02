@@ -7,7 +7,11 @@
 // glyphs are drawn at runtime, never shipped as files. The PNG is a black glyph on
 // clear; the page uses only its alpha as a mask, so any text colour tints it.
 
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 
 public enum SFSymbolRenderer {
@@ -22,6 +26,7 @@ public enum SFSymbolRenderer {
 
     /// PNG data for `name`, or nil when it is not a symbol this macOS knows.
     /// Main-actor only: AppKit image drawing.
+    #if canImport(AppKit)
     @MainActor
     public static func pngData(for name: String) -> Data? {
         guard isValidName(name),
@@ -55,6 +60,27 @@ public enum SFSymbolRenderer {
         NSGraphicsContext.restoreGraphicsState()
         return rep.representation(using: .png, properties: [:])
     }
+    #else
+    @MainActor
+    public static func pngData(for name: String) -> Data? {
+        guard isValidName(name), let base = UIImage(systemName: name) else { return nil }
+        let configured = base.applyingSymbolConfiguration(.init(pointSize: 64, weight: .regular)) ?? base
+        let natural = configured.size
+        guard natural.width > 0, natural.height > 0 else { return nil }
+        let side = CGFloat(pixelSize)
+        let box = side - 16
+        let scale = min(box / natural.width, box / natural.height)
+        let drawn = CGSize(width: natural.width * scale, height: natural.height * scale)
+        let rect = CGRect(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2, width: drawn.width, height: drawn.height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        // Drawn in solid black; only the alpha matters to the page that recolors it.
+        let tinted = configured.withTintColor(.black, renderingMode: .alwaysOriginal)
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
+            .pngData { _ in tinted.draw(in: rect) }
+    }
+    #endif
 }
 
 /// Thread-safe memo of rendered symbols (nil results are cached too, so a bad name
