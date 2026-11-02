@@ -17,7 +17,6 @@
 import SwiftUI
 import WebKit
 
-#if canImport(AppKit)
 public extension View {
     /// Wire the in-page diagrams of a cached `WebSectionLiveView` (artifact /
     /// spec surfaces) to present the native expand dialog when a diagram's
@@ -63,7 +62,6 @@ struct LiveDiagramOverlay: ViewModifier {
         }
     }
 }
-#endif
 
 /// Weak-free forwarding handler: the `WKUserContentController` retains it
 /// strongly, and it holds only a value-closure (`onExpand`) — no back-reference

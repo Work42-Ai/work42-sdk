@@ -1,5 +1,3 @@
-#if canImport(AppKit)
-// MAC-ONLY: reacts to theme changes for the cached live web view.
 // ThemeReactiveLayer.swift — live theme reactivity for a full-surface artifact
 // webview (the `.artifacts` gallery detail view).
 //
@@ -72,4 +70,3 @@ struct LiveThemeReactive: ViewModifier {
         }
     }
 }
-#endif

@@ -1,5 +1,3 @@
-#if canImport(AppKit)
-// MAC-ONLY: window-state diagnostics, AppKit dialogs and the cached live web view. iPadOS uses WebSectionView+iOS.swift.
 // WebSectionView.swift - Reusable embedded web section (NSViewRepresentable).
 //
 // Wraps a WKWebView so a real web app can be embedded as a native
@@ -43,7 +41,7 @@ import WebKit
 
 /// Embeds one section of a web app as a native view, configured by a
 /// `WebSectionSpec`. See file header for the subtask boundaries.
-public struct WebSectionView: NSViewRepresentable {
+public struct WebSectionView: PlatformViewRepresentable {
 
     /// The configuration that drives this section. Changing the `url`
     /// reloads the page; the persistent store is keyed by
@@ -102,7 +100,21 @@ public struct WebSectionView: NSViewRepresentable {
         self.onOpenLink = onOpenLink
     }
 
-    public func makeNSView(context: Context) -> WKWebView {
+    #if canImport(AppKit)
+    public func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+    public func updateNSView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #else
+    public func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    public func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    public static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #endif
+
+    private func makeWebView(context: Context) -> WKWebView {
         return Self.buildWebView(spec: spec, onSignal: onSignal, coordinator: context.coordinator)
     }
 
@@ -748,6 +760,7 @@ public struct WebSectionView: NSViewRepresentable {
             reapplyIsolation(in: webView)
         }
 
+        #if canImport(AppKit)
         // MARK: - JS dialog delegates (native-web-dialog-parity, subtask .1)
 
         /// Shared presentation helper: present `alert` as a window-modal sheet
@@ -996,6 +1009,89 @@ public struct WebSectionView: NSViewRepresentable {
             }
         }
 
+        #else
+        // MARK: - JS dialog delegates (iPadOS)
+
+        /// The view controller to present a dialog from: the topmost one in the web view's window.
+        private func presenter(for webView: WKWebView) -> UIViewController? {
+            var top = webView.window?.rootViewController
+            while let presented = top?.presentedViewController { top = presented }
+            return top
+        }
+
+        public func webView(
+            _ webView: WKWebView,
+            runJavaScriptAlertPanelWithMessage message: String,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping @MainActor @Sendable () -> Void
+        ) {
+            let host = frame.request.url?.host ?? webView.url?.host ?? "This page"
+            guard let top = presenter(for: webView) else { completionHandler(); return }
+            let alert = UIAlertController(title: host, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+            top.present(alert, animated: true)
+        }
+
+        public func webView(
+            _ webView: WKWebView,
+            runJavaScriptConfirmPanelWithMessage message: String,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
+        ) {
+            let host = frame.request.url?.host ?? webView.url?.host ?? "This page"
+            guard let top = presenter(for: webView) else { completionHandler(false); return }
+            let alert = UIAlertController(title: host, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+            top.present(alert, animated: true)
+        }
+
+        public func webView(
+            _ webView: WKWebView,
+            runJavaScriptTextInputPanelWithPrompt prompt: String,
+            defaultText: String?,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping @MainActor @Sendable (String?) -> Void
+        ) {
+            let host = frame.request.url?.host ?? webView.url?.host ?? "This page"
+            guard let top = presenter(for: webView) else { completionHandler(nil); return }
+            let alert = UIAlertController(title: host, message: prompt, preferredStyle: .alert)
+            alert.addTextField { $0.text = defaultText ?? "" }
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                completionHandler(alert.textFields?.first?.text ?? "")
+            })
+            top.present(alert, animated: true)
+        }
+
+        /// HTTP Basic/Digest sign-in; every other challenge (notably TLS server trust) gets WebKit's default handling.
+        public func webView(
+            _ webView: WKWebView,
+            didReceive challenge: URLAuthenticationChallenge,
+            completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+            let method = challenge.protectionSpace.authenticationMethod
+            guard method == NSURLAuthenticationMethodHTTPBasic || method == NSURLAuthenticationMethodHTTPDigest,
+                  let top = presenter(for: webView) else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+            let alert = UIAlertController(
+                title: "Sign in to \(challenge.protectionSpace.host)", message: nil, preferredStyle: .alert)
+            alert.addTextField { $0.placeholder = "Username"; $0.autocapitalizationType = .none }
+            alert.addTextField { $0.placeholder = "Password"; $0.isSecureTextEntry = true }
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            })
+            alert.addAction(UIAlertAction(title: "Sign In", style: .default) { _ in
+                let user = alert.textFields?[0].text ?? ""
+                let pass = alert.textFields?[1].text ?? ""
+                completionHandler(.useCredential, URLCredential(user: user, password: pass, persistence: .forSession))
+            })
+            top.present(alert, animated: true)
+        }
+        #endif
+
         private func reapplyIsolation(in webView: WKWebView) {
             // Best-effort: ignore the result/error. If the target node
             // isn't present yet the script no-ops, and the injected
@@ -1169,7 +1265,7 @@ public struct WebSectionView: NSViewRepresentable {
     /// the proxy. Without this the proxy (and through it nothing, since it
     /// only weakly holds the Coordinator) would linger with the controller;
     /// removing it keeps teardown clean and symmetric with `makeNSView`.
-    public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+    static func dismantleWebView(_ webView: WKWebView, coordinator: Coordinator) {
         let controller = webView.configuration.userContentController
         controller.removeScriptMessageHandler(forName: Self.messageHandlerName)
         coordinator.messageProxy = nil
@@ -1191,7 +1287,7 @@ public struct WebSectionView: NSViewRepresentable {
         coordinator.diagramExpandHandler = nil
     }
 
-    public func updateNSView(_ webView: WKWebView, context: Context) {
+    private func updateWebView(_ webView: WKWebView, context: Context) {
         // Reload only if the spec now points at a different URL, so
         // routine SwiftUI updates don't kick off a reload (which would
         // also drop any in-progress login or SPA state).
@@ -1223,11 +1319,10 @@ public struct WebSectionView: NSViewRepresentable {
         // Theme-first: a custom theme pins an explicit accent hex — use it
         // directly (already sRGB). Only the System palette (`accent: system`)
         // falls through to the macOS controlAccentColor resolution below.
-        let isDark = NSApp?.effectiveAppearance
-            .bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let isDark = PlatformAppearance.current.isDarkAppearance
         let tokens = isDark ? ThemeRuntime.current.spec.dark : ThemeRuntime.current.spec.light
         if case .hex(let h) = tokens.accent { return h }
-        let nsColor = NSColor.controlAccentColor
+        let nsColor = PlatformColor.platformAccent
         if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
            let cgColor = nsColor.cgColor.converted(to: colorSpace, intent: .perceptual, options: nil),
            let comps = cgColor.components, comps.count >= 3 {
@@ -1710,8 +1805,13 @@ public final class WebSectionLiveView {
             return
         }
         webView.setNeedsDisplay(webView.bounds)
+        #if canImport(AppKit)
         webView.layer?.setNeedsDisplay()
         webView.needsLayout = true
+        #else
+        webView.layer.setNeedsDisplay()
+        webView.setNeedsLayout()
+        #endif
 
         let current = webView.url
         let hasPage = current != nil && current?.absoluteString != "about:blank"
@@ -2026,7 +2126,7 @@ public final class WebSectionLiveView {
         coordinator.onNavigationStateChange = nil
         coordinator.onProcessTerminated = nil
         coordinator.onContentReady = nil
-        WebSectionView.dismantleNSView(webView, coordinator: coordinator)
+        WebSectionView.dismantleWebView(webView, coordinator: coordinator)
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
     }
@@ -2141,18 +2241,22 @@ public struct CachedWebSectionView: View {
             // The sign-in import banner: every persistent web view showing a web page, until an import succeeds or
             // the user opts out. Ephemeral views (artifacts, previews) never show it. The state is shared, so hiding
             // it is immediate everywhere.
+            #if canImport(AppKit)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if showsImportBanner {
                     ImportBannerView(state: .shared).padding(DT.s8)
                 }
             }
+            #endif
     }
 
+    #if canImport(AppKit)
     private var showsImportBanner: Bool {
         guard live.isPersistent, !ImportBannerState.shared.resolved, !ImportBannerState.shared.browsers.isEmpty,
               let scheme = live.webView.url?.scheme?.lowercased() else { return false }
         return scheme == "http" || scheme == "https"
     }
+    #endif
 
     /// Keep the loading overlay up until the page has genuinely painted its
     /// content AND this view is visible — so it reads as "ready" exactly when
@@ -2175,7 +2279,7 @@ public struct CachedWebSectionView: View {
         ZStack {
             // Semi-transparent background so the webview (which may be
             // partially rendered) doesn't show through distractingly.
-            Color(nsColor: .windowBackgroundColor).opacity(0.85)
+            Color.platformWindowBackground.opacity(0.85)
             // The glass logo loader: the animated 42 mark on the design system's Liquid Glass capsule
             // (not a generic spinner), the same indicator every web-based surface uses. It says what is
             // loading, so a slow page reads as slow and not as stuck.
@@ -2197,7 +2301,7 @@ public struct CachedWebSectionView: View {
     @ViewBuilder
     private var unresponsiveOverlay: some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor).opacity(0.92)
+            Color.platformWindowBackground.opacity(0.92)
             VStack(spacing: 14) {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 30, weight: .light))
@@ -2246,7 +2350,7 @@ public struct CachedWebSectionView: View {
     @ViewBuilder
     private var stalledOverlay: some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor).opacity(0.92)
+            Color.platformWindowBackground.opacity(0.92)
             VStack(spacing: 14) {
                 LoadingIndicator(label: loadingLabel)
 
@@ -2293,7 +2397,7 @@ public struct CachedWebSectionView: View {
     @ViewBuilder
     private func errorOverlay(description: String) -> some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor)
+            Color.platformWindowBackground
             VStack(spacing: 16) {
                 Image(systemName: "wifi.slash")
                     .font(.system(size: 32, weight: .light))
@@ -2333,6 +2437,7 @@ public struct CachedWebSectionView: View {
 /// the web view itself, the older mount's teardown removed it from the newer, visible one and left that tile empty,
 /// with a held first load that never started. With a container per mount the newest mount adopts the web view, and
 /// an older mount can only release it while it is still the one holding it.
+#if canImport(AppKit)
 @MainActor
 final class CachedWebViewContainer: NSView {
     let webView: WKWebView
@@ -2424,18 +2529,76 @@ final class CachedWebViewContainer: NSView {
     }
 }
 
+#else
+@MainActor
+final class CachedWebViewContainer: UIView {
+    let webView: WKWebView
+    private let mountedAt = Date()
+    /// The live view this is a mount of, so a dismantled mount can hand the web view on.
+    weak var live: WebSectionLiveView?
+
+    init(webView: WKWebView) {
+        self.webView = webView
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    var placement: String { "frame=\(Int(frame.width))x\(Int(frame.height)) window=\(window != nil)" }
+    func elapsed() -> String { String(format: "%.2fs", Date().timeIntervalSince(mountedAt)) }
+    func startPlacementTimeline(label: String) {}
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if webView.superview === self, webView.frame != bounds { webView.frame = bounds }
+    }
+
+    func adopt() {
+        guard webView.superview !== self else { return }
+        webView.removeFromSuperview()
+        webView.frame = bounds
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(webView)
+    }
+
+    func reclaimIfOrphaned() {
+        guard webView.superview == nil else { return }
+        adopt()
+    }
+
+    func relinquish() {
+        guard webView.superview === self else { return }
+        webView.removeFromSuperview()
+    }
+}
+#endif
+
 // MARK: - Private representable
 
 /// The thin `NSViewRepresentable` that adopts the cached `WKWebView`.
 /// Kept private so callers always go through `CachedWebSectionView` (which
 /// owns the loading/error overlay layer).
 @MainActor
-private struct _CachedWebViewRepresentable: NSViewRepresentable {
+private struct _CachedWebViewRepresentable: PlatformViewRepresentable {
     let live: WebSectionLiveView
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> CachedWebViewContainer {
+    #if canImport(AppKit)
+    func makeNSView(context: Context) -> CachedWebViewContainer { makeContainer(context: context) }
+    func updateNSView(_ container: CachedWebViewContainer, context: Context) { updateContainer(container, context: context) }
+    static func dismantleNSView(_ container: CachedWebViewContainer, coordinator: Coordinator) {
+        dismantleContainer(container, coordinator: coordinator)
+    }
+    #else
+    func makeUIView(context: Context) -> CachedWebViewContainer { makeContainer(context: context) }
+    func updateUIView(_ container: CachedWebViewContainer, context: Context) { updateContainer(container, context: context) }
+    static func dismantleUIView(_ container: CachedWebViewContainer, coordinator: Coordinator) {
+        dismantleContainer(container, coordinator: coordinator)
+    }
+    #endif
+
+    private func makeContainer(context: Context) -> CachedWebViewContainer {
         // Every time a view is hosted again (the Home page re-mounts its widgets when you come back to it) the page
         // is checked and repainted. Once on the next turn, and once more when the layout has settled.
         let live = live
@@ -2452,14 +2615,14 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         return container
     }
 
-    static func dismantleNSView(_ container: CachedWebViewContainer, coordinator: Coordinator) {
+    private static func dismantleContainer(_ container: CachedWebViewContainer, coordinator: Coordinator) {
         Logger(subsystem: "com.work42.browser", category: "host")
             .notice("dismantled \(container.elapsed(), privacy: .public) after it was made: \(container.placement, privacy: .public)")
         container.relinquish()
         container.live?.mountDismantled(container)
     }
 
-    func updateNSView(_ container: CachedWebViewContainer, context: Context) {
+    private func updateContainer(_ container: CachedWebViewContainer, context: Context) {
         // SwiftUI can mount the same cached view a second time before it tears the first mount down, and the
         // older mount's teardown must not take the page out of the newer one. If it did, this mount is empty:
         // take the web view back.
@@ -2484,5 +2647,18 @@ private struct _CachedWebViewRepresentable: NSViewRepresentable {
         /// Last visibility reported to the live view from this representable; nil until the first update.
         var wasVisible: Bool?
     }
+}
+
+#if canImport(AppKit)
+extension Color {
+    static var platformWindowBackground: Color { Color(nsColor: .windowBackgroundColor) }
+}
+#else
+extension Notification.Name {
+    /// Posted by the macOS sign-in import; never posted on iPadOS (there is no browser-profile import).
+    static let work42BrowserCookiesImported = Notification.Name("work42BrowserCookiesImported")
+}
+extension Color {
+    static var platformWindowBackground: Color { Color(uiColor: .systemBackground) }
 }
 #endif
