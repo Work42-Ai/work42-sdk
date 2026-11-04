@@ -802,6 +802,7 @@ public struct Work42SelectableProse: UIViewRepresentable {
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
         view.delegate = context.coordinator
+        context.coordinator.observeSelectionClearing(of: view)
         return view
     }
 
@@ -823,6 +824,20 @@ public struct Work42SelectableProse: UIViewRepresentable {
         var onSelectionChange: ((String, CGRect) -> Void)?
         var onComment: ((String, CGRect) -> Void)?
         var onDictate: ((String, CGRect) -> Void)?
+        nonisolated(unsafe) private var clearing: NSObjectProtocol?
+
+        /// Drops this view's text selection when a highlight has been used up (`.work42ClearTextSelection`).
+        func observeSelectionClearing(of textView: UITextView) {
+            clearing = NotificationCenter.default.addObserver(
+                forName: .work42ClearTextSelection, object: nil, queue: .main
+            ) { [weak textView] _ in
+                MainActor.assumeIsolated { textView?.selectedTextRange = nil }
+            }
+        }
+
+        deinit {
+            if let clearing { NotificationCenter.default.removeObserver(clearing) }
+        }
 
         /// Adds "Comment", with the 42 mark, and the microphone ahead of the system's own items over a selection.
         public func textView(

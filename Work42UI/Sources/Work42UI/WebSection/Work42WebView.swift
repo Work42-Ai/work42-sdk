@@ -158,6 +158,25 @@ public class PolicyWebView: WKWebView {
     /// What the microphone item of the selection menu does: dictate the comment on the highlighted text (WOR-605). Nil: no item.
     public var dictateMenuHandler: (() -> Void)?
 
+    private var clearingSelection: NSObjectProtocol?
+
+    /// While on screen, drops the page's text selection when a highlight has been used up (`.work42ClearTextSelection`).
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            if let clearingSelection { NotificationCenter.default.removeObserver(clearingSelection) }
+            clearingSelection = nil
+        } else if clearingSelection == nil {
+            clearingSelection = NotificationCenter.default.addObserver(
+                forName: .work42ClearTextSelection, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.evaluateJavaScript("(function(){var s=window.getSelection(); if(s){ s.removeAllRanges(); }})()", completionHandler: nil)
+                }
+            }
+        }
+    }
+
     /// Puts "Comment", with the 42 mark, first in the edit menu shown over a selection: the first of the very group that holds
     /// Copy, not a group of its own after it, so it is on the menu's first row and not behind its "more" arrow.
     public override func buildMenu(with builder: any UIMenuBuilder) {

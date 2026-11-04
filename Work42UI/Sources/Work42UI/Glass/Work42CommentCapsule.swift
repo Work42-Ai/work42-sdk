@@ -20,6 +20,12 @@ private let work42Mark42Image: PlatformImage? = {
     return PlatformImage.loadFile(at: url)
 }()
 
+public extension Notification.Name {
+    /// Posted by whatever finished with a highlight (a dictated comment was delivered): every selectable text view and web view drops
+    /// its text selection, since the highlight has done its job.
+    static let work42ClearTextSelection = Notification.Name("work42.clearTextSelection")
+}
+
 #if !canImport(AppKit)
 /// The comment item of iPadOS's edit menu: the brand 42 mark alone, no word, the way the system's Writing Tools shows an icon
 /// alone. It is how to comment on selected text on an iPad, in place of the floating pill the Mac draws. The caller says what
