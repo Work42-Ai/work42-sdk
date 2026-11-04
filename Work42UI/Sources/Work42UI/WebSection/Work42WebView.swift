@@ -163,8 +163,10 @@ public class PolicyWebView: WKWebView {
     public override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
         guard let handler = commentMenuHandler else { return }
-        var added: [UIMenuElement] = [Work42CommentMenu.action(handler)]
+        // The microphone first, the 42 comment second.
+        var added: [UIMenuElement] = []
         if let dictate = dictateMenuHandler { added.append(Work42CommentMenu.dictateAction(dictate)) }
+        added.append(Work42CommentMenu.action(handler))
         if builder.menu(for: .standardEdit) != nil {
             builder.replaceChildren(ofMenu: .standardEdit) { added + $0 }
         } else {

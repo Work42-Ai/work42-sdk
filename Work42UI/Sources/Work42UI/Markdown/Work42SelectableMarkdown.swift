@@ -831,8 +831,10 @@ public struct Work42SelectableProse: UIViewRepresentable {
             guard let onComment, range.length > 0, let selected = textView.selectedTextRange, !selected.isEmpty,
                   let text = textView.text(in: selected) else { return UIMenu(children: suggestedActions) }
             let rect = textView.firstRect(for: selected)
-            var added: [UIMenuElement] = [Work42CommentMenu.action { onComment(text, rect) }]
+            // The microphone first, the 42 comment second, then the system's own items.
+            var added: [UIMenuElement] = []
             if let onDictate { added.append(Work42CommentMenu.dictateAction { onDictate(text, rect) }) }
+            added.append(Work42CommentMenu.action { onComment(text, rect) })
             return UIMenu(children: added + suggestedActions)
         }
 

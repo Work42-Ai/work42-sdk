@@ -37,12 +37,25 @@ public enum Work42CommentMenu {
         return UIAction(title: "", image: image, discoverabilityTitle: "Comment") { _ in handler() }
     }
 
-    /// The menu action that dictates the comment: a microphone, with no word, next to the 42 mark. The caller says what choosing it
-    /// does (start dictation aimed at the highlighted text).
+    /// The menu action that dictates the comment: a microphone with the 42 mark at its corner, no word. It is first on the menu,
+    /// ahead of "Comment". The caller says what choosing it does (start dictation aimed at the highlighted text).
     @MainActor
     public static func dictateAction(_ handler: @escaping () -> Void) -> UIAction {
-        let image = UIImage(systemName: "mic.fill")
-        return UIAction(title: image == nil ? "Dictate" : "", image: image, discoverabilityTitle: "Dictate a comment") { _ in handler() }
+        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+        guard let mic = UIImage(systemName: "mic.fill", withConfiguration: config)?.withTintColor(.label, renderingMode: .alwaysOriginal)
+        else { return UIAction(title: "Dictate") { _ in handler() } }
+        guard let mark = work42Mark42Image else {
+            return UIAction(title: "", image: mic, discoverabilityTitle: "Dictate a comment") { _ in handler() }
+        }
+        let side: CGFloat = 26
+        let canvas = CGSize(width: side, height: side)
+        let badge: CGFloat = 12
+        let image = UIGraphicsImageRenderer(size: canvas).image { _ in
+            mic.draw(in: CGRect(x: 1, y: (side - mic.size.height) / 2, width: mic.size.width, height: mic.size.height))
+            mark.draw(in: CGRect(x: side - badge, y: side - badge * mark.size.height / max(mark.size.width, 1), width: badge,
+                                 height: badge * mark.size.height / max(mark.size.width, 1)))
+        }.withRenderingMode(.alwaysOriginal)
+        return UIAction(title: "", image: image, discoverabilityTitle: "Dictate a comment") { _ in handler() }
     }
 }
 #endif
