@@ -156,12 +156,17 @@ public class PolicyWebView: WKWebView {
     /// a highlight into a comment (WOR-604).
     public var commentMenuHandler: (() -> Void)?
 
-    /// Puts "Comment", with the 42 mark, at the head of the edit menu shown over a selection.
+    /// Puts "Comment", with the 42 mark, first in the edit menu shown over a selection: the first of the very group that holds
+    /// Copy, not a group of its own after it, so it is on the menu's first row and not behind its "more" arrow.
     public override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
         guard let handler = commentMenuHandler else { return }
-        builder.insertChild(
-            UIMenu(options: .displayInline, children: [Work42CommentMenu.action(handler)]), atStartOfMenu: .standardEdit)
+        let comment = Work42CommentMenu.action(handler)
+        if builder.menu(for: .standardEdit) != nil {
+            builder.replaceChildren(ofMenu: .standardEdit) { [comment] + $0 }
+        } else {
+            builder.insertChild(UIMenu(options: .displayInline, children: [comment]), atStartOfMenu: .root)
+        }
     }
     #endif
 

@@ -21,20 +21,20 @@ private let work42Mark42Image: PlatformImage? = {
 }()
 
 #if !canImport(AppKit)
-/// The "Comment" item of iPadOS's edit menu, with the brand 42 mark: the way to comment on selected text on an iPad, in place of
-/// the floating pill the Mac draws. The caller says what choosing it does (open the note box).
+/// The comment item of iPadOS's edit menu: the brand 42 mark alone, no word, the way the system's Writing Tools shows an icon
+/// alone. It is how to comment on selected text on an iPad, in place of the floating pill the Mac draws. The caller says what
+/// choosing it does (open the note box).
 public enum Work42CommentMenu {
-    /// The menu action, `Comment` with the 42 mark (its own colours, 20 pt).
+    /// The menu action: the 42 mark (its own colours, 22 pt) with an empty title, so the menu bar draws the icon. "Comment" is its
+    /// discoverability title, which VoiceOver and a long press read out. Without the mark it falls back to the word "Comment".
     @MainActor
     public static func action(_ handler: @escaping () -> Void) -> UIAction {
-        var image: UIImage?
-        if let mark = work42Mark42Image {
-            let side: CGFloat = 20
-            let size = CGSize(width: side, height: side * mark.size.height / max(mark.size.width, 1))
-            image = UIGraphicsImageRenderer(size: size).image { _ in mark.draw(in: CGRect(origin: .zero, size: size)) }
-                .withRenderingMode(.alwaysOriginal)
-        }
-        return UIAction(title: "Comment", image: image) { _ in handler() }
+        guard let mark = work42Mark42Image else { return UIAction(title: "Comment") { _ in handler() } }
+        let side: CGFloat = 22
+        let size = CGSize(width: side, height: side * mark.size.height / max(mark.size.width, 1))
+        let image = UIGraphicsImageRenderer(size: size).image { _ in mark.draw(in: CGRect(origin: .zero, size: size)) }
+            .withRenderingMode(.alwaysOriginal)
+        return UIAction(title: "", image: image, discoverabilityTitle: "Comment") { _ in handler() }
     }
 }
 #endif
