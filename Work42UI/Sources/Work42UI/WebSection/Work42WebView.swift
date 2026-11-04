@@ -155,17 +155,20 @@ public class PolicyWebView: WKWebView {
     /// What the "Comment" item of the selection menu does. Nil leaves the menu as the system draws it. Set by the layer that turns
     /// a highlight into a comment (WOR-604).
     public var commentMenuHandler: (() -> Void)?
+    /// What the microphone item of the selection menu does: dictate the comment on the highlighted text (WOR-605). Nil: no item.
+    public var dictateMenuHandler: (() -> Void)?
 
     /// Puts "Comment", with the 42 mark, first in the edit menu shown over a selection: the first of the very group that holds
     /// Copy, not a group of its own after it, so it is on the menu's first row and not behind its "more" arrow.
     public override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
         guard let handler = commentMenuHandler else { return }
-        let comment = Work42CommentMenu.action(handler)
+        var added: [UIMenuElement] = [Work42CommentMenu.action(handler)]
+        if let dictate = dictateMenuHandler { added.append(Work42CommentMenu.dictateAction(dictate)) }
         if builder.menu(for: .standardEdit) != nil {
-            builder.replaceChildren(ofMenu: .standardEdit) { [comment] + $0 }
+            builder.replaceChildren(ofMenu: .standardEdit) { added + $0 }
         } else {
-            builder.insertChild(UIMenu(options: .displayInline, children: [comment]), atStartOfMenu: .root)
+            builder.insertChild(UIMenu(options: .displayInline, children: added), atStartOfMenu: .root)
         }
     }
     #endif

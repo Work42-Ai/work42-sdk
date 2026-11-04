@@ -36,6 +36,14 @@ public enum Work42CommentMenu {
             .withRenderingMode(.alwaysOriginal)
         return UIAction(title: "", image: image, discoverabilityTitle: "Comment") { _ in handler() }
     }
+
+    /// The menu action that dictates the comment: a microphone, with no word, next to the 42 mark. The caller says what choosing it
+    /// does (start dictation aimed at the highlighted text).
+    @MainActor
+    public static func dictateAction(_ handler: @escaping () -> Void) -> UIAction {
+        let image = UIImage(systemName: "mic.fill")
+        return UIAction(title: image == nil ? "Dictate" : "", image: image, discoverabilityTitle: "Dictate a comment") { _ in handler() }
+    }
 }
 #endif
 
