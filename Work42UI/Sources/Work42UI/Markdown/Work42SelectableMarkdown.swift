@@ -66,8 +66,9 @@ public enum Work42MarkdownSegments {
         return builder.finish()
     
         #else
-        // iPadOS has no TextKit table/quote-bar blocks, so the whole reply renders through Work42MarkdownText.
-        return markdown.isEmpty ? [] : [.markdown(markdown)]
+        // iPadOS has no TextKit table/quote-bar blocks: its own builder keeps prose selectable and hands tables to
+        // Work42MarkdownText (Work42SelectableMarkdown+iOS.swift).
+        return IOSMarkdownSegments.split(markdown, bodyFontSize: bodyFontSize)
         #endif
     }
 
