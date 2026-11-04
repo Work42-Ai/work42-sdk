@@ -44,31 +44,6 @@ import UIKit
 import SwiftUI
 // WebSectionStatus is declared in Work42UI (WebSectionView.swift, lanky-pine.3)
 
-// MARK: - BrowserBookmarkControl
-
-/// The app-supplied "add this page to Bookmarks" (★) control for the browser
-/// chrome (feat/home-labels .5). Bookmark storage is app-side, so the app host
-/// builds this value; Work42UI's `BrowserChromeRow` only renders the star and
-/// presents the supplied add popover. `isBookmarked` drives the filled star;
-/// `removeCurrent` runs when the star is tapped while already bookmarked;
-/// `popover` supplies the add-bookmark form shown when tapped on a new page.
-@MainActor
-public struct BrowserBookmarkControl {
-    public let isBookmarked: Bool
-    public let removeCurrent: (() -> Void)?
-    public let popover: (() -> AnyView)?
-
-    public init(
-        isBookmarked: Bool,
-        removeCurrent: (() -> Void)? = nil,
-        popover: (() -> AnyView)? = nil
-    ) {
-        self.isBookmarked = isBookmarked
-        self.removeCurrent = removeCurrent
-        self.popover = popover
-    }
-}
-
 // MARK: - BrowserChromeRow
 
 /// The compact browser navigation row:
@@ -130,16 +105,6 @@ public struct BrowserChromeRow: View {
         return false
     }
 
-    /// Optional "add this page to Bookmarks" (★) control rendered at the TRAILING
-    /// edge of the URL capsule (feat/home-labels .5). Nil = no star (e.g. no page
-    /// loaded, or no project). The app-side host builds it since bookmark storage
-    /// is app-side; Work42UI only renders the star + presents the supplied popover.
-    public var bookmarkControl: BrowserBookmarkControl? = nil
-
-    /// Drives the add-bookmark popover shown when the ★ is tapped on a not-yet-
-    /// bookmarked page.
-    @State private var showBookmarkPopover = false
-
     /// Drives keyboard focus into the URL TextField when `model.urlFocusNonce`
     /// is incremented (via `model.focusURL()` / ⌘L intent — dewy-flint.5 / AC12).
     /// Boolean because the URL capsule has exactly one focusable field.
@@ -161,8 +126,7 @@ public struct BrowserChromeRow: View {
         pillAccessory: AnyView = AnyView(EmptyView()),
         pillTint: Color? = nil,
         trailingControls: AnyView = AnyView(EmptyView()),
-        webStatus: WebSectionStatus = .loaded,
-        bookmarkControl: BrowserBookmarkControl? = nil
+        webStatus: WebSectionStatus = .loaded
     ) {
         self.icon = icon
         self.iconImageData = iconImageData
@@ -178,7 +142,6 @@ public struct BrowserChromeRow: View {
         self.pillTint = pillTint
         self.trailingControls = trailingControls
         self.webStatus = webStatus
-        self.bookmarkControl = bookmarkControl
     }
 
     public var body: some View {
@@ -326,36 +289,6 @@ public struct BrowserChromeRow: View {
                         .truncationMode(.middle)
                 }
 
-                // ★ Add-current-page control at the capsule's TRAILING edge
-                // (Safari-style; the + new-tab is at the leading edge). Filled
-                // when the current page is already bookmarked — tapping then
-                // removes it; otherwise tapping opens the app-supplied add popover.
-                if let bc = bookmarkControl {
-                    Button {
-                        if bc.isBookmarked {
-                            bc.removeCurrent?()
-                        } else {
-                            showBookmarkPopover = true
-                        }
-                    } label: {
-                        ZStack {
-                            Color.clear
-                            Image(systemName: bc.isBookmarked ? "star.fill" : "star")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(bc.isBookmarked
-                                    ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
-                        }
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(bc.isBookmarked
-                        ? "Remove this page from Bookmarks"
-                        : "Add this page to Bookmarks")
-                    .popover(isPresented: $showBookmarkPopover, arrowEdge: .bottom) {
-                        if let content = bc.popover { content() }
-                    }
-                }
             }
             .padding(.horizontal, DT.s12)
             .frame(height: Self.controlGroupHeight)
