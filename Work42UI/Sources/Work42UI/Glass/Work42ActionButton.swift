@@ -112,7 +112,7 @@ public struct Work42ActionButton<Label: View>: View {
         let button = Button(action: action) { label }
         if #available(macOS 26.0, *) {
             button
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(labelStyle == .iconOnly ? .circle : .capsule)
                 .tint(background)
@@ -132,7 +132,7 @@ public struct Work42ActionButton<Label: View>: View {
         let button = Button(action: action) { label }
         if #available(macOS 26.0, *) {
             button
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(labelStyle == .iconOnly ? .circle : .capsule)
         } else {
@@ -164,7 +164,7 @@ public struct Work42ActionButton<Label: View>: View {
 
         if #available(macOS 26.0, *) {
             button
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
         } else {

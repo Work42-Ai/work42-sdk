@@ -86,7 +86,7 @@ public struct BrowserBookmarkControl {
 public struct BrowserChromeRow: View {
 
     /// Shared outer height for the three Liquid Glass control groups.
-    private static let controlGroupHeight: CGFloat = 40
+    private static let controlGroupHeight: CGFloat = TileMetrics.controlHeight
 
     public let icon: String          // SF Symbol name for the widget type (e.g. "globe", "ticket")
     public let iconImageData: Data?  // Bundled brand mark; `icon` remains the fallback.
@@ -226,7 +226,7 @@ public struct BrowserChromeRow: View {
 
             // Back + Refresh + Forward grouped pill (refresh sits between the
             // two chevrons).
-            Toolbar {
+            TileControlGroup {
                 Button(action: onGoBack) {
                     ZStack {
                         Color.clear
@@ -234,7 +234,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoBack ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -250,7 +250,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -264,7 +264,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoForward ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -286,7 +286,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -345,7 +345,7 @@ public struct BrowserChromeRow: View {
                                 .foregroundStyle(bc.isBookmarked
                                     ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
                         }
-                        .frame(width: 28, height: 32)
+                        .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -360,7 +360,7 @@ public struct BrowserChromeRow: View {
             .padding(.horizontal, DT.s12)
             .frame(height: Self.controlGroupHeight)
             .frame(maxWidth: .infinity)
-            .glassCapsuleSurface()
+            .tileControlSurface()
             .contentShape(Capsule())
             .onTapGesture {
                 if model.canEditURL { isURLFieldFocused = true }
@@ -368,7 +368,7 @@ public struct BrowserChromeRow: View {
 
             // Trailing controls: picker | accessory? | zoom? | loading?
             // (+ new-tab moved into the URL capsule; refresh moved into the nav pill.)
-            Toolbar(tint: pillTint) {
+            TileControlGroup(tint: pillTint) {
                 // Element picker toggle (lanky-pine.5 / AC1). Arms/disarms the
                 // element-picker overlay in the WKWebView, wired by BrowserHighlightLayer.
                 // accentColor when active, tertiary when inactive.
@@ -385,7 +385,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(model.isPicking ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
