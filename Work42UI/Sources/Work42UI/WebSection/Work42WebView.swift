@@ -151,6 +151,20 @@ public class PolicyWebView: WKWebView {
     /// Called when the page closes its own window (`window.close()`), which is how a popup tab goes away.
     public var onClose: (() -> Void)?
 
+    #if !canImport(AppKit)
+    /// What the "Comment" item of the selection menu does. Nil leaves the menu as the system draws it. Set by the layer that turns
+    /// a highlight into a comment (WOR-604).
+    public var commentMenuHandler: (() -> Void)?
+
+    /// Puts "Comment", with the 42 mark, at the head of the edit menu shown over a selection.
+    public override func buildMenu(with builder: any UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        guard let handler = commentMenuHandler else { return }
+        builder.insertChild(
+            UIMenu(options: .displayInline, children: [Work42CommentMenu.action(handler)]), atStartOfMenu: .standardEdit)
+    }
+    #endif
+
     /// Internal so the link-policy tests can drive the proxy directly.
     let policy = LinkPolicyProxy()
     private var policyActive = false

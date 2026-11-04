@@ -20,6 +20,25 @@ private let work42Mark42Image: PlatformImage? = {
     return PlatformImage.loadFile(at: url)
 }()
 
+#if !canImport(AppKit)
+/// The "Comment" item of iPadOS's edit menu, with the brand 42 mark: the way to comment on selected text on an iPad, in place of
+/// the floating pill the Mac draws. The caller says what choosing it does (open the note box).
+public enum Work42CommentMenu {
+    /// The menu action, `Comment` with the 42 mark (its own colours, 20 pt).
+    @MainActor
+    public static func action(_ handler: @escaping () -> Void) -> UIAction {
+        var image: UIImage?
+        if let mark = work42Mark42Image {
+            let side: CGFloat = 20
+            let size = CGSize(width: side, height: side * mark.size.height / max(mark.size.width, 1))
+            image = UIGraphicsImageRenderer(size: size).image { _ in mark.draw(in: CGRect(origin: .zero, size: size)) }
+                .withRenderingMode(.alwaysOriginal)
+        }
+        return UIAction(title: "Comment", image: image) { _ in handler() }
+    }
+}
+#endif
+
 public struct Work42CommentCapsule: View {
     public enum Size {
         case regular

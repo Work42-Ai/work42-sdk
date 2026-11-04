@@ -559,10 +559,12 @@ public struct Work42SelectableProse: NSViewRepresentable {
     ///   - onOpenLink: called for a clicked link; with nil the system opens it.
     ///   - onSelectionChange: the selected text and the rect of its first line in this view's top-left coordinates;
     ///     `("", .zero)` when the selection is cleared.
+    /// - Parameter onComment: iPadOS only (the Mac has the pill): what the "Comment" item of the selection menu does. Ignored here.
     public init(
         _ text: NSAttributedString,
         onOpenLink: ((URL) -> Void)? = nil,
-        onSelectionChange: ((String, CGRect) -> Void)? = nil
+        onSelectionChange: ((String, CGRect) -> Void)? = nil,
+        onComment: ((String, CGRect) -> Void)? = nil
     ) {
         self.text = text
         self.onOpenLink = onOpenLink
@@ -766,15 +768,20 @@ public struct Work42SelectableProse: UIViewRepresentable {
     private let text: NSAttributedString
     private let onOpenLink: ((URL) -> Void)?
     private let onSelectionChange: ((String, CGRect) -> Void)?
+    private let onComment: ((String, CGRect) -> Void)?
 
+    /// - Parameter onComment: what the "Comment" item of the selection menu does with the selected text and the rect of its first
+    ///   line; with nil the menu is the system's own.
     public init(
         _ text: NSAttributedString,
         onOpenLink: ((URL) -> Void)? = nil,
-        onSelectionChange: ((String, CGRect) -> Void)? = nil
+        onSelectionChange: ((String, CGRect) -> Void)? = nil,
+        onComment: ((String, CGRect) -> Void)? = nil
     ) {
         self.text = text
         self.onOpenLink = onOpenLink
         self.onSelectionChange = onSelectionChange
+        self.onComment = onComment
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -794,6 +801,7 @@ public struct Work42SelectableProse: UIViewRepresentable {
     public func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.onOpenLink = onOpenLink
         context.coordinator.onSelectionChange = onSelectionChange
+        context.coordinator.onComment = onComment
         if view.attributedText != text { view.attributedText = text }
     }
 
@@ -805,6 +813,17 @@ public struct Work42SelectableProse: UIViewRepresentable {
     public final class Coordinator: NSObject, UITextViewDelegate {
         var onOpenLink: ((URL) -> Void)?
         var onSelectionChange: ((String, CGRect) -> Void)?
+        var onComment: ((String, CGRect) -> Void)?
+
+        /// Adds "Comment", with the 42 mark, ahead of the system's own items over a selection.
+        public func textView(
+            _ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]
+        ) -> UIMenu? {
+            guard let onComment, range.length > 0, let selected = textView.selectedTextRange, !selected.isEmpty,
+                  let text = textView.text(in: selected) else { return UIMenu(children: suggestedActions) }
+            let rect = textView.firstRect(for: selected)
+            return UIMenu(children: [Work42CommentMenu.action { onComment(text, rect) }] + suggestedActions)
+        }
 
         public func textView(
             _ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange,
