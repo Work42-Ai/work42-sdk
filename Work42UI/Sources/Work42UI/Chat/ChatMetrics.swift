@@ -34,8 +34,8 @@ public enum ChatMetrics {
         max(0, bodyLineHeight - PlatformFontMetrics.systemLineBoundsHeight(ofSize: bodyFontSize).rounded())
     }
 
-    /// Padding inside my message card.
-    public static let myCardPadding = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+    /// Padding inside a message card: 12 on every side, for my card and another participant's bubble alike (the Mac and the iPad).
+    public static let myCardPadding = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
 
     /// Text inside the composer box.
     public static let composerTextInsets = EdgeInsets(top: 16, leading: 18, bottom: 14, trailing: 18)
