@@ -234,7 +234,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoBack ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -250,7 +250,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -264,7 +264,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoForward ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -385,7 +385,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(model.isPicking ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -418,7 +418,7 @@ public struct BrowserChromeRow: View {
             // WidgetChrome, pinned to this top row.
             trailingControls
         }
-        .padding(.horizontal, DT.s8)
+        .padding(.horizontal, TileMetrics.chromeRowInset)
         .frame(height: Self.controlGroupHeight)
     }
 }

@@ -19,6 +19,16 @@ public enum TileMetrics {
     public static let headerHeight: CGFloat = 44
     public static let headerLeading: CGFloat = 14
     public static let headerTrailing: CGFloat = 10
+    /// The horizontal padding the browser's address row (`BrowserChromeRow`) adds to itself.
+    public static let chromeRowInset: CGFloat = 8
+    /// The padding a widget's own header (the address row) gets in a tile that draws name headers with the metrics above, so
+    /// its controls line up with a name header's: the row's own inset is taken off the sides, and the row is centred in the
+    /// header height.
+    public static var customHeaderInsets: EdgeInsets {
+        EdgeInsets(
+            top: (headerHeight - controlHeight) / 2, leading: headerLeading - chromeRowInset,
+            bottom: (headerHeight - controlHeight) / 2, trailing: headerTrailing - chromeRowInset)
+    }
     /// The height of every control group in a header (and of the buttons in one), and the width of a button in a menu/close group.
     public static let controlHeight: CGFloat = 28
     public static let controlButtonWidth: CGFloat = 34
