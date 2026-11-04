@@ -63,15 +63,21 @@ public final class BrowserWorkspace {
     @ObservationIgnored private let store: any WebSectionLiveStore
     /// A data store key for plain pages, to keep a device's logins apart per Mac; nil is the shared `browser` store.
     @ObservationIgnored private let genericDataStoreKey: String?
+    /// A CSS selector a custom widget isolates on its plain pages (a Jira or GitHub address keeps its own preset); nil or empty
+    /// shows the whole page.
+    @ObservationIgnored private let genericSelector: String?
     /// The URL each tab's web view was first built with. A tab that navigates keeps its view, so the pin does not move.
     public private(set) var pins: [UUID: URL] = [:]
 
     /// Joins `model` to `store`: wires the new-tab and close-tab callbacks, makes sure there is a tab to type into, and pins
     /// the addresses the tabs already have.
-    public init(model: BrowserWidgetModel, store: any WebSectionLiveStore, genericDataStoreKey: String? = nil) {
+    public init(
+        model: BrowserWidgetModel, store: any WebSectionLiveStore, genericDataStoreKey: String? = nil, genericSelector: String? = nil
+    ) {
         self.model = model
         self.store = store
         self.genericDataStoreKey = genericDataStoreKey
+        self.genericSelector = genericSelector
         model.onNewTab = { [weak model] in _ = model?.openTab(url: nil, title: "New Tab", icon: "globe") }
         model.onTabClosed = { [weak self] id in self?.release(tab: id) }
         if model.tabs.isEmpty {
@@ -117,9 +123,11 @@ public final class BrowserWorkspace {
         case .generic:
             key = Self.cacheKey(of: tab.id)
             if let genericDataStoreKey { spec.dataStoreKey = genericDataStoreKey }
+            if let genericSelector, !genericSelector.isEmpty { spec.selector = genericSelector }
         @unknown default:
             key = Self.cacheKey(of: tab.id)
             if let genericDataStoreKey { spec.dataStoreKey = genericDataStoreKey }
+            if let genericSelector, !genericSelector.isEmpty { spec.selector = genericSelector }
         }
         let live = store.liveView(for: spec, cacheKey: key)
         // A page the person clicked to (not typed) is kept on the tab, so a restored tab reopens the real page.

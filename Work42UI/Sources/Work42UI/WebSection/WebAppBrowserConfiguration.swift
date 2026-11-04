@@ -17,6 +17,7 @@ enum WebAppBrowserConfiguration {
     /// WebKit's frozen compatibility token, identical in every Safari build.
     static let webKitToken = "605.1.15"
 
+    #if canImport(AppKit)
     /// Safari's marketing version on this Mac (e.g. "26.4"), nil when Safari is not installed or unreadable.
     static let installedSafariVersion: String? = {
         let url = URL(fileURLWithPath: "/Applications/Safari.app/Contents/Info.plist")
@@ -24,6 +25,15 @@ enum WebAppBrowserConfiguration {
               let version = info["CFBundleShortVersionString"] as? String else { return nil }
         return validated(version)
     }()
+    #else
+    /// Safari's marketing version on this device: iOS and iPadOS ship the Safari whose version is the OS's (iPadOS 26.1 has
+    /// Safari 26.1), and there is no Safari app bundle to read. A web view on an iPad sends the desktop-class user agent, so the
+    /// token is the same one a Mac's Safari sends.
+    static let installedSafariVersion: String? = {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        return validated("\(os.majorVersion).\(os.minorVersion)")
+    }()
+    #endif
 
     /// The `applicationNameForUserAgent` value for a given Safari version; nil if the version is malformed.
     static func applicationName(safariVersion: String?) -> String? {
