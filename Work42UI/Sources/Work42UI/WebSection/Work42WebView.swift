@@ -151,6 +151,49 @@ public class PolicyWebView: WKWebView {
     /// Called when the page closes its own window (`window.close()`), which is how a popup tab goes away.
     public var onClose: (() -> Void)?
 
+    #if !canImport(AppKit)
+    /// What the "Comment" item of the selection menu does. Nil leaves the menu as the system draws it. Set by the layer that turns
+    /// a highlight into a comment (WOR-604).
+    public var commentMenuHandler: (() -> Void)?
+    /// What the microphone item of the selection menu does: dictate the comment on the highlighted text (WOR-605). Nil: no item.
+    public var dictateMenuHandler: (() -> Void)?
+
+    private var clearingSelection: NSObjectProtocol?
+
+    /// While on screen, drops the page's text selection when a highlight has been used up (`.work42ClearTextSelection`).
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            if let clearingSelection { NotificationCenter.default.removeObserver(clearingSelection) }
+            clearingSelection = nil
+        } else if clearingSelection == nil {
+            clearingSelection = NotificationCenter.default.addObserver(
+                forName: .work42ClearTextSelection, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.evaluateJavaScript("(function(){var s=window.getSelection(); if(s){ s.removeAllRanges(); }})()", completionHandler: nil)
+                }
+            }
+        }
+    }
+
+    /// Puts "Comment", with the 42 mark, first in the edit menu shown over a selection: the first of the very group that holds
+    /// Copy, not a group of its own after it, so it is on the menu's first row and not behind its "more" arrow.
+    public override func buildMenu(with builder: any UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        guard let handler = commentMenuHandler else { return }
+        // The microphone first, the 42 comment second.
+        var added: [UIMenuElement] = []
+        if let dictate = dictateMenuHandler { added.append(Work42CommentMenu.dictateAction(dictate)) }
+        added.append(Work42CommentMenu.action(handler))
+        if builder.menu(for: .standardEdit) != nil {
+            builder.replaceChildren(ofMenu: .standardEdit) { added + $0 }
+        } else {
+            builder.insertChild(UIMenu(options: .displayInline, children: added), atStartOfMenu: .root)
+        }
+    }
+    #endif
+
     /// Internal so the link-policy tests can drive the proxy directly.
     let policy = LinkPolicyProxy()
     private var policyActive = false

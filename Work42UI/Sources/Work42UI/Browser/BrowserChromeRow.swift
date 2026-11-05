@@ -44,31 +44,6 @@ import UIKit
 import SwiftUI
 // WebSectionStatus is declared in Work42UI (WebSectionView.swift, lanky-pine.3)
 
-// MARK: - BrowserBookmarkControl
-
-/// The app-supplied "add this page to Bookmarks" (★) control for the browser
-/// chrome (feat/home-labels .5). Bookmark storage is app-side, so the app host
-/// builds this value; Work42UI's `BrowserChromeRow` only renders the star and
-/// presents the supplied add popover. `isBookmarked` drives the filled star;
-/// `removeCurrent` runs when the star is tapped while already bookmarked;
-/// `popover` supplies the add-bookmark form shown when tapped on a new page.
-@MainActor
-public struct BrowserBookmarkControl {
-    public let isBookmarked: Bool
-    public let removeCurrent: (() -> Void)?
-    public let popover: (() -> AnyView)?
-
-    public init(
-        isBookmarked: Bool,
-        removeCurrent: (() -> Void)? = nil,
-        popover: (() -> AnyView)? = nil
-    ) {
-        self.isBookmarked = isBookmarked
-        self.removeCurrent = removeCurrent
-        self.popover = popover
-    }
-}
-
 // MARK: - BrowserChromeRow
 
 /// The compact browser navigation row:
@@ -86,7 +61,7 @@ public struct BrowserBookmarkControl {
 public struct BrowserChromeRow: View {
 
     /// Shared outer height for the three Liquid Glass control groups.
-    private static let controlGroupHeight: CGFloat = 40
+    private static let controlGroupHeight: CGFloat = TileMetrics.controlHeight
 
     public let icon: String          // SF Symbol name for the widget type (e.g. "globe", "ticket")
     public let iconImageData: Data?  // Bundled brand mark; `icon` remains the fallback.
@@ -130,16 +105,6 @@ public struct BrowserChromeRow: View {
         return false
     }
 
-    /// Optional "add this page to Bookmarks" (★) control rendered at the TRAILING
-    /// edge of the URL capsule (feat/home-labels .5). Nil = no star (e.g. no page
-    /// loaded, or no project). The app-side host builds it since bookmark storage
-    /// is app-side; Work42UI only renders the star + presents the supplied popover.
-    public var bookmarkControl: BrowserBookmarkControl? = nil
-
-    /// Drives the add-bookmark popover shown when the ★ is tapped on a not-yet-
-    /// bookmarked page.
-    @State private var showBookmarkPopover = false
-
     /// Drives keyboard focus into the URL TextField when `model.urlFocusNonce`
     /// is incremented (via `model.focusURL()` / ⌘L intent — dewy-flint.5 / AC12).
     /// Boolean because the URL capsule has exactly one focusable field.
@@ -161,8 +126,7 @@ public struct BrowserChromeRow: View {
         pillAccessory: AnyView = AnyView(EmptyView()),
         pillTint: Color? = nil,
         trailingControls: AnyView = AnyView(EmptyView()),
-        webStatus: WebSectionStatus = .loaded,
-        bookmarkControl: BrowserBookmarkControl? = nil
+        webStatus: WebSectionStatus = .loaded
     ) {
         self.icon = icon
         self.iconImageData = iconImageData
@@ -178,7 +142,6 @@ public struct BrowserChromeRow: View {
         self.pillTint = pillTint
         self.trailingControls = trailingControls
         self.webStatus = webStatus
-        self.bookmarkControl = bookmarkControl
     }
 
     public var body: some View {
@@ -226,7 +189,7 @@ public struct BrowserChromeRow: View {
 
             // Back + Refresh + Forward grouped pill (refresh sits between the
             // two chevrons).
-            Toolbar {
+            TileControlGroup {
                 Button(action: onGoBack) {
                     ZStack {
                         Color.clear
@@ -234,7 +197,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoBack ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -250,7 +213,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -264,7 +227,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoForward ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -286,7 +249,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -326,41 +289,11 @@ public struct BrowserChromeRow: View {
                         .truncationMode(.middle)
                 }
 
-                // ★ Add-current-page control at the capsule's TRAILING edge
-                // (Safari-style; the + new-tab is at the leading edge). Filled
-                // when the current page is already bookmarked — tapping then
-                // removes it; otherwise tapping opens the app-supplied add popover.
-                if let bc = bookmarkControl {
-                    Button {
-                        if bc.isBookmarked {
-                            bc.removeCurrent?()
-                        } else {
-                            showBookmarkPopover = true
-                        }
-                    } label: {
-                        ZStack {
-                            Color.clear
-                            Image(systemName: bc.isBookmarked ? "star.fill" : "star")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(bc.isBookmarked
-                                    ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
-                        }
-                        .frame(width: 28, height: 32)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(bc.isBookmarked
-                        ? "Remove this page from Bookmarks"
-                        : "Add this page to Bookmarks")
-                    .popover(isPresented: $showBookmarkPopover, arrowEdge: .bottom) {
-                        if let content = bc.popover { content() }
-                    }
-                }
             }
             .padding(.horizontal, DT.s12)
             .frame(height: Self.controlGroupHeight)
             .frame(maxWidth: .infinity)
-            .glassCapsuleSurface()
+            .tileControlSurface()
             .contentShape(Capsule())
             .onTapGesture {
                 if model.canEditURL { isURLFieldFocused = true }
@@ -368,7 +301,7 @@ public struct BrowserChromeRow: View {
 
             // Trailing controls: picker | accessory? | zoom? | loading?
             // (+ new-tab moved into the URL capsule; refresh moved into the nav pill.)
-            Toolbar(tint: pillTint) {
+            TileControlGroup(tint: pillTint) {
                 // Element picker toggle (lanky-pine.5 / AC1). Arms/disarms the
                 // element-picker overlay in the WKWebView, wired by BrowserHighlightLayer.
                 // accentColor when active, tertiary when inactive.
@@ -385,7 +318,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(model.isPicking ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -418,7 +351,7 @@ public struct BrowserChromeRow: View {
             // WidgetChrome, pinned to this top row.
             trailingControls
         }
-        .padding(.horizontal, DT.s8)
+        .padding(.horizontal, TileMetrics.chromeRowInset)
         .frame(height: Self.controlGroupHeight)
     }
 }

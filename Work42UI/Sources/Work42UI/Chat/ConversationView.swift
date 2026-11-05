@@ -319,6 +319,8 @@ struct ConversationAvatar: View {
     let logo: Image?
 
     @Environment(\.colorScheme) private var colorScheme
+    /// The actor's profile photo, once loaded. Until then (or if it never loads) the initials show.
+    @State private var photo: PlatformImage?
 
     var body: some View {
         let size = ConversationMetrics.avatarSize
@@ -326,7 +328,13 @@ struct ConversationAvatar: View {
         ZStack {
             Circle().fill(tint.fill)
             Circle().strokeBorder(tint.stroke, lineWidth: 0.5)
-            if let logo {
+            if let photo {
+                Image(platformImage: photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size - 1, height: size - 1)
+                    .clipShape(Circle())
+            } else if let logo {
                 logo
                     .renderingMode(.template)
                     .resizable()
@@ -339,6 +347,10 @@ struct ConversationAvatar: View {
         }
         .foregroundStyle(tint.foreground)
         .frame(width: size, height: size)
+        .task(id: actor.imageURL) {
+            guard let url = actor.imageURL else { photo = nil; return }
+            photo = await GlassAvatarImageCache.shared.image(for: url)
+        }
     }
 }
 

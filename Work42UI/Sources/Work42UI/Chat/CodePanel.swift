@@ -189,7 +189,7 @@ struct CodePanelButtonLook: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.glass)
                 .buttonBorderShape(shape == .circle ? .circle : .capsule)
                 .foregroundStyle(DT.systemAccent)

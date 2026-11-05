@@ -66,8 +66,9 @@ public enum Work42MarkdownSegments {
         return builder.finish()
     
         #else
-        // iPadOS has no TextKit table/quote-bar blocks, so the whole reply renders through Work42MarkdownText.
-        return markdown.isEmpty ? [] : [.markdown(markdown)]
+        // iPadOS has no TextKit table/quote-bar blocks: its own builder keeps prose selectable and hands tables to
+        // Work42MarkdownText (Work42SelectableMarkdown+iOS.swift).
+        return IOSMarkdownSegments.split(markdown, bodyFontSize: bodyFontSize)
         #endif
     }
 
@@ -558,10 +559,14 @@ public struct Work42SelectableProse: NSViewRepresentable {
     ///   - onOpenLink: called for a clicked link; with nil the system opens it.
     ///   - onSelectionChange: the selected text and the rect of its first line in this view's top-left coordinates;
     ///     `("", .zero)` when the selection is cleared.
+    /// - Parameters onComment, onDictate: iPadOS only (the Mac has the pill and its own dictation): what the "Comment" and the microphone item of the
+    ///   selection menu do. Ignored here.
     public init(
         _ text: NSAttributedString,
         onOpenLink: ((URL) -> Void)? = nil,
-        onSelectionChange: ((String, CGRect) -> Void)? = nil
+        onSelectionChange: ((String, CGRect) -> Void)? = nil,
+        onComment: ((String, CGRect) -> Void)? = nil,
+        onDictate: ((String, CGRect) -> Void)? = nil
     ) {
         self.text = text
         self.onOpenLink = onOpenLink
@@ -765,15 +770,25 @@ public struct Work42SelectableProse: UIViewRepresentable {
     private let text: NSAttributedString
     private let onOpenLink: ((URL) -> Void)?
     private let onSelectionChange: ((String, CGRect) -> Void)?
+    private let onComment: ((String, CGRect) -> Void)?
+    private let onDictate: ((String, CGRect) -> Void)?
 
+    /// - Parameters:
+    ///   - onComment: what the "Comment" item of the selection menu does with the selected text and the rect of its first line;
+    ///     with nil the menu is the system's own.
+    ///   - onDictate: what the microphone item does: dictate the comment on the selected text. Nil: no microphone item.
     public init(
         _ text: NSAttributedString,
         onOpenLink: ((URL) -> Void)? = nil,
-        onSelectionChange: ((String, CGRect) -> Void)? = nil
+        onSelectionChange: ((String, CGRect) -> Void)? = nil,
+        onComment: ((String, CGRect) -> Void)? = nil,
+        onDictate: ((String, CGRect) -> Void)? = nil
     ) {
         self.text = text
         self.onOpenLink = onOpenLink
         self.onSelectionChange = onSelectionChange
+        self.onComment = onComment
+        self.onDictate = onDictate
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -787,12 +802,15 @@ public struct Work42SelectableProse: UIViewRepresentable {
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
         view.delegate = context.coordinator
+        context.coordinator.observeSelectionClearing(of: view)
         return view
     }
 
     public func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.onOpenLink = onOpenLink
         context.coordinator.onSelectionChange = onSelectionChange
+        context.coordinator.onComment = onComment
+        context.coordinator.onDictate = onDictate
         if view.attributedText != text { view.attributedText = text }
     }
 
@@ -804,6 +822,36 @@ public struct Work42SelectableProse: UIViewRepresentable {
     public final class Coordinator: NSObject, UITextViewDelegate {
         var onOpenLink: ((URL) -> Void)?
         var onSelectionChange: ((String, CGRect) -> Void)?
+        var onComment: ((String, CGRect) -> Void)?
+        var onDictate: ((String, CGRect) -> Void)?
+        nonisolated(unsafe) private var clearing: NSObjectProtocol?
+
+        /// Drops this view's text selection when a highlight has been used up (`.work42ClearTextSelection`).
+        func observeSelectionClearing(of textView: UITextView) {
+            clearing = NotificationCenter.default.addObserver(
+                forName: .work42ClearTextSelection, object: nil, queue: .main
+            ) { [weak textView] _ in
+                MainActor.assumeIsolated { textView?.selectedTextRange = nil }
+            }
+        }
+
+        deinit {
+            if let clearing { NotificationCenter.default.removeObserver(clearing) }
+        }
+
+        /// Adds "Comment", with the 42 mark, and the microphone ahead of the system's own items over a selection.
+        public func textView(
+            _ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]
+        ) -> UIMenu? {
+            guard let onComment, range.length > 0, let selected = textView.selectedTextRange, !selected.isEmpty,
+                  let text = textView.text(in: selected) else { return UIMenu(children: suggestedActions) }
+            let rect = textView.firstRect(for: selected)
+            // The microphone first, the 42 comment second, then the system's own items.
+            var added: [UIMenuElement] = []
+            if let onDictate { added.append(Work42CommentMenu.dictateAction { onDictate(text, rect) }) }
+            added.append(Work42CommentMenu.action { onComment(text, rect) })
+            return UIMenu(children: added + suggestedActions)
+        }
 
         public func textView(
             _ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange,

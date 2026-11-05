@@ -272,7 +272,11 @@ public final class Loader42View: Loader42BaseView {
 
     private func buildLayerTree() {
         guard let root = rootLayer else { return }
-        container.isGeometryFlipped = true // SVG/top-left coordinate space
+        // The glyphs are traced in SVG/top-left coordinates. AppKit layers have a bottom-left origin, so they need the
+        // flip; a UIView's layer already has its origin at the top-left, and flipping it draws the mark upside down.
+        #if canImport(AppKit)
+        container.isGeometryFlipped = true
+        #endif
         container.bounds = CGRect(x: 0, y: 0, width: Self.designSize, height: Self.designSize)
         root.addSublayer(container)
 

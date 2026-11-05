@@ -666,6 +666,15 @@ public struct WebSectionView: PlatformViewRepresentable {
             preferences: WKWebpagePreferences,
             decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
         ) {
+            #if !canImport(AppKit)
+            // A page that tries to open an app (Linear's `linear://` hand-off, then its `?noRedirect=1` retry) cannot be followed
+            // here: iOS has no app to hand it to, and letting WebKit try fails the whole tab as "unsupported URL", again and again.
+            // The navigation is cancelled (a policy cancel is not a failure) and the page stays as it is. macOS hands these to the system.
+            if let url = navigationAction.request.url, Self.isAppLaunchScheme(url) {
+                decisionHandler(.cancel, preferences)
+                return
+            }
+            #endif
             if navigationAction.targetFrame?.isMainFrame == true,
                Self.recordsAsIntent(navigationAction.navigationType),
                let url = navigationAction.request.url,
@@ -673,6 +682,15 @@ public struct WebSectionView: PlatformViewRepresentable {
                 navState.recordPageRequest(navigationAction.request, now: Date())
             }
             decisionHandler(.allow, preferences)
+        }
+
+        /// The schemes a web view loads itself. Anything else (`linear://`, `slack://`, `zoommtg://`) names an app.
+        static let webSchemes: Set<String> = ["http", "https", "about", "blob", "data", "file", "javascript", "work42", "w42-artifact"]
+
+        /// Whether `url` asks to open an app rather than load a page.
+        static func isAppLaunchScheme(_ url: URL) -> Bool {
+            guard let scheme = url.scheme?.lowercased(), !scheme.isEmpty else { return false }
+            return !webSchemes.contains(scheme)
         }
 
         /// Reloads and history moves are not new intents; everything else is a request someone asked for.

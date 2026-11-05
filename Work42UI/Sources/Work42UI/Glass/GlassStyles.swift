@@ -33,7 +33,7 @@ struct GlassProminentCapsule: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.glass)
                 .foregroundStyle(tint)
         } else {
@@ -55,7 +55,7 @@ struct GlassSubtleCapsule: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.glass)
                 .foregroundStyle(tint)
         } else {
@@ -80,7 +80,7 @@ struct GlassPlainCapsule: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.glass)
                 .foregroundStyle(.primary)
         } else {
@@ -101,7 +101,7 @@ struct GlassIconButton: ViewModifier {
         if #available(macOS 26.0, *) {
             content
                 .frame(minWidth: 18, minHeight: 18)
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
         } else {
@@ -275,5 +275,19 @@ public extension View {
     /// chat composer's model + mode selector pills.
     func glassCapsuleSurface() -> some View {
         modifier(GlassCapsuleSurface())
+    }
+}
+
+// MARK: - Size
+
+/// The control size every glass button takes: the Mac's extra large, and medium (regular) on iPad, where the same size reads as
+/// far too big next to the touch targets the system already makes generous.
+enum GlassMetrics {
+    static var controlSize: ControlSize {
+        #if os(macOS)
+        .extraLarge
+        #else
+        .regular
+        #endif
     }
 }

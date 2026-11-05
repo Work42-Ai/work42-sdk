@@ -112,7 +112,7 @@ public struct Work42ActionButton<Label: View>: View {
         let button = Button(action: action) { label }
         if #available(macOS 26.0, *) {
             button
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(labelStyle == .iconOnly ? .circle : .capsule)
                 .tint(background)
@@ -132,7 +132,7 @@ public struct Work42ActionButton<Label: View>: View {
         let button = Button(action: action) { label }
         if #available(macOS 26.0, *) {
             button
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(labelStyle == .iconOnly ? .circle : .capsule)
         } else {
@@ -143,6 +143,7 @@ public struct Work42ActionButton<Label: View>: View {
         }
     }
 
+    #if canImport(AppKit)
     /// A bordered capsule that opens a native `NSMenu` under the pointer. Not a SwiftUI `Menu`: the action area
     /// redraws while it is clicked (focus and scope changes), and a redraw reset the SwiftUI menu before it could
     /// open; an AppKit menu runs its own tracking loop, independent of SwiftUI updates (WOR-420).
@@ -164,7 +165,7 @@ public struct Work42ActionButton<Label: View>: View {
 
         if #available(macOS 26.0, *) {
             button
-                .controlSize(.extraLarge)
+                .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
         } else {
@@ -174,6 +175,44 @@ public struct Work42ActionButton<Label: View>: View {
                 .buttonBorderShape(.capsule)
         }
     }
+    #else
+    /// The same bordered capsule on iPadOS, opening a SwiftUI `Menu` (there is no pointer for an AppKit pop-up, and no
+    /// scope changes redraw the bar mid-tap there). The selected option is checkmarked.
+    @ViewBuilder
+    private func menuButton(
+        options: [Work42ActionMenuOption],
+        onSelect: @escaping @MainActor @Sendable (String) -> Void
+    ) -> some View {
+        Menu {
+            ForEach(options) { option in
+                Button {
+                    onSelect(option.id)
+                } label: {
+                    // `Label` is this view's generic parameter here, so SwiftUI's is named in full.
+                    if option.isSelected {
+                        SwiftUI.Label(option.title, systemImage: "checkmark")
+                    } else if let symbol = option.systemImage {
+                        SwiftUI.Label(option.title, systemImage: symbol)
+                    } else {
+                        Text(option.title)
+                    }
+                }
+                .disabled(!option.isEnabled)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                label
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .menuStyle(.button)
+        .controlSize(GlassMetrics.controlSize)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+    }
+    #endif
 
 }
 

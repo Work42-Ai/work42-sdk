@@ -55,8 +55,7 @@ public func makeWebWidgetChrome(
     onClose: @escaping () -> Void,
     moveOptions: WidgetMoveOptions?,
     headerAccessory: AnyView = AnyView(EmptyView()),
-    headerAccessoryPillTint: Color? = nil,
-    bookmarkControl: BrowserBookmarkControl? = nil
+    headerAccessoryPillTint: Color? = nil
 ) -> WidgetChrome<AnyView> {
     WidgetChrome(
         title: label,
@@ -82,9 +81,7 @@ public func makeWebWidgetChrome(
                 // Engine-owned move/close controls remain bare after the pill.
                 trailingControls: trailing,
                 // Read when the header renders, so Refresh/Stop follows the live view's status.
-                webStatus: webStatus(),
-                // ★ add-current-page control at the URL capsule's trailing edge.
-                bookmarkControl: bookmarkControl
+                webStatus: webStatus()
             )
         },
         canClose: canClose,
