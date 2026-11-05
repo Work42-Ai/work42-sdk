@@ -930,6 +930,15 @@ private final class ConversationScrollMetrics {
     var appendGrowthTarget: Int?
     /// The pending trim back to one page after re-pinning; cancelled when the reader scrolls again.
     var trimTask: Task<Void, Never>?
+    /// An older page asked of the host (`ConversationLoadMore`) and not yet arrived (WOR-642): what `items` looked like when it
+    /// was asked for, so the page is recognised when it lands in front.
+    var remote: RemoteRequest?
+
+    struct RemoteRequest {
+        var generation: Int
+        var firstID: AnyHashable?
+        var count: Int
+    }
 }
 
 // MARK: - Labels
@@ -972,6 +981,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     let date: (Item) -> Date?
     let row: (Item, ConversationRowContext) -> Row
     let footer: () -> Footer
+    let loadMore: ConversationLoadMore?
 
     /// - Parameters:
     ///   - items: The whole conversation, oldest first. Pass all of it; the view windows it.
@@ -988,6 +998,9 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     ///   - date: When the item happened (drives dividers and the label time).
     ///   - row: The row for an item. `ConversationBubble` does the standard placement.
     ///   - footer: Content after the last row and inside the scroll (typing indicator, queued messages).
+    ///   - loadMore: History the host keeps, asked for when the reader reaches the top with nothing older left in `items`. The
+    ///     page arrives as items added at the front of `items` and the reader keeps their place. Nil for a conversation that
+    ///     holds all of its history.
     public init(
         items: [Item],
         pageSize: Int,
@@ -997,11 +1010,13 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
+        loadMore: ConversationLoadMore? = nil,
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
         @ViewBuilder row: @escaping (Item, ConversationRowContext) -> Row,
         @ViewBuilder footer: @escaping () -> Footer
     ) {
+        self.loadMore = loadMore
         self.items = items
         self.pageSize = max(1, pageSize)
         self.resetKey = resetKey
@@ -1116,6 +1131,48 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         }
     }
 
+    /// The reader reached the top and everything held is shown: ask the host for an older page. Nothing is held yet; the reader's
+    /// place is held once the page arrives (`remotePageArrived`), because the host may take longer than a hold runs.
+    private func requestRemotePage(generation: Int) {
+        metrics.remote = ConversationScrollMetrics.RemoteRequest(
+            generation: generation, firstID: items.first.map { AnyHashable($0.id) }, count: items.count)
+        loadMore?.load()
+    }
+
+    /// `items` changed at the front or the host finished: a page landed, or the request ended with nothing to show.
+    private func remotePageArrived() {
+        guard let request = metrics.remote else { return }
+        let prepended = ConversationRemoteLoad.prepended(
+            firstBefore: request.firstID, countBefore: request.count,
+            firstNow: items.first.map { AnyHashable($0.id) }, countNow: items.count)
+        guard let added = prepended else {
+            // Still waiting: the request is out. Ended with nothing in front (it failed, or the host had nothing): the next
+            // upward move may ask again.
+            if !(loadMore?.isLoading ?? false) {
+                metrics.remote = nil
+                metrics.paging.pageDone(
+                    generation: request.generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                    placed: false)
+            }
+            return
+        }
+        metrics.remote = nil
+        // Hold the reader's place before the window grows to take the page in, exactly as for a page of what is held.
+        let started = scroller.begin(generation: request.generation) { done, outcome in
+            metrics.paging.pageDone(
+                generation: done, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                placed: outcome.hasPrefix("settled"))
+        }
+        if !started {
+            metrics.paging.pageDone(
+                generation: request.generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                placed: false)
+        }
+        // Lines held back during a gesture are counted from the front: the page moves every index, so the held count moves with it.
+        // The window itself grows with `shownCount` below, which keeps the rendered rows a superset (the new page is shown).
+        if let held = heldCount { heldCount = held + added }
+    }
+
     // MARK: Body
 
     public var body: some View {
@@ -1157,6 +1214,26 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
+                    }
+                    // History the host keeps: its loader while a page is on its way, and why the last request failed.
+                    if let loadMore, hiddenOlder == 0 {
+                        if loadMore.isLoading {
+                            Loader42(style: .brand)
+                                .frame(width: 28, height: 28)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        } else if let error = loadMore.error {
+                            HStack(spacing: 8) {
+                                Text(error)
+                                    .font(.system(size: DT.f11))
+                                    .foregroundStyle(.red)
+                                Button("Retry") { loadMore.load() }
+                                    .font(.system(size: DT.f11, weight: .semibold))
+                                    .buttonStyle(.plain)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                        }
                     }
                     ForEach(rowKeys, id: \.id) { key in
                         let item = items[key.index]
@@ -1251,10 +1328,17 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 let direction: ConversationPaging.Direction =
                     !previous.isFinite || top == previous ? .none : (top > previous ? .up : .down)
                 let hidden = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: renderCount)
+                // Older than the window: a page of what is held, or, once all of it is shown, one the host can send.
                 guard let generation = metrics.paging.readerMoved(
-                    offsetFromTop: max(0, -top), direction: direction, viewportHeight: viewportHeight, hasOlder: hidden > 0
+                    offsetFromTop: max(0, -top), direction: direction, viewportHeight: viewportHeight,
+                    hasOlder: ConversationRemoteLoad.hasOlder(
+                        hiddenOlder: hidden, hasMore: loadMore?.hasMore ?? false, isLoading: loadMore?.isLoading ?? false)
                 ) else { return }
-                loadOlderPage(generation: generation)
+                if hidden > 0 {
+                    loadOlderPage(generation: generation)
+                } else {
+                    requestRemotePage(generation: generation)
+                }
             } }
             // The scroll view starts at the bottom and STAYS there while content grows, as long as
             // the user has not scrolled away: following needs no scrollTo at all.
@@ -1286,12 +1370,16 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     renderCount += count - lastItemCount
                 }
             }
+            // A page from the host lands in front of `items` (and a request that ended says so by `isLoading` going false).
+            .onChange(of: items.first.map { AnyHashable($0.id) }) { _, _ in remotePageArrived() }
+            .onChange(of: loadMore?.isLoading ?? false) { _, _ in remotePageArrived() }
             // Appended lines are not a page load. A page's hold was begun before the window grew (`loadOlderPage`).
             .onChange(of: renderCount) { oldCount, newCount in
                 guard newCount > oldCount, metrics.appendGrowthTarget == newCount else { return }
                 metrics.appendGrowthTarget = nil
             }
             .onChange(of: resetKey) { _, _ in
+                metrics.remote = nil
                 isPinnedToBottom = true
                 heldCount = nil
                 renderCount = pageSize
@@ -1423,6 +1511,7 @@ extension ConversationView where Footer == EmptyView {
         runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
+        loadMore: ConversationLoadMore? = nil,
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
         @ViewBuilder row: @escaping (Item, ConversationRowContext) -> Row
@@ -1430,7 +1519,8 @@ extension ConversationView where Footer == EmptyView {
         self.init(
             items: items, pageSize: pageSize, resetKey: resetKey,
             scrollToBottomTrigger: scrollToBottomTrigger, rowSpacing: rowSpacing, runSpacing: runSpacing,
-            labels: labels, dividerLabel: dividerLabel, actor: actor, date: date, row: row, footer: { EmptyView() }
+            labels: labels, dividerLabel: dividerLabel, loadMore: loadMore, actor: actor, date: date, row: row,
+            footer: { EmptyView() }
         )
     }
 }
