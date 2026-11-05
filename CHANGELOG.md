@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.12.0
+
+- **ABI generation stays `14`.** Additions only: no stored property was added to an existing public type and no existing init or
+  symbol changed, so plugins built for 2.11.x need no rebuild.
+- **`Work42BrowserBacked`, `BrowserSurfaceDeclaration`, `BrowserSurface.resolveHeadless`, `BrowserSurface.releaseHeadless`**
+  (WOR-644): a widget built on `BrowserSurface` can declare its surface (`browserSurface`), build its view from the declaration
+  (`BrowserSurface(declaration)`), and let the host read its tabs without a view: while a device watches a session, the host
+  builds the model from the declaration, caches it under the same scoped key a mounted surface uses, and lets go of it when no
+  device watches and no view shows it. A widget that does not conform behaves exactly as before.
+- **`.conversationLoadMore(_:)`, `ConversationLoadMore`, `ConversationRemoteLoad`** (WOR-642): a `ConversationView` whose older
+  messages are kept by the host (the iPad's, where the Mac holds them) asks for the next page when the reader reaches the top,
+  and the reader keeps their place when it arrives in front. It is an environment value rather than a `ConversationView`
+  parameter: a stored property or a changed init would break every plugin built against an earlier SDK.
+
 ## 2.11.0
 
 - **ABI generation stays `14`.** Additions only: no public symbol was removed and no stored property was added to an

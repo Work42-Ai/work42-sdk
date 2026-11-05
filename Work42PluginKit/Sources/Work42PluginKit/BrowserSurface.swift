@@ -205,6 +205,28 @@ public struct BrowserSurfaceSpec {
     }
 }
 
+// MARK: - BrowserSurfaceDeclaration
+
+/// What a browser-backed widget says about its surface, separately from drawing it (WOR-644).
+///
+/// A widget declares its `BrowserSurface` once, here, and its `body` builds the view from the declaration
+/// (`BrowserSurface(declaration)`). The host can then read the widget's tabs without the widget being on screen: a device that
+/// opens a tab the Mac never showed gets the widget's data, because the host builds the model from the declaration
+/// (`BrowserSurface.resolveHeadless`) and no view is needed. See `Work42BrowserBacked`.
+public struct BrowserSurfaceDeclaration {
+    public var spec: BrowserSurfaceSpec
+    /// Identity of the cached model and live views, as for `BrowserSurface`: the widget's `id`.
+    public var cacheKey: String
+    /// Called once with the model when it is built, wherever it is built (a mounted surface or the host's headless resolve).
+    public var configure: ((BrowserWidgetModel) -> Void)?
+
+    public init(spec: BrowserSurfaceSpec, cacheKey: String, configure: ((BrowserWidgetModel) -> Void)? = nil) {
+        self.spec = spec
+        self.cacheKey = cacheKey
+        self.configure = configure
+    }
+}
+
 // MARK: - BrowserSurfaceCache
 
 /// Process-wide cache of `BrowserWidgetModel` instances and their per-tab
@@ -247,6 +269,41 @@ public final class BrowserSurfaceCache {
     private var liveViews: [String: WebSectionLiveView] = [:]
 
     private init() {}
+
+    // MARK: - Headless models (WOR-644)
+
+    /// How many `BrowserSurface` views are mounted on each (scoped) key: a model the host built without a view is the host's to
+    /// let go of only while none is.
+    private var mountCounts: [String: Int] = [:]
+    /// Keys whose model the host built headless (`BrowserSurface.resolveHeadless`) and no widget lifecycle owns.
+    private var headlessKeys: Set<String> = []
+    /// Headless resolutions under way, so two readers of one widget share one provider run.
+    private var headlessRuns: [String: Task<Void, Never>] = [:]
+
+    func mounted(_ key: String) { mountCounts[key, default: 0] += 1 }
+
+    func unmounted(_ key: String) {
+        guard let count = mountCounts[key] else { return }
+        if count <= 1 { mountCounts[key] = nil } else { mountCounts[key] = count - 1 }
+    }
+
+    func mountCount(forKey key: String) -> Int { mountCounts[key] ?? 0 }
+
+    func markHeadless(_ key: String) { headlessKeys.insert(key) }
+
+    func isHeadless(_ key: String) -> Bool { headlessKeys.contains(key) }
+
+    func headlessRun(forKey key: String) -> Task<Void, Never>? { headlessRuns[key] }
+
+    func setHeadlessRun(_ run: Task<Void, Never>?, forKey key: String) { headlessRuns[key] = run }
+
+    /// Lets go of a model the host built headless, unless a view is showing it now. A model a widget's own lifecycle built is
+    /// left to that lifecycle.
+    func releaseHeadless(scopedKey key: String) {
+        guard headlessKeys.contains(key), mountCount(forKey: key) == 0 else { return }
+        headlessKeys.remove(key)
+        tearDown(scopedKey: key)
+    }
 
     // MARK: - Session scope
 
@@ -336,7 +393,12 @@ public final class BrowserSurfaceCache {
     /// Call from the widget's `deactivate()` — a cached `WKWebView` is a
     /// heavyweight resource and "done means inert".
     public func teardown(key rawKey: String) {
-        let key = Self.scopedKey(rawKey, scope: scope)
+        tearDown(scopedKey: Self.scopedKey(rawKey, scope: scope))
+    }
+
+    /// `teardown(key:)` for a key that already carries its scope.
+    func tearDown(scopedKey key: String) {
+        headlessKeys.remove(key)
         // Release the model for this surface.
         models.removeValue(forKey: key)
         // Release all per-tab live views: keys are "<key>:<tabID>".
@@ -539,6 +601,12 @@ public struct BrowserSurface: View {
         self.configure = configure
     }
 
+    /// A surface built from the widget's declaration (WOR-644): what a `Work42BrowserBacked` widget's `body` returns, so the view
+    /// and the host's headless resolve are made from the same declaration.
+    public init(_ declaration: BrowserSurfaceDeclaration) {
+        self.init(spec: declaration.spec, cacheKey: declaration.cacheKey, configure: declaration.configure)
+    }
+
     /// The services the comment pipeline uses: the explicit parameter, else the environment's.
     static func effectiveServices(explicit: SessionServices?, environment: SessionServices?) -> SessionServices? {
         explicit ?? environment
@@ -549,6 +617,9 @@ public struct BrowserSurface: View {
         BrowserSurfaceScopeReader { scope in
             let key = BrowserSurfaceCache.scopedKey(cacheKey, scope: scope)
             content(cacheKey: key)
+                // Counted while on screen, so the host lets go of a headless model only when no view shows it (WOR-644).
+                .onAppear { BrowserSurfaceCache.shared.mounted(key) }
+                .onDisappear { BrowserSurfaceCache.shared.unmounted(key) }
                 // Re-runs when Retry is pressed AND when the cached model disappears while this surface is on
                 // screen (its widget was deactivated around a session visit): the surface rebuilds its model and
                 // views instead of showing a spinner with nothing behind it. Reading the cache here is what
@@ -621,6 +692,83 @@ public struct BrowserSurface: View {
     /// when one widget is shown in several sessions.
     public static func model(forKey cacheKey: String, scope: String?) -> BrowserWidgetModel? {
         BrowserSurfaceCache.shared.existingModel(forKey: BrowserSurfaceCache.scopedKey(cacheKey, scope: scope))
+    }
+
+    // MARK: - Headless resolution (WOR-644)
+
+    /// Builds the surface's model without a view, as a mounted surface would, and returns it: what the host does to read a
+    /// `Work42BrowserBacked` widget's tabs that no panel is showing (a device opened a tab the Mac never showed). A cached model is
+    /// returned at once and the provider never runs again. The model is cached under the same scoped key a view would use, so a view
+    /// that mounts later reuses it. Nil when the provider failed or did not answer in `openingTimeout`; a late answer still lands
+    /// in the cache.
+    @MainActor
+    public static func resolveHeadless(_ declaration: BrowserSurfaceDeclaration, scope: String) async -> BrowserWidgetModel? {
+        await resolveHeadless(declaration, scope: scope, timeout: openingTimeout)
+    }
+
+    /// `resolveHeadless` with an explicit wait, so tests can drive it quickly.
+    @MainActor
+    static func resolveHeadless(
+        _ declaration: BrowserSurfaceDeclaration, scope: String, timeout: Duration
+    ) async -> BrowserWidgetModel? {
+        let cache = BrowserSurfaceCache.shared
+        let key = BrowserSurfaceCache.scopedKey(declaration.cacheKey, scope: scope)
+        if let model = cache.existingModel(forKey: key), !model.tabs.isEmpty { return model }
+        let run: Task<Void, Never>
+        if let running = cache.headlessRun(forKey: key) {
+            run = running
+        } else {
+            let existed = cache.existingModel(forKey: key) != nil
+            run = Task { @MainActor in
+                await resolve(
+                    spec: declaration.spec, cacheKey: key, state: BrowserSurfaceState(), configure: declaration.configure,
+                    timeout: timeout)
+                // A model the host built is the host's to let go of; one a view or the widget's own lifecycle built is not.
+                if !existed, cache.mountCount(forKey: key) == 0, cache.existingModel(forKey: key) != nil {
+                    cache.markHeadless(key)
+                }
+                cache.setHeadlessRun(nil, forKey: key)
+            }
+            cache.setHeadlessRun(run, forKey: key)
+        }
+        await wait(for: run, timeout: timeout)
+        guard let model = cache.existingModel(forKey: key), !model.tabs.isEmpty else { return nil }
+        return model
+    }
+
+    /// Lets go of a model `resolveHeadless` built, when no view is showing it. A model a widget's own lifecycle built (a mounted
+    /// surface, `teardown` in `deactivate`) is left alone.
+    @MainActor
+    public static func releaseHeadless(cacheKey: String, scope: String) {
+        BrowserSurfaceCache.shared.releaseHeadless(scopedKey: BrowserSurfaceCache.scopedKey(cacheKey, scope: scope))
+    }
+
+    @MainActor
+    private final class ResumeOnce {
+        private var taken = false
+        func take() -> Bool {
+            defer { taken = true }
+            return !taken
+        }
+    }
+
+    /// Returns when `run` finishes or `timeout` passes, whichever is first. `run` is not cancelled: a slow provider's late answer
+    /// still lands.
+    @MainActor
+    private static func wait(for run: Task<Void, Never>, timeout: Duration) async {
+        let once = ResumeOnce()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let sleeper = Task { @MainActor in
+                try? await Task.sleep(for: timeout)
+                guard !Task.isCancelled else { return }
+                if once.take() { continuation.resume() }
+            }
+            Task { @MainActor in
+                await run.value
+                sleeper.cancel()
+                if once.take() { continuation.resume() }
+            }
+        }
     }
 
     // MARK: - Resolution

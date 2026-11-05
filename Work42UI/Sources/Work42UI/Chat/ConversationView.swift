@@ -933,6 +933,8 @@ private final class ConversationScrollMetrics {
     /// An older page asked of the host (`ConversationLoadMore`) and not yet arrived (WOR-642): what `items` looked like when it
     /// was asked for, so the page is recognised when it lands in front.
     var remote: RemoteRequest?
+    /// What the host last offered through `.conversationLoadMore(_:)`, kept here for the paging methods.
+    var loadMore: ConversationLoadMore?
 
     struct RemoteRequest {
         var generation: Int
@@ -981,7 +983,6 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     let date: (Item) -> Date?
     let row: (Item, ConversationRowContext) -> Row
     let footer: () -> Footer
-    let loadMore: ConversationLoadMore?
 
     /// - Parameters:
     ///   - items: The whole conversation, oldest first. Pass all of it; the view windows it.
@@ -998,9 +999,10 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     ///   - date: When the item happened (drives dividers and the label time).
     ///   - row: The row for an item. `ConversationBubble` does the standard placement.
     ///   - footer: Content after the last row and inside the scroll (typing indicator, queued messages).
-    ///   - loadMore: History the host keeps, asked for when the reader reaches the top with nothing older left in `items`. The
-    ///     page arrives as items added at the front of `items` and the reader keeps their place. Nil for a conversation that
-    ///     holds all of its history.
+    ///
+    /// History the host keeps (the iPad's, where the Mac holds the older messages) is asked for with the
+    /// `.conversationLoadMore(_:)` modifier on this view, not a parameter: a stored property or a changed init would break every
+    /// plugin built against this SDK (see `PublicLayoutStabilityTests`).
     public init(
         items: [Item],
         pageSize: Int,
@@ -1010,13 +1012,11 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
-        loadMore: ConversationLoadMore? = nil,
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
         @ViewBuilder row: @escaping (Item, ConversationRowContext) -> Row,
         @ViewBuilder footer: @escaping () -> Footer
     ) {
-        self.loadMore = loadMore
         self.items = items
         self.pageSize = max(1, pageSize)
         self.resetKey = resetKey
@@ -1136,7 +1136,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     private func requestRemotePage(generation: Int) {
         metrics.remote = ConversationScrollMetrics.RemoteRequest(
             generation: generation, firstID: items.first.map { AnyHashable($0.id) }, count: items.count)
-        loadMore?.load()
+        metrics.loadMore?.load()
     }
 
     /// `items` changed at the front or the host finished: a page landed, or the request ended with nothing to show.
@@ -1148,7 +1148,7 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         guard let added = prepended else {
             // Still waiting: the request is out. Ended with nothing in front (it failed, or the host had nothing): the next
             // upward move may ask again.
-            if !(loadMore?.isLoading ?? false) {
+            if !(metrics.loadMore?.isLoading ?? false) {
                 metrics.remote = nil
                 metrics.paging.pageDone(
                     generation: request.generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
@@ -1175,7 +1175,14 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
 
     // MARK: Body
 
+    /// The environment is read in a nested view, never here: a stored `@Environment` would change this struct's size.
     public var body: some View {
+        ConversationLoadMoreReader { loadMore in content(loadMore: loadMore) }
+    }
+
+    private func content(loadMore: ConversationLoadMore?) -> some View {
+        // Kept for the paging methods, which are not passed it.
+        metrics.loadMore = loadMore
         let shown = shownCount
         let windowStart = ConversationLayout.renderedStart(itemCount: shown, renderCount: renderCount)
         let hiddenOlder = windowStart
@@ -1511,7 +1518,6 @@ extension ConversationView where Footer == EmptyView {
         runSpacing: CGFloat? = ChatMetrics.blockSpacing,
         labels: ConversationLabels = .automatic,
         dividerLabel: @escaping (Date) -> String = ConversationDateDivider.dayClockLabel(for:),
-        loadMore: ConversationLoadMore? = nil,
         actor: @escaping (Item) -> ConversationActor?,
         date: @escaping (Item) -> Date?,
         @ViewBuilder row: @escaping (Item, ConversationRowContext) -> Row
@@ -1519,8 +1525,7 @@ extension ConversationView where Footer == EmptyView {
         self.init(
             items: items, pageSize: pageSize, resetKey: resetKey,
             scrollToBottomTrigger: scrollToBottomTrigger, rowSpacing: rowSpacing, runSpacing: runSpacing,
-            labels: labels, dividerLabel: dividerLabel, loadMore: loadMore, actor: actor, date: date, row: row,
-            footer: { EmptyView() }
+            labels: labels, dividerLabel: dividerLabel, actor: actor, date: date, row: row, footer: { EmptyView() }
         )
     }
 }
