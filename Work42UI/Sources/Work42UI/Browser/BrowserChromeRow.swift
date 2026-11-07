@@ -151,6 +151,7 @@ public struct BrowserChromeRow: View {
                 BrowserTabBar(
                     tabs: model.tabs,
                     activeTabId: model.activeTabId,
+                    viewers: model.tabViewers,
                     onSelect: { id in model.selectTab(id) },
                     onClose:  { id in model.closeTab(id) }
                 )

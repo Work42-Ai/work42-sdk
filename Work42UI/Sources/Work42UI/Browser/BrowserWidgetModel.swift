@@ -61,6 +61,21 @@ public struct BrowserTab: Identifiable, Equatable, Hashable, Codable {
     }
 }
 
+/// Someone else looking at a browser tab: what the tab bar draws on that tab.
+public struct BrowserTabViewer: Identifiable, Equatable, Sendable {
+    public let id: String
+    public var name: String
+    public var avatarURL: String?
+
+    public init(id: String, name: String, avatarURL: String? = nil) {
+        self.id = id
+        self.name = name
+        self.avatarURL = avatarURL
+    }
+
+    public var initials: String { name.first.map { String($0).uppercased() } ?? "?" }
+}
+
 // MARK: - BrowserWidgetModel
 
 /// Shared state for any embedded-browser widget (Browser, Jira, GitHub PR, Canvas).
@@ -126,7 +141,9 @@ public final class BrowserWidgetModel: ObservableObject {
     public private(set) var tabs: [BrowserTab] = []
 
     /// The ID of the currently-selected tab, or nil when `tabs` is empty.
-    public private(set) var activeTabId: UUID?
+    public private(set) var activeTabId: UUID? {
+        didSet { if activeTabId != oldValue { onFrontTabChanged?(activeTabId) } }
+    }
 
     /// Called when the `+` (new tab) button is pressed. Subtask .7 wires this
     /// to the PR paste-URL flow. The closure is set by the widget host; the
@@ -146,6 +163,14 @@ public final class BrowserWidgetModel: ObservableObject {
     /// closure pattern. Every find/zoom method resolves the current live view
     /// by calling `activeLiveView?()`.
     public var activeLiveView: (() -> WebSectionLiveView?)?
+
+    /// The other people whose front tab each tab is, set by the host from session presence. Every browser-based widget
+    /// (Browser, Jira, GitHub, Linear, plugin browsers) draws these on its tab bar, so none has to do anything for it.
+    public var tabViewers: [UUID: [BrowserTabViewer]] = [:]
+
+    /// Called with the front tab's id whenever it changes (a tab picked, opened or closed), so the host can tell the
+    /// session which tab this device is on. Fires for the tab on show, too.
+    public var onFrontTabChanged: ((UUID?) -> Void)?
 
     /// True when the tab bar should be shown (more than one tab exists).
     /// Single-tab or no-tab widgets keep the bar hidden — the chrome looks as
