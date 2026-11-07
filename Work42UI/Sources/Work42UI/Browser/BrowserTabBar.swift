@@ -108,7 +108,7 @@ public struct BrowserTabBar: View {
                     HStack(spacing: -6) {
                         ForEach(here.prefix(3)) { viewer in
                             GlassAvatar(
-                                initials: viewer.initials, color: .indigo, size: 16,
+                                initials: viewer.initials, color: viewer.color ?? .indigo, size: 16,
                                 imageURL: viewer.avatarURL.flatMap(URL.init(string:)))
                                 .overlay(Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
                         }

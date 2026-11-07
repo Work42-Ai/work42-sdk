@@ -66,11 +66,14 @@ public struct BrowserTabViewer: Identifiable, Equatable, Sendable {
     public let id: String
     public var name: String
     public var avatarURL: String?
+    /// The person's colour (one per person, the same on every avatar in the session); nil draws the default.
+    public var color: Color?
 
-    public init(id: String, name: String, avatarURL: String? = nil) {
+    public init(id: String, name: String, avatarURL: String? = nil, color: Color? = nil) {
         self.id = id
         self.name = name
         self.avatarURL = avatarURL
+        self.color = color
     }
 
     public var initials: String { name.first.map { String($0).uppercased() } ?? "?" }
