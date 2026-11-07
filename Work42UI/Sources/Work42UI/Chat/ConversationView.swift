@@ -35,18 +35,23 @@ public struct ConversationActor: Sendable, Hashable {
     public let isMe: Bool
     /// A profile photo shown in the avatar's glass ring instead of the initials, when there is one.
     public let imageURL: URL?
+    /// True when the actor's messages sit in a bubble tinted with `color` (a person in the session), instead of the neutral one.
+    public let tintsBubble: Bool
 
     public init(id: String, name: String, initials: String, color: Color, isMe: Bool) {
         self.init(id: id, name: name, initials: initials, color: color, isMe: isMe, imageURL: nil)
     }
 
-    public init(id: String, name: String, initials: String, color: Color, isMe: Bool, imageURL: URL?) {
+    public init(
+        id: String, name: String, initials: String, color: Color, isMe: Bool, imageURL: URL?, tintsBubble: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.initials = initials
         self.color = color
         self.isMe = isMe
         self.imageURL = imageURL
+        self.tintsBubble = tintsBubble
     }
 }
 
@@ -122,13 +127,19 @@ public struct ConversationBubble<Content: View>: View {
                     if context.showsLabel {
                         caption(actor, nameFirst: true).padding(.horizontal, 6).padding(.top, 2)
                     }
-                    ChatBubble(side: .leading, style: .neutral, content: content)
+                    ChatBubble(side: .leading, style: Self.style(for: actor), content: content)
                         .transformEnvironment(\.chatBubbleContainerWidth) { $0 = $0 > 0 ? max(1, $0 - avatarSize - 8) : 0 }
                 }
             }
         } else {
-            ChatBubble(side: .leading, style: .neutral, content: content)
+            ChatBubble(side: .leading, style: Self.style(for: context.actor), content: content)
         }
+    }
+
+    /// The bubble of someone else: tinted with their colour when they ask for it (a person in the session), else neutral.
+    private static func style(for actor: ConversationActor?) -> ChatBubbleStyle {
+        if let actor, actor.tintsBubble { return .speaker(actor.color) }
+        return .neutral
     }
 
     /// My run in a conversation that labels everyone: the time and my name above the bubble, my
