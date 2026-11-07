@@ -168,6 +168,10 @@ public final class BrowserWidgetModel: ObservableObject {
     /// (Browser, Jira, GitHub, Linear, plugin browsers) draws these on its tab bar, so none has to do anything for it.
     public var tabViewers: [UUID: [BrowserTabViewer]] = [:]
 
+    /// Called after every change to the tab list (a tab opened, closed, updated or the list replaced), so a host that shares the
+    /// list can pass the change on.
+    public var onTabsMutated: (() -> Void)?
+
     /// Called with the front tab's id whenever it changes (a tab picked, opened or closed), so the host can tell the
     /// session which tab this device is on. Fires for the tab on show, too.
     public var onFrontTabChanged: ((UUID?) -> Void)?
@@ -243,6 +247,7 @@ public final class BrowserWidgetModel: ObservableObject {
     /// `persistenceKey` is nil. Called at the end of every method that
     /// mutates the tab list or selection.
     private func persistTabsIfNeeded() {
+        onTabsMutated?()
         guard let persistenceKey else { return }
         BrowserTabsStore.save(tabs: tabs, activeTabId: activeTabId, forKey: persistenceKey)
     }
@@ -319,9 +324,11 @@ public final class BrowserWidgetModel: ObservableObject {
     ///
     /// - Returns: the new or existing tab's id.
     @discardableResult
-    public func openTab(id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil) -> UUID {
+    public func openTab(
+        id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil, activate: Bool = true
+    ) -> UUID {
         if let existingIndex = tabs.firstIndex(where: { $0.id == id }) {
-            selectTab(tabs[existingIndex].id)
+            if activate { selectTab(tabs[existingIndex].id) }
             return tabs[existingIndex].id
         }
         let tab = BrowserTab(id: id, url: url, title: title, icon: icon)
@@ -329,6 +336,12 @@ public final class BrowserWidgetModel: ObservableObject {
             tabs.insert(tab, at: openerIndex + 1)
         } else {
             tabs.append(tab)
+        }
+        // A tab opened for someone else (the shared list) does not take this device's front tab.
+        guard activate else {
+            objectWillChange.send()
+            persistTabsIfNeeded()
+            return tab.id
         }
         activeTabId = tab.id
         // The new tab becomes active: mirror its URL into the capsule — an empty
