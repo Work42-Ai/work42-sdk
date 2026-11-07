@@ -164,17 +164,33 @@ public final class BrowserWidgetModel: ObservableObject {
     /// by calling `activeLiveView?()`.
     public var activeLiveView: (() -> WebSectionLiveView?)?
 
+    // The three below are kept beside the model (`BrowserModelExtras`), not in it, so this class gains no stored property and a
+    // plugin built against an earlier SDK keeps its layout (ABI generation 14).
+
     /// The other people whose front tab each tab is, set by the host from session presence. Every browser-based widget
     /// (Browser, Jira, GitHub, Linear, plugin browsers) draws these on its tab bar, so none has to do anything for it.
-    public var tabViewers: [UUID: [BrowserTabViewer]] = [:]
+    public var tabViewers: [UUID: [BrowserTabViewer]] {
+        get { BrowserModelExtras.of(self).tabViewers }
+        set {
+            guard BrowserModelExtras.of(self).tabViewers != newValue else { return }
+            BrowserModelExtras.of(self).tabViewers = newValue
+            objectWillChange.send()
+        }
+    }
 
     /// Called after every change to the tab list (a tab opened, closed, updated or the list replaced), so a host that shares the
     /// list can pass the change on.
-    public var onTabsMutated: (() -> Void)?
+    public var onTabsMutated: (() -> Void)? {
+        get { BrowserModelExtras.of(self).onTabsMutated }
+        set { BrowserModelExtras.of(self).onTabsMutated = newValue }
+    }
 
     /// Called with the front tab's id whenever it changes (a tab picked, opened or closed), so the host can tell the
     /// session which tab this device is on. Fires for the tab on show, too.
-    public var onFrontTabChanged: ((UUID?) -> Void)?
+    public var onFrontTabChanged: ((UUID?) -> Void)? {
+        get { BrowserModelExtras.of(self).onFrontTabChanged }
+        set { BrowserModelExtras.of(self).onFrontTabChanged = newValue }
+    }
 
     /// True when the tab bar should be shown (more than one tab exists).
     /// Single-tab or no-tab widgets keep the bar hidden — the chrome looks as
@@ -324,8 +340,15 @@ public final class BrowserWidgetModel: ObservableObject {
     ///
     /// - Returns: the new or existing tab's id.
     @discardableResult
+    public func openTab(id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil) -> UUID {
+        openTab(id: id, url: url, title: title, icon: icon, after: after, activate: true)
+    }
+
+    /// `openTab` that can leave the front tab where it is: a tab opened for someone else (the shared list) does not take this
+    /// device's front tab. A tab that already exists is selected only when `activate` is true.
+    @discardableResult
     public func openTab(
-        id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil, activate: Bool = true
+        id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil, activate: Bool
     ) -> UUID {
         if let existingIndex = tabs.firstIndex(where: { $0.id == id }) {
             if activate { selectTab(tabs[existingIndex].id) }
@@ -671,6 +694,26 @@ public final class BrowserWidgetModel: ObservableObject {
         urlFocusNonce += 1
         // Notify ObservableObject observers (BrowserChromeRow).
         objectWillChange.send()
+    }
+}
+
+// MARK: - BrowserModelExtras
+
+/// What a host adds to a `BrowserWidgetModel` (the others on its tabs, hooks for sharing its list), kept beside the model so the
+/// model's own layout does not change. One per model, alive as long as the model is.
+@MainActor
+final class BrowserModelExtras {
+    var tabViewers: [UUID: [BrowserTabViewer]] = [:]
+    var onTabsMutated: (() -> Void)?
+    var onFrontTabChanged: ((UUID?) -> Void)?
+
+    private static let table = NSMapTable<BrowserWidgetModel, BrowserModelExtras>.weakToStrongObjects()
+
+    static func of(_ model: BrowserWidgetModel) -> BrowserModelExtras {
+        if let held = table.object(forKey: model) { return held }
+        let made = BrowserModelExtras()
+        table.setObject(made, forKey: model)
+        return made
     }
 }
 
