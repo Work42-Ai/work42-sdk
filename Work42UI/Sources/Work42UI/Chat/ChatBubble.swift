@@ -323,7 +323,7 @@ public struct ChatBubble<Content: View>: View {
     }
 
     private func initialsCircle(_ text: String, color: Color) -> some View {
-        GlassAvatar(initials: text, color: color, size: avatarSize)
+        Work42Avatar(initials: text, color: color, size: .nearest(to: avatarSize))
     }
 
     private var relativeFormatter: DateFormatter { chatBubbleRelativeFormatter }

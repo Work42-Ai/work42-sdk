@@ -68,12 +68,15 @@ public struct BrowserTabViewer: Identifiable, Equatable, Sendable {
     public var avatarURL: String?
     /// The person's colour (one per person, the same on every avatar in the session); nil draws the default.
     public var color: Color?
+    /// The device the person is on, for the badge on their avatar.
+    public var device: Work42AvatarDevice
 
-    public init(id: String, name: String, avatarURL: String? = nil, color: Color? = nil) {
+    public init(id: String, name: String, avatarURL: String? = nil, color: Color? = nil, device: Work42AvatarDevice = .none) {
         self.id = id
         self.name = name
         self.avatarURL = avatarURL
         self.color = color
+        self.device = device
     }
 
     public var initials: String { name.first.map { String($0).uppercased() } ?? "?" }

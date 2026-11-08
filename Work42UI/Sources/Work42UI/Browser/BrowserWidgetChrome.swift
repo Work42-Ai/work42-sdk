@@ -63,7 +63,7 @@ public func makeWebWidgetChrome(
         minWidth: minWidth,
         minHeight: minHeight,
         contentPadding: 0,
-        headerContent: { trailing in
+        headerContent: {
             BrowserChromeRow(
                 icon: icon,
                 iconImageData: iconImageData,
@@ -78,8 +78,7 @@ public func makeWebWidgetChrome(
                 // joins the shared trailing glass pill after the picker.
                 pillAccessory: headerAccessory,
                 pillTint: headerAccessoryPillTint,
-                // Engine-owned move/close controls remain bare after the pill.
-                trailingControls: trailing,
+                // The engine appends its controls pill (people, move, close) after this header.
                 // Read when the header renders, so Refresh/Stop follows the live view's status.
                 webStatus: webStatus()
             )

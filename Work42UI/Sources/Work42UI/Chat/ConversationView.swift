@@ -119,7 +119,8 @@ public struct ConversationBubble<Content: View>: View {
         } else if context.labeled, let actor = context.actor {
             HStack(alignment: .top, spacing: 8) {
                 if context.showsLabel {
-                    GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize, imageURL: actor.imageURL)
+                    Work42Avatar(
+                        initials: actor.initials, color: actor.color, imageURL: actor.imageURL, size: .nearest(to: avatarSize))
                 } else {
                     Color.clear.frame(width: avatarSize, height: 1)
                 }
@@ -155,7 +156,7 @@ public struct ConversationBubble<Content: View>: View {
                     .transformEnvironment(\.chatBubbleContainerWidth) { $0 = $0 > 0 ? max(1, $0 - avatarSize - 8) : 0 }
             }
             if context.showsLabel {
-                GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize, imageURL: actor.imageURL)
+                Work42Avatar(initials: actor.initials, color: actor.color, imageURL: actor.imageURL, size: .nearest(to: avatarSize))
             } else {
                 Color.clear.frame(width: avatarSize, height: 1)
             }
@@ -322,45 +323,18 @@ public struct ConversationMessageRow<Content: View>: View {
     }
 }
 
-/// The flat avatar of a run, in the chip language of the provider pill: a translucent fill of the
-/// actor's colour with a hairline stroke, and the mark (a template provider logo, or the initials)
-/// drawn in that colour. `DT.resolveChipTint` keeps a near-black colour (Codex) legible in dark mode.
+/// The avatar of a run's header: the shared `Work42Avatar`, an agent's (the template provider logo in the actor's
+/// colour) when there is a logo and no photo, else the person's (photo or initials).
 struct ConversationAvatar: View {
     let actor: ConversationActor
     let logo: Image?
 
-    @Environment(\.colorScheme) private var colorScheme
-    /// The actor's profile photo, once loaded. Until then (or if it never loads) the initials show.
-    @State private var photo: PlatformImage?
-
     var body: some View {
-        let size = ConversationMetrics.avatarSize
-        let tint = DT.resolveChipTint(actor.color, colorScheme: colorScheme)
-        ZStack {
-            Circle().fill(tint.fill)
-            Circle().strokeBorder(tint.stroke, lineWidth: 0.5)
-            if let photo {
-                Image(platformImage: photo)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size - 1, height: size - 1)
-                    .clipShape(Circle())
-            } else if let logo {
-                logo
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size * 0.5, height: size * 0.5)
-            } else {
-                Text(actor.initials)
-                    .font(.system(size: 11, weight: .semibold))
-            }
-        }
-        .foregroundStyle(tint.foreground)
-        .frame(width: size, height: size)
-        .task(id: actor.imageURL) {
-            guard let url = actor.imageURL else { photo = nil; return }
-            photo = await GlassAvatarImageCache.shared.image(for: url)
+        let size = Work42AvatarSize.nearest(to: ConversationMetrics.avatarSize)
+        if let logo, actor.imageURL == nil {
+            Work42Avatar(agentMark: logo, tint: actor.color, size: size)
+        } else {
+            Work42Avatar(initials: actor.initials, color: actor.color, imageURL: actor.imageURL, size: size)
         }
     }
 }

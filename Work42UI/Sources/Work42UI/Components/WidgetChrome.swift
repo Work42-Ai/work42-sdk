@@ -63,12 +63,12 @@ public struct WidgetChrome<Actions: View> {
     /// Extra trailing header controls, placed before the move menu + close X.
     @ViewBuilder public let actions: () -> Actions
     /// When non-nil, replaces the title+icon block in the card header. The
-    /// builder RECEIVES the trailing widget controls (`actions` + move menu +
-    /// close X) as a ready-to-place `AnyView`, so the header decides where they
-    /// sit — letting a multi-row header (e.g. BrowserChromeRow, with a tab bar
-    /// below) pin the controls to its TOP row while a full-width second row
-    /// spans edge to edge. Set only via the `headerContent:` overload.
-    public let headerContent: ((AnyView) -> AnyView)?
+    /// builder returns only the header's OWN content (title, middle, a
+    /// multi-row header such as BrowserChromeRow with a tab bar below); the
+    /// host appends the controls pill (people on the widget, move menu, close
+    /// X) after it, top-aligned, so a header can't place, drop or replace the
+    /// pill. Set only via the `headerContent:` overload.
+    public let headerContent: (() -> AnyView)?
     /// When true, `WidgetCard` renders the header as a floating overlay that
     /// slides down on hover (Theme B — floating browser header, AC9–AC13).
     /// When false (default), the header stacks above the content as usual
@@ -126,8 +126,8 @@ public struct WidgetChrome<Actions: View> {
     }
 
     /// Overload: `headerContent` replaces the title+icon block in the card
-    /// header. The builder RECEIVES the trailing controls (`actions` + move menu
-    /// + close X) and places them itself — so the header owns their position.
+    /// header. The builder returns only the header's own content; the host
+    /// appends the controls pill (people, move menu, close X) after it.
     /// `title` and `systemImage` are still required so the ghost overlay
     /// can label the placeholder card during column resize drags.
     public init<HC: View>(
@@ -136,7 +136,7 @@ public struct WidgetChrome<Actions: View> {
         minWidth: CGFloat = 0,
         minHeight: CGFloat = 0,
         contentPadding: CGFloat = 16,
-        headerContent: @escaping (_ trailingControls: AnyView) -> HC,
+        headerContent: @escaping () -> HC,
         canClose: Bool = false,
         onClose: @escaping () -> Void = {},
         moveOptions: WidgetMoveOptions? = nil,
@@ -155,7 +155,7 @@ public struct WidgetChrome<Actions: View> {
         self.onClose = onClose
         self.moveOptions = moveOptions
         self.actions = actions
-        self.headerContent = { trailing in AnyView(headerContent(trailing)) }
+        self.headerContent = { AnyView(headerContent()) }
         self.floatingHeader = floatingHeader
         self.externalReveal = externalReveal
         self.pinned = pinned

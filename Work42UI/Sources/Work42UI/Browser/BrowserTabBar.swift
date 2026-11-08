@@ -106,13 +106,17 @@ public struct BrowserTabBar: View {
                 // The others on this tab, growing in as they arrive.
                 if let here = viewers[tab.id], !here.isEmpty {
                     HStack(spacing: -6) {
-                        ForEach(here.prefix(3)) { viewer in
-                            GlassAvatar(
-                                initials: viewer.initials, color: viewer.color ?? .indigo, size: 16,
-                                imageURL: viewer.avatarURL.flatMap(URL.init(string:)))
-                                .overlay(Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+                        // The first is on top, so each device badge, which hangs over the next avatar, stays in front.
+                        ForEach(Array(here.prefix(3).enumerated()), id: \.element.id) { index, viewer in
+                            Work42Avatar(
+                                initials: viewer.initials, color: viewer.color ?? .indigo,
+                                imageURL: viewer.avatarURL.flatMap(URL.init(string:)), device: viewer.device, size: .s18
+                            )
+                            .zIndex(Double(3 - index))
                         }
                     }
+                    // Room for the last badge, which hangs past its avatar; nothing here clips it.
+                    .padding(.trailing, Work42AvatarSize.s18.badge.offset.width)
                     .transition(.scale(scale: 0.2).combined(with: .opacity))
                     .accessibilityLabel(here.map(\.name).joined(separator: ", "))
                 }
