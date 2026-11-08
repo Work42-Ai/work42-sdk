@@ -114,7 +114,7 @@ private struct GlassAvatarBackground: ViewModifier {
     let color: Color
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, iOS 26.0, *) {
             content.glassEffect(.regular.tint(color.opacity(0.28)), in: Circle())
         } else {
             content
