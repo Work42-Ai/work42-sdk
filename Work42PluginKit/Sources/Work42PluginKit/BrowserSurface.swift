@@ -1298,6 +1298,11 @@ private struct BrowserSurfaceReady: View {
         model.bind(to: live.webView)
         model.syncZoom(from: live.webView)
         model.activeLiveView = { [weak live] in live }
+        // Another device moved a tab (the shared address): its page here, if it has one yet, shows it.
+        let prefix = cacheKey
+        model.showInTab = { id, url in
+            BrowserSurfaceCache.shared.existingLiveView(forKey: "\(prefix):\(id)")?.show(url)
+        }
         // Track in-page navigation (link clicks, SPA pushState) onto the tab's
         // URL so a remount or tab-template restore reopens the actual visited page.
         live.onURLChange = { [weak model] landed in

@@ -1728,6 +1728,14 @@ public final class WebSectionLiveView {
         load(URLRequest(url: url))
     }
 
+    /// Brings this page to `url` because somebody else moved the tab: nothing when it is already there, a step back or forward
+    /// when `url` is the page before or after in its history, else a load.
+    public func show(_ url: URL) {
+        if webView.url == url { return }
+        let history = webView.backForwardList
+        if history.backItem?.url == url { webView.goBack() } else if history.forwardItem?.url == url { webView.goForward() } else { load(url) }
+    }
+
     func load(_ request: URLRequest) {
         guard !isTornDown else {
             Self.returnLog.notice("load ignored: the view was torn down (\(request.url?.host ?? "no host", privacy: .public))")

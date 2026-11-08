@@ -195,6 +195,23 @@ public final class BrowserWidgetModel: ObservableObject {
         set { BrowserModelExtras.of(self).onFrontTabChanged = newValue }
     }
 
+    /// Set by whatever draws the pages (`BrowserWorkspace`, a plugin's `BrowserSurface`): loads `url` in the tab's own page.
+    /// A host that shares a tab's address calls `show(_:inTab:)` when another device moved the tab, so this device's page follows.
+    public var showInTab: ((UUID, URL) -> Void)? {
+        get { BrowserModelExtras.of(self).showInTab }
+        set { BrowserModelExtras.of(self).showInTab = newValue }
+    }
+
+    /// Makes `url` the address of tab `id` and has its page show it. A back or forward step in the page's history is taken as
+    /// such, so going back on one device goes back on every device.
+    public func show(_ url: URL, inTab id: UUID) {
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        let had = tab.url != nil
+        if tab.url != url { updateTab(id, title: tab.title == "New Tab" ? url.host : nil, url: url) }
+        if activeTabId == id { self.url = url; setDraft(url.absoluteString) }
+        if had { showInTab?(id, url) }
+    }
+
     /// True when the tab bar should be shown (more than one tab exists).
     /// Single-tab or no-tab widgets keep the bar hidden — the chrome looks as
     /// it does today.
@@ -709,6 +726,7 @@ final class BrowserModelExtras {
     var tabViewers: [UUID: [BrowserTabViewer]] = [:]
     var onTabsMutated: (() -> Void)?
     var onFrontTabChanged: ((UUID?) -> Void)?
+    var showInTab: ((UUID, URL) -> Void)?
 
     private static let table = NSMapTable<BrowserWidgetModel, BrowserModelExtras>.weakToStrongObjects()
 
