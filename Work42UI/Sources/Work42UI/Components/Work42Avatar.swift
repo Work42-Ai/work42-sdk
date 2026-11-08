@@ -3,9 +3,10 @@
 // It owns the photo or initials, the person's colour, the ring, dimmed, the agent variant and the device badge (a laptop or an
 // iPad), at a fixed set of sizes, so the same person looks the same everywhere but for size.
 //
-// The face is flat (a thin material, a wash of the colour and a hairline), not `.glassEffect`. A glass face inside a
-// `GlassEffectContainer` (the session tab strip) renders in the container's glass layer and covered the badge. The badge is an
-// overlay of the face, in front of it, so it is above the avatar in every container, glass or not.
+// A person's face is Liquid Glass (`GlassAvatar`'s: `.glassEffect` tinted with the colour on macOS 26 / iOS 26, a material, a wash
+// and a hairline before). The badge and the ring are drawn as content of that glass view, not as overlays outside it: in a
+// `GlassEffectContainer` (the session tab strip) the container's glass layer covers anything that is not a glass view's own
+// content, which hid the badge. Content of a glass view is above its glass, so the badge is in front in every container.
 
 import SwiftUI
 
@@ -133,31 +134,38 @@ public struct Work42Avatar: View {
     private func person(initials: String, color: Color, imageURL: URL?, device: Work42AvatarDevice, dimmed: Bool) -> some View {
         let diameter = size.diameter
         let inset = max(1.5, diameter * 0.05)
-        let initialsColor = colorScheme == .dark ? color : color.mix(with: .black, by: 0.18)
+        // A device that is not connected is greyed by its colour and its photo, not by a filter on the whole view: a filter
+        // would flatten the glass, and the badge stays at full strength.
+        let tint = dimmed ? Color.gray : color
+        let initialsColor = colorScheme == .dark ? tint : tint.mix(with: .black, by: 0.18)
         return ZStack {
             Text(initials)
                 .font(.system(size: diameter * 0.38, weight: .semibold))
                 .foregroundStyle(initialsColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .opacity(photo == nil ? 1 : 0)
+                .opacity(photo == nil ? (dimmed ? 0.6 : 1) : 0)
             if let photo {
                 Image(platformImage: photo)
                     .resizable()
                     .scaledToFill()
                     .frame(width: diameter - inset * 2, height: diameter - inset * 2)
                     .clipShape(Circle())
+                    .grayscale(dimmed ? 1 : 0)
+                    .opacity(dimmed ? 0.6 : 1)
             }
         }
         .frame(width: diameter, height: diameter)
-        .background(Circle().fill(.ultraThinMaterial))
-        .background(Circle().fill(color.opacity(0.22)))
-        .overlay(Circle().strokeBorder(color.opacity(0.35), lineWidth: 1))
-        .grayscale(dimmed ? 1 : 0)
-        .opacity(dimmed ? 0.6 : 1)
-        .background { if let ring { Circle().fill(ring).padding(-2) } }
-        // The badge is the last overlay: in front of the face and its ring, whatever the container draws behind.
+        // The ring and the badge are CONTENT of the glass view, not siblings or overlays outside it. Inside a
+        // `GlassEffectContainer` the container's glass layer is drawn over everything that is not the content of a glass view
+        // (that is how the badge, an overlay after `.glassEffect`, was covered); a glass view's own content (the initials) is
+        // drawn above its glass. The badge is therefore above the face by construction, with or without a container around.
+        // The ring is a stroke outside the face, so an overlapping neighbour's glass does not cover the cut either.
+        .overlay {
+            if let ring { Circle().strokeBorder(ring, lineWidth: 2).padding(-2).allowsHitTesting(false) }
+        }
         .overlay(alignment: .bottomTrailing) { badge(device) }
+        .modifier(GlassAvatarBackground(color: tint))
         .accessibilityLabel(initials)
         .task(id: imageURL) {
             guard let imageURL else { photo = nil; return }
@@ -176,7 +184,6 @@ public struct Work42Avatar: View {
                 .background(Circle().fill(DT.surface))
                 .overlay(Circle().strokeBorder(.quaternary, lineWidth: 1))
                 .offset(x: badge.offset.width, y: badge.offset.height)
-                .zIndex(1)
         }
     }
 
