@@ -785,6 +785,18 @@ struct MarkdownWebView: PlatformViewRepresentable {
               rect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }
             };
           }
+          // The selection when the host asks for it: the iPad's edit menu "Comment", where a touch selection fires no mouseup.
+          // The source lines when both ends are in mapped blocks, else the text alone. Always a JSON string.
+          window.__w42SelectionInfo = function(){
+            var info = selectionInfo();
+            if(info) return JSON.stringify(info);
+            var sel = window.getSelection();
+            if(!sel || sel.isCollapsed || sel.rangeCount === 0) return '{}';
+            var text = sel.toString();
+            if(!text || !text.trim()) return '{}';
+            var rect = sel.getRangeAt(0).getBoundingClientRect();
+            return JSON.stringify({ excerpt: text, rect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height } });
+          };
           function post(msg){
             if(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.w42comment){
               window.webkit.messageHandlers.w42comment.postMessage(msg);
