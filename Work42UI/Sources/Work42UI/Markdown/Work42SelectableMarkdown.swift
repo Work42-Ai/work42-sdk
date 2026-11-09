@@ -366,7 +366,10 @@ private final class ProseBuilder {
                 out.append(NSAttributedString(string: "\u{2028}", attributes: attributes(for: style)))
             case "code":
                 inner.mono = true
-                out.append(NSAttributedString(string: Self.literal(c), attributes: attributes(for: inner)))
+                // Tagged with its text, so a host can draw chosen spans its own way (`MarkdownInlineCodeSpans`).
+                var attrs = attributes(for: inner)
+                attrs[.work42InlineCode] = Self.literal(c)
+                out.append(NSAttributedString(string: Self.literal(c), attributes: attrs))
             case "html_inline":
                 out.append(NSAttributedString(string: Self.literal(c), attributes: attributes(for: style)))
             case "emph":
@@ -529,7 +532,7 @@ public enum ProseCopyText {
             let part = NSIntersectionRange(paragraph, range)
             location = NSMaxRange(paragraph)
             guard part.length > 0 else { continue }
-            var piece = full.substring(with: part)
+            var piece = MarkdownInlineCodeSpans.plain(text, in: part)
             let style = text.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
             if let cell = style?.textBlocks.last as? NSTextTableBlock {
                 if piece.hasSuffix("\n") { piece.removeLast() }
@@ -580,13 +583,13 @@ public struct Work42SelectableProse: NSViewRepresentable {
         view.delegate = context.coordinator
         context.coordinator.view = view
         configure(view, context: context)
-        view.setProse(text)
+        view.setProse(text, styler: context.environment.markdownInlineCodeStyler.resolve, dark: context.environment.colorScheme == .dark)
         return view
     }
 
     public func updateNSView(_ view: SelectableProseTextView, context: Context) {
         configure(view, context: context)
-        view.setProse(text)
+        view.setProse(text, styler: context.environment.markdownInlineCodeStyler.resolve, dark: context.environment.colorScheme == .dark)
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize, nsView view: SelectableProseTextView, context: Context) -> CGSize? {
@@ -660,10 +663,23 @@ public final class SelectableProseTextView: NSTextView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    func setProse(_ text: NSAttributedString) {
-        guard !content.isEqual(to: text) else { return }
-        content = text
-        textStorage?.setAttributedString(text)
+    /// What was last given and how the host's styler dressed it: a styled text holds attachments, which never compare
+    /// equal, so the unchanged case is decided on these (re-setting the text would drop the selection).
+    private var source: NSAttributedString?
+    private var styleSignature = ""
+
+    func setProse(
+        _ text: NSAttributedString, styler: @MainActor @Sendable (String) -> MarkdownInlineCodeStyle? = { _ in nil },
+        dark: Bool = false
+    ) {
+        let runs = MarkdownInlineCodeSpans.runs(in: text, styler: styler)
+        let signature = MarkdownInlineCodeSpans.signature(runs, dark: dark)
+        if let source, source.isEqual(to: text), signature == styleSignature { return }
+        source = text
+        styleSignature = signature
+        let shown = MarkdownInlineCodeSpans.styled(text, runs: runs, dark: dark)
+        content = shown
+        textStorage?.setAttributedString(shown)
         lastWidth = -1
         invalidateIntrinsicContentSize()
     }
@@ -709,7 +725,7 @@ public final class SelectableProseTextView: NSTextView {
         guard range.length > 0, range.location + range.length <= content.length else { super.copy(sender); return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([content.attributedSubstring(from: range)])
+        pasteboard.writeObjects([MarkdownInlineCodeSpans.withoutDecoration(content.attributedSubstring(from: range))])
         pasteboard.setString(ProseCopyText.plainText(of: content, range: range), forType: .string)
     }
 
@@ -758,9 +774,7 @@ public final class SelectableProseTextView: NSTextView {
 @_spi(Work42Host)
 public enum ProseCopyText {
     public static func plainText(of text: NSAttributedString, range: NSRange) -> String {
-        let full = text.string as NSString
-        let range = NSIntersectionRange(range, NSRange(location: 0, length: full.length))
-        return range.length > 0 ? full.substring(with: range) : ""
+        MarkdownInlineCodeSpans.plain(text, in: range)
     }
 }
 
@@ -794,7 +808,7 @@ public struct Work42SelectableProse: UIViewRepresentable {
     public func makeCoordinator() -> Coordinator { Coordinator() }
 
     public func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
+        let view = ProseUITextView()
         view.isEditable = false
         view.isSelectable = true
         view.isScrollEnabled = false
@@ -811,7 +825,16 @@ public struct Work42SelectableProse: UIViewRepresentable {
         context.coordinator.onSelectionChange = onSelectionChange
         context.coordinator.onComment = onComment
         context.coordinator.onDictate = onDictate
-        if view.attributedText != text { view.attributedText = text }
+        // The host's styler dresses its chosen inline code spans (stages). A styled text holds attachments, which never
+        // compare equal, so what was given and how it was dressed decide whether to set it again (which drops the selection).
+        let dark = context.environment.colorScheme == .dark
+        let runs = MarkdownInlineCodeSpans.runs(in: text, styler: context.environment.markdownInlineCodeStyler.resolve)
+        let signature = MarkdownInlineCodeSpans.signature(runs, dark: dark)
+        let coordinator = context.coordinator
+        if let source = coordinator.source, source.isEqual(to: text), signature == coordinator.styleSignature { return }
+        coordinator.source = text
+        coordinator.styleSignature = signature
+        view.attributedText = MarkdownInlineCodeSpans.styled(text, runs: runs, dark: dark)
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize, uiView view: UITextView, context: Context) -> CGSize? {
@@ -824,6 +847,9 @@ public struct Work42SelectableProse: UIViewRepresentable {
         var onSelectionChange: ((String, CGRect) -> Void)?
         var onComment: ((String, CGRect) -> Void)?
         var onDictate: ((String, CGRect) -> Void)?
+        /// The text last given to the view and how its inline code was dressed (see `updateUIView`).
+        var source: NSAttributedString?
+        var styleSignature = ""
         nonisolated(unsafe) private var clearing: NSObjectProtocol?
 
         /// Drops this view's text selection when a highlight has been used up (`.work42ClearTextSelection`).
@@ -843,8 +869,11 @@ public struct Work42SelectableProse: UIViewRepresentable {
         public func textView(
             _ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]
         ) -> UIMenu? {
-            guard let onComment, range.length > 0, let selected = textView.selectedTextRange, !selected.isEmpty,
-                  let text = textView.text(in: selected) else { return UIMenu(children: suggestedActions) }
+            guard let onComment, range.length > 0, let selected = textView.selectedTextRange, !selected.isEmpty
+            else { return UIMenu(children: suggestedActions) }
+            // Plain text: a stage's icon is decoration, not part of what the comment quotes.
+            let text = MarkdownInlineCodeSpans.plain(textView.attributedText, in: textView.selectedRange)
+            guard !text.isEmpty else { return UIMenu(children: suggestedActions) }
             let rect = textView.firstRect(for: selected)
             // The microphone first, the 42 comment second, then the system's own items.
             var added: [UIMenuElement] = []
@@ -863,13 +892,28 @@ public struct Work42SelectableProse: UIViewRepresentable {
         }
 
         public func textViewDidChangeSelection(_ textView: UITextView) {
-            guard let range = textView.selectedTextRange, !range.isEmpty,
-                  let selected = textView.text(in: range) else {
+            guard let range = textView.selectedTextRange, !range.isEmpty else {
+                onSelectionChange?("", .zero)
+                return
+            }
+            let selected = MarkdownInlineCodeSpans.plain(textView.attributedText, in: textView.selectedRange)
+            guard !selected.isEmpty else {
                 onSelectionChange?("", .zero)
                 return
             }
             onSelectionChange?(selected, textView.firstRect(for: range))
         }
+    }
+}
+
+/// The prose text view: copying a selection that holds a styled stage copies plain text (the stage's name, no icon).
+final class ProseUITextView: UITextView {
+    override func copy(_ sender: Any?) {
+        guard selectedRange.length > 0, MarkdownInlineCodeSpans.hasDecoration(attributedText, in: selectedRange) else {
+            super.copy(sender)
+            return
+        }
+        UIPasteboard.general.string = MarkdownInlineCodeSpans.plain(attributedText, in: selectedRange)
     }
 }
 #endif

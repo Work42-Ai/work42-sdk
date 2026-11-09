@@ -269,7 +269,10 @@ private final class IOSProseBuilder {
                 out.append(NSAttributedString(string: "\u{2028}", attributes: attributes(for: style)))
             case "code":
                 inner.mono = true
-                out.append(NSAttributedString(string: Self.literal(c), attributes: attributes(for: inner)))
+                // Tagged with its text, so a host can draw chosen spans its own way (`MarkdownInlineCodeSpans`).
+                var attrs = attributes(for: inner)
+                attrs[.work42InlineCode] = Self.literal(c)
+                out.append(NSAttributedString(string: Self.literal(c), attributes: attrs))
             case "emph":
                 inner.italic = true
                 appendInlines(of: c, style: inner, into: out)
