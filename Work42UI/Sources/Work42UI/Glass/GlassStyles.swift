@@ -92,20 +92,16 @@ struct GlassPlainCapsule: ViewModifier {
     }
 }
 
-/// Glass icon-only button — matches the size + padding of the
-/// system title-bar toolbar buttons (`.buttonStyle(.glass)` with
-/// a circular border shape) so toolbar clusters across the app
-/// read as one consistent family of medallions. Every one has the same
-/// diameter (`GlassMetrics.iconButtonDiameter`), whatever its glyph's width:
-/// a circle sized by its glyph made `sidebar.left` bigger than `chevron.left`.
+/// Glass icon-only button — a family of identical medallions so toolbar
+/// clusters across the app read as one. Every one is the same circle
+/// (`GlassMetrics.iconButtonDiameter`), whatever its glyph's width. On macOS /
+/// iPadOS 26 the glass itself is the frame (`GlassIconButtonStyle`): framing the
+/// Button only reserved space while `.buttonStyle(.glass)` sized the glass from
+/// the label plus its padding, which made `sidebar.left` wider than `chevron.left`.
 struct GlassIconButton: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            content
-                .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
-                .controlSize(GlassMetrics.controlSize)
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
+            content.buttonStyle(GlassIconButtonStyle())
         } else {
             content
                 .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
@@ -115,6 +111,21 @@ struct GlassIconButton: ViewModifier {
                 )
                 .buttonStyle(.plain)
         }
+    }
+}
+
+/// The Liquid Glass circle of a `GlassIconButton`: the label is framed at the
+/// one diameter and the interactive glass is drawn in that circle, so the glass
+/// is exactly the diameter whatever the label. Presses scale it to 0.94.
+@available(macOS 26.0, *)
+private struct GlassIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
+            .glassEffect(.regular.interactive(), in: Circle())
+            .contentShape(Circle())
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
