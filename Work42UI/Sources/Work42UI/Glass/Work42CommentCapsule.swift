@@ -27,61 +27,20 @@ public extension Notification.Name {
 }
 
 #if !canImport(AppKit)
-/// The comment item of iPadOS's edit menu: the brand 42 mark alone, no word, the way the system's Writing Tools shows an icon
-/// alone. It is how to comment on selected text on an iPad, in place of the floating pill the Mac draws. The caller says what
-/// choosing it does (open the note box).
+/// The Work42 items of iPadOS's edit menu, as words with no icon (AC167): "Dictate Work42" first, then "Comment Work42", ahead of
+/// Copy. They are how to comment on selected text on an iPad, in place of the floating pill the Mac draws. The caller says what
+/// choosing each one does.
 public enum Work42CommentMenu {
-    /// The menu action: the 42 mark with a speech bubble at its corner and an empty title, so the menu bar draws the icon. One
-    /// plain colour that follows the menu's tint. "Comment" is its discoverability title, which VoiceOver and a long press read
-    /// out. Without the mark it falls back to the word "Comment".
+    /// "Comment Work42": the caller opens the note box on the selection.
     @MainActor
     public static func action(_ handler: @escaping () -> Void) -> UIAction {
-        guard let image = badgedMark(subSymbol: "bubble.left.fill") else { return UIAction(title: "Comment") { _ in handler() } }
-        return UIAction(title: "", image: image, discoverabilityTitle: "Comment") { _ in handler() }
+        UIAction(title: "Comment Work42") { _ in handler() }
     }
 
-    /// The menu action that dictates the comment: the 42 mark with a microphone at its corner, no word. It is first on the menu,
-    /// ahead of "Comment". The caller says what choosing it does (start dictation aimed at the highlighted text).
+    /// "Dictate Work42", first on the menu: the caller starts dictation aimed at the highlighted text.
     @MainActor
     public static func dictateAction(_ handler: @escaping () -> Void) -> UIAction {
-        guard let image = badgedMark(subSymbol: "mic.fill") else { return UIAction(title: "Dictate") { _ in handler() } }
-        return UIAction(title: "", image: image, discoverabilityTitle: "Dictate a comment") { _ in handler() }
-    }
-
-    /// The 42 mark (22 pt wide, its aspect ratio kept) with `subSymbol` (about 12 pt) at the bottom right, a transparent ring
-    /// (1.5 pt) cut around it. Built as an alpha mask in black and returned as a template, so the edit menu tints it with the
-    /// label colour: white in dark mode, black in light. `nil` when the mark or the symbol can't load.
-    @MainActor
-    private static func badgedMark(subSymbol: String) -> UIImage? {
-        guard let mark = work42Mark42Image else { return nil }
-        let config = UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)
-        guard let symbol = UIImage(systemName: subSymbol, withConfiguration: config)?
-            .withTintColor(.black, renderingMode: .alwaysOriginal) else { return nil }
-
-        let markWidth: CGFloat = 22
-        let markSize = CGSize(width: markWidth, height: markWidth * mark.size.height / max(mark.size.width, 1))
-        let badge: CGFloat = 12
-        let ring: CGFloat = 1.5
-        let canvas = CGSize(width: markSize.width + 2, height: markSize.height + 2)
-        // The sub-icon's box sits in the bottom right corner, inset by the ring so the cut-out is not clipped.
-        let badgeCenter = CGPoint(x: canvas.width - ring - badge / 2, y: canvas.height - ring - badge / 2)
-        let fit = min(badge / max(symbol.size.width, 1), badge / max(symbol.size.height, 1), 1)
-        let symbolSize = CGSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
-
-        let format = UIGraphicsImageRendererFormat.default()
-        format.opaque = false
-        let image = UIGraphicsImageRenderer(size: canvas, format: format).image { context in
-            mark.withTintColor(.black, renderingMode: .alwaysOriginal).draw(in: CGRect(origin: .zero, size: markSize))
-            let cg = context.cgContext
-            cg.saveGState()
-            cg.setBlendMode(.clear)
-            let cutout = badge + 2 * ring
-            cg.fillEllipse(in: CGRect(x: badgeCenter.x - cutout / 2, y: badgeCenter.y - cutout / 2, width: cutout, height: cutout))
-            cg.restoreGState()
-            symbol.draw(in: CGRect(x: badgeCenter.x - symbolSize.width / 2, y: badgeCenter.y - symbolSize.height / 2,
-                                   width: symbolSize.width, height: symbolSize.height))
-        }
-        return image.withRenderingMode(.alwaysTemplate)
+        UIAction(title: "Dictate Work42") { _ in handler() }
     }
 }
 #endif
