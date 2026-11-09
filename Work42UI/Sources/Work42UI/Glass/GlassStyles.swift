@@ -308,15 +308,15 @@ enum GlassMetrics {
     ///
     /// A glass circle is its label plus the control size's padding, but never smaller than the control size's height, so each
     /// circle used to follow its glyph: `chevron.left` (about 12 pt wide) sat at the control's minimum height while `sidebar.left`
-    /// (about 24 pt wide at the 17 pt body size) was padded out to a larger circle. The value is the larger of the two, the
-    /// `sidebar.left` circle, estimated from Apple's control-size metrics (glyph width plus the glass style's side padding, about
-    /// 10 pt a side on iPad's regular size, about 9 pt on the Mac's extra large), not read off a device: check it against the old
-    /// `sidebar.left` button and change this number, nothing else, if the estimate is off.
+    /// (about 24 pt wide at the 17 pt body size) was padded out to a larger circle. On the Mac the value is the larger of the two
+    /// (40, estimated from the extra large control size). On iPad it is the regular control's own minimum circle, 34, which is
+    /// what the usual buttons were: the first estimate there, the larger `sidebar.left` circle at 44, read as far too big on the
+    /// iPad Pro (WOR-739). Change this number, nothing else, to resize every glass icon button on a platform.
     static var iconButtonDiameter: CGFloat {
         #if os(macOS)
         40
         #else
-        44
+        34
         #endif
     }
 }
