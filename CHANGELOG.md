@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.12.1
+
+- **ABI generation stays `14`.** No public symbol, type or init changed; plugins built for 2.12.0 and earlier 2.x releases need no
+  rebuild.
+- **`glassIconButton()` is one fixed circle** (WOR-729, WOR-739): the glass is drawn at `GlassMetrics.iconButtonDiameter` by a private
+  button style, so every round icon button is the same size whatever its glyph (before, `.buttonStyle(.glass)` sized the glass from the
+  label and its padding, and `sidebar.left` drew wider than `chevron.left`). The circle is 34 pt on iPad and 40 pt on the Mac, with a
+  0.94 press scale. Systems before macOS / iPadOS 26 are unchanged.
+
 ## 2.12.0
 
 - **ABI generation stays `14`.** Additions only: no stored property was added to an existing public type and no existing init or
