@@ -110,17 +110,19 @@ public final class GlassAvatarImageCache {
     }
 }
 
-private struct GlassAvatarBackground: ViewModifier {
+/// The glass (or, before macOS 26 / iOS 26, material + wash + hairline) behind an avatar's content. `Work42Avatar` draws through
+/// this too. The hairline is a background so it never lies over content (a device badge) that hangs past the circle.
+struct GlassAvatarBackground: ViewModifier {
     let color: Color
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, iOS 26.0, *) {
             content.glassEffect(.regular.tint(color.opacity(0.28)), in: Circle())
         } else {
             content
+                .background(Circle().strokeBorder(color.opacity(0.35), lineWidth: 1))
                 .background(Circle().fill(.ultraThinMaterial))
                 .background(Circle().fill(color.opacity(0.22)))
-                .overlay(Circle().strokeBorder(color.opacity(0.35), lineWidth: 1))
         }
     }
 }

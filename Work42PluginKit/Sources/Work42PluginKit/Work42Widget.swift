@@ -620,7 +620,9 @@ public protocol Work42WidgetHeaderLabels: AnyObject {
 /// This is deliberately separate from `Work42Widget`: the host discovers it
 /// with a conditional cast, so widgets compiled against older SDKs keep their
 /// existing generic header and ABI. Work42 still owns and appends the widget's
-/// move and close controls after this view.
+/// controls pill after this view: the people on the widget, the move menu and
+/// close. The pill is drawn by the host for every widget and cannot be left out
+/// or replaced; this view is only the header's own content.
 @MainActor
 public protocol Work42WidgetCustomHeader: Work42Widget {
 

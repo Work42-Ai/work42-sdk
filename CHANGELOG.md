@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.12.0
+
+- **ABI generation stays `14`.** Additions only: no stored property was added to an existing public type and no existing init or
+  symbol changed, so plugins built for 2.11.x need no rebuild.
+- **`Work42BrowserBacked`, `BrowserSurfaceDeclaration`, `BrowserSurface.resolveHeadless`, `BrowserSurface.releaseHeadless`**
+  (WOR-644): a widget built on `BrowserSurface` can declare its surface (`browserSurface`), build its view from the declaration
+  (`BrowserSurface(declaration)`), and let the host read its tabs without a view: while a device watches a session, the host
+  builds the model from the declaration, caches it under the same scoped key a mounted surface uses, and lets go of it when no
+  device watches and no view shows it. A widget that does not conform behaves exactly as before.
+- **`ViewerContext.frontURL`, `BrowserWidgetModel.currentAddress`** (WOR-680): a browser widget's buttons are worked out for the
+  person asking. While the Mac works a button out for another device, or runs one that device pressed, `frontURL` is that device's
+  page; `currentAddress` is it when set and the Mac's own address otherwise. A widget that reads `currentAddress` where it read
+  `urlDraft` answers for the right page with nothing else to do (linear42, github, jira do).
+- **`BrowserTabViewer`, `BrowserWidgetModel.tabViewers`, `.onFrontTabChanged`, `.onTabsMutated`, `openTab(…activate:)`** (WOR-679):
+  every browser-based widget's tab bar shows the others on each tab, and a host can share the tab list. The three properties
+  are kept beside the model, not in it, so `BrowserWidgetModel` gains no stored property and the ABI generation stays `14`.
+- **`.conversationLoadMore(_:)`, `ConversationLoadMore`, `ConversationRemoteLoad`** (WOR-642): a `ConversationView` whose older
+  messages are kept by the host (the iPad's, where the Mac holds them) asks for the next page when the reader reaches the top,
+  and the reader keeps their place when it arrives in front. It is an environment value rather than a `ConversationView`
+  parameter: a stored property or a changed init would break every plugin built against an earlier SDK.
+
 ## 2.11.0
 
 - **ABI generation stays `14`.** Additions only: no public symbol was removed and no stored property was added to an

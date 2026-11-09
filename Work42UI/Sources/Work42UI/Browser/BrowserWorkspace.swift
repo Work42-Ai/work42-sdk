@@ -80,6 +80,7 @@ public final class BrowserWorkspace {
         self.genericSelector = genericSelector
         model.onNewTab = { [weak model] in _ = model?.openTab(url: nil, title: "New Tab", icon: "globe") }
         model.onTabClosed = { [weak self] id in self?.release(tab: id) }
+        model.showInTab = { [weak self] id, url in self?.show(url, inTab: id) }
         if model.tabs.isEmpty {
             _ = model.openTab(url: model.url, title: model.url?.host ?? "New Tab", icon: "globe")
         }
@@ -148,6 +149,12 @@ public final class BrowserWorkspace {
     public func navigate(to url: URL) {
         guard let tab = activeTab else { return }
         if pins[tab.id] != nil { activeLive?.load(url) } else { syncPins() }
+    }
+
+    /// Another device moved tab `id` to `url`: its page (built if it had none yet) shows it.
+    private func show(_ url: URL, inTab id: UUID) {
+        guard let tab = model.tabs.first(where: { $0.id == id }), let shown = shownURL(for: tab) else { return }
+        live(for: tab, url: pins[id] ?? shown).show(url)
     }
 
     /// A page in `opener` opened a window: it becomes the tab right after it, backed by the web view WebKit made, so

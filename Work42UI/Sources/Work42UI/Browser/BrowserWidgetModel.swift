@@ -61,6 +61,27 @@ public struct BrowserTab: Identifiable, Equatable, Hashable, Codable {
     }
 }
 
+/// Someone else looking at a browser tab: what the tab bar draws on that tab.
+public struct BrowserTabViewer: Identifiable, Equatable, Sendable {
+    public let id: String
+    public var name: String
+    public var avatarURL: String?
+    /// The person's colour (one per person, the same on every avatar in the session); nil draws the default.
+    public var color: Color?
+    /// The device the person is on, for the badge on their avatar.
+    public var device: Work42AvatarDevice
+
+    public init(id: String, name: String, avatarURL: String? = nil, color: Color? = nil, device: Work42AvatarDevice = .none) {
+        self.id = id
+        self.name = name
+        self.avatarURL = avatarURL
+        self.color = color
+        self.device = device
+    }
+
+    public var initials: String { name.first.map { String($0).uppercased() } ?? "?" }
+}
+
 // MARK: - BrowserWidgetModel
 
 /// Shared state for any embedded-browser widget (Browser, Jira, GitHub PR, Canvas).
@@ -126,7 +147,9 @@ public final class BrowserWidgetModel: ObservableObject {
     public private(set) var tabs: [BrowserTab] = []
 
     /// The ID of the currently-selected tab, or nil when `tabs` is empty.
-    public private(set) var activeTabId: UUID?
+    public private(set) var activeTabId: UUID? {
+        didSet { if activeTabId != oldValue { onFrontTabChanged?(activeTabId) } }
+    }
 
     /// Called when the `+` (new tab) button is pressed. Subtask .7 wires this
     /// to the PR paste-URL flow. The closure is set by the widget host; the
@@ -146,6 +169,51 @@ public final class BrowserWidgetModel: ObservableObject {
     /// closure pattern. Every find/zoom method resolves the current live view
     /// by calling `activeLiveView?()`.
     public var activeLiveView: (() -> WebSectionLiveView?)?
+
+    // The three below are kept beside the model (`BrowserModelExtras`), not in it, so this class gains no stored property and a
+    // plugin built against an earlier SDK keeps its layout (ABI generation 14).
+
+    /// The other people whose front tab each tab is, set by the host from session presence. Every browser-based widget
+    /// (Browser, Jira, GitHub, Linear, plugin browsers) draws these on its tab bar, so none has to do anything for it.
+    public var tabViewers: [UUID: [BrowserTabViewer]] {
+        get { BrowserModelExtras.of(self).tabViewers }
+        set {
+            guard BrowserModelExtras.of(self).tabViewers != newValue else { return }
+            BrowserModelExtras.of(self).tabViewers = newValue
+            objectWillChange.send()
+        }
+    }
+
+    /// Called after every change to the tab list (a tab opened, closed, updated or the list replaced), so a host that shares the
+    /// list can pass the change on.
+    public var onTabsMutated: (() -> Void)? {
+        get { BrowserModelExtras.of(self).onTabsMutated }
+        set { BrowserModelExtras.of(self).onTabsMutated = newValue }
+    }
+
+    /// Called with the front tab's id whenever it changes (a tab picked, opened or closed), so the host can tell the
+    /// session which tab this device is on. Fires for the tab on show, too.
+    public var onFrontTabChanged: ((UUID?) -> Void)? {
+        get { BrowserModelExtras.of(self).onFrontTabChanged }
+        set { BrowserModelExtras.of(self).onFrontTabChanged = newValue }
+    }
+
+    /// Set by whatever draws the pages (`BrowserWorkspace`, a plugin's `BrowserSurface`): loads `url` in the tab's own page.
+    /// A host that shares a tab's address calls `show(_:inTab:)` when another device moved the tab, so this device's page follows.
+    public var showInTab: ((UUID, URL) -> Void)? {
+        get { BrowserModelExtras.of(self).showInTab }
+        set { BrowserModelExtras.of(self).showInTab = newValue }
+    }
+
+    /// Makes `url` the address of tab `id` and has its page show it. A back or forward step in the page's history is taken as
+    /// such, so going back on one device goes back on every device.
+    public func show(_ url: URL, inTab id: UUID) {
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        let had = tab.url != nil
+        if tab.url != url { updateTab(id, title: tab.title == "New Tab" ? url.host : nil, url: url) }
+        if activeTabId == id { self.url = url; setDraft(url.absoluteString) }
+        if had { showInTab?(id, url) }
+    }
 
     /// True when the tab bar should be shown (more than one tab exists).
     /// Single-tab or no-tab widgets keep the bar hidden — the chrome looks as
@@ -218,6 +286,7 @@ public final class BrowserWidgetModel: ObservableObject {
     /// `persistenceKey` is nil. Called at the end of every method that
     /// mutates the tab list or selection.
     private func persistTabsIfNeeded() {
+        onTabsMutated?()
         guard let persistenceKey else { return }
         BrowserTabsStore.save(tabs: tabs, activeTabId: activeTabId, forKey: persistenceKey)
     }
@@ -295,8 +364,17 @@ public final class BrowserWidgetModel: ObservableObject {
     /// - Returns: the new or existing tab's id.
     @discardableResult
     public func openTab(id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil) -> UUID {
+        openTab(id: id, url: url, title: title, icon: icon, after: after, activate: true)
+    }
+
+    /// `openTab` that can leave the front tab where it is: a tab opened for someone else (the shared list) does not take this
+    /// device's front tab. A tab that already exists is selected only when `activate` is true.
+    @discardableResult
+    public func openTab(
+        id: UUID = UUID(), url: URL? = nil, title: String, icon: String? = nil, after: UUID? = nil, activate: Bool
+    ) -> UUID {
         if let existingIndex = tabs.firstIndex(where: { $0.id == id }) {
-            selectTab(tabs[existingIndex].id)
+            if activate { selectTab(tabs[existingIndex].id) }
             return tabs[existingIndex].id
         }
         let tab = BrowserTab(id: id, url: url, title: title, icon: icon)
@@ -304,6 +382,12 @@ public final class BrowserWidgetModel: ObservableObject {
             tabs.insert(tab, at: openerIndex + 1)
         } else {
             tabs.append(tab)
+        }
+        // A tab opened for someone else (the shared list) does not take this device's front tab.
+        guard activate else {
+            objectWillChange.send()
+            persistTabsIfNeeded()
+            return tab.id
         }
         activeTabId = tab.id
         // The new tab becomes active: mirror its URL into the capsule — an empty
@@ -633,6 +717,27 @@ public final class BrowserWidgetModel: ObservableObject {
         urlFocusNonce += 1
         // Notify ObservableObject observers (BrowserChromeRow).
         objectWillChange.send()
+    }
+}
+
+// MARK: - BrowserModelExtras
+
+/// What a host adds to a `BrowserWidgetModel` (the others on its tabs, hooks for sharing its list), kept beside the model so the
+/// model's own layout does not change. One per model, alive as long as the model is.
+@MainActor
+final class BrowserModelExtras {
+    var tabViewers: [UUID: [BrowserTabViewer]] = [:]
+    var onTabsMutated: (() -> Void)?
+    var onFrontTabChanged: ((UUID?) -> Void)?
+    var showInTab: ((UUID, URL) -> Void)?
+
+    private static let table = NSMapTable<BrowserWidgetModel, BrowserModelExtras>.weakToStrongObjects()
+
+    static func of(_ model: BrowserWidgetModel) -> BrowserModelExtras {
+        if let held = table.object(forKey: model) { return held }
+        let made = BrowserModelExtras()
+        table.setObject(made, forKey: model)
+        return made
     }
 }
 

@@ -70,6 +70,52 @@ public nonisolated struct ConversationPaging: Equatable {
     }
 }
 
+/// History the host keeps and the view asks for (WOR-642): a conversation whose older messages are not in `items` yet, such as the
+/// iPad's, where the Mac holds them. Reaching the top with nothing older left in the window calls `load`; the page lands as items
+/// added at the FRONT of `items`, and the reader stays on the message they were reading.
+public struct ConversationLoadMore {
+    /// Whether the host has older messages to send.
+    public var hasMore: Bool
+    /// Whether a request is out. No second one is made meanwhile.
+    public var isLoading: Bool
+    /// Why the last request failed, or nil. Shown above the first row with a Retry that calls `load`.
+    public var error: String?
+    /// Asks the host for the next older page.
+    public var load: @MainActor () -> Void
+
+    public init(hasMore: Bool, isLoading: Bool, error: String? = nil, load: @escaping @MainActor () -> Void) {
+        self.hasMore = hasMore
+        self.isLoading = isLoading
+        self.error = error
+        self.load = load
+    }
+}
+
+/// The rules for asking the host for an older page, pure so they are tested without a view (WOR-642).
+public nonisolated enum ConversationRemoteLoad {
+
+    /// Whether arriving at the top should ask the host: nothing older is left to show from what is held, the host has more, and no
+    /// request is out already.
+    public static func canLoad(hiddenOlder: Int, hasMore: Bool, isLoading: Bool) -> Bool {
+        hiddenOlder == 0 && hasMore && !isLoading
+    }
+
+    /// Whether there is anything older to bring in at the top: a page of what is held, or one the host can send. What
+    /// `ConversationPaging.readerMoved` is told, so one arrival loads one page.
+    public static func hasOlder(hiddenOlder: Int, hasMore: Bool, isLoading: Bool) -> Bool {
+        hiddenOlder > 0 || canLoad(hiddenOlder: hiddenOlder, hasMore: hasMore, isLoading: isLoading)
+    }
+
+    /// How many items a page added to the front, given what was there when it was asked for and what is there now; nil when
+    /// nothing was added in front (the request failed, or the chat only grew at its end).
+    public static func prepended(
+        firstBefore: AnyHashable?, countBefore: Int, firstNow: AnyHashable?, countNow: Int
+    ) -> Int? {
+        guard firstBefore != firstNow, countNow > countBefore else { return nil }
+        return countNow - countBefore
+    }
+}
+
 public nonisolated enum ConversationHold {
 
     public enum Step: Equatable {

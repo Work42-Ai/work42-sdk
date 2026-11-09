@@ -38,16 +38,21 @@ public struct BrowserTabBar: View {
     /// Called when the user taps the × button on a tab.
     public let onClose: (UUID) -> Void
 
+    /// The others whose front tab each tab is. A tab nobody else is on shows nothing.
+    public let viewers: [UUID: [BrowserTabViewer]]
+
     @Namespace private var pill
 
     public init(
         tabs: [BrowserTab],
         activeTabId: UUID?,
+        viewers: [UUID: [BrowserTabViewer]] = [:],
         onSelect: @escaping (UUID) -> Void,
         onClose: @escaping (UUID) -> Void
     ) {
         self.tabs = tabs
         self.activeTabId = activeTabId
+        self.viewers = viewers
         self.onSelect = onSelect
         self.onClose = onClose
     }
@@ -62,6 +67,7 @@ public struct BrowserTabBar: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: viewers)
         .padding(4)
         .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(0.06)))
@@ -96,6 +102,24 @@ public struct BrowserTabBar: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                // The others on this tab, growing in as they arrive.
+                if let here = viewers[tab.id], !here.isEmpty {
+                    HStack(spacing: -6) {
+                        // The first is on top, so each device badge, which hangs over the next avatar, stays in front.
+                        ForEach(Array(here.prefix(3).enumerated()), id: \.element.id) { index, viewer in
+                            Work42Avatar(
+                                initials: viewer.initials, color: viewer.color ?? .indigo,
+                                imageURL: viewer.avatarURL.flatMap(URL.init(string:)), device: viewer.device, size: .s18
+                            )
+                            .zIndex(Double(3 - index))
+                        }
+                    }
+                    // Room for the last badge, which hangs past its avatar; nothing here clips it.
+                    .padding(.trailing, Work42AvatarSize.s18.badge.offset.width)
+                    .transition(.scale(scale: 0.2).combined(with: .opacity))
+                    .accessibilityLabel(here.map(\.name).joined(separator: ", "))
+                }
 
                 // × close button
                 Button {

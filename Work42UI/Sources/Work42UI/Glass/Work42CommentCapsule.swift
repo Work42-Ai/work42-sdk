@@ -27,41 +27,20 @@ public extension Notification.Name {
 }
 
 #if !canImport(AppKit)
-/// The comment item of iPadOS's edit menu: the brand 42 mark alone, no word, the way the system's Writing Tools shows an icon
-/// alone. It is how to comment on selected text on an iPad, in place of the floating pill the Mac draws. The caller says what
-/// choosing it does (open the note box).
+/// The Work42 items of iPadOS's edit menu, as words with no icon (AC167): "Dictate Work42" first, then "Comment Work42", ahead of
+/// Copy. They are how to comment on selected text on an iPad, in place of the floating pill the Mac draws. The caller says what
+/// choosing each one does.
 public enum Work42CommentMenu {
-    /// The menu action: the 42 mark (its own colours, 22 pt) with an empty title, so the menu bar draws the icon. "Comment" is its
-    /// discoverability title, which VoiceOver and a long press read out. Without the mark it falls back to the word "Comment".
+    /// "Comment Work42": the caller opens the note box on the selection.
     @MainActor
     public static func action(_ handler: @escaping () -> Void) -> UIAction {
-        guard let mark = work42Mark42Image else { return UIAction(title: "Comment") { _ in handler() } }
-        let side: CGFloat = 22
-        let size = CGSize(width: side, height: side * mark.size.height / max(mark.size.width, 1))
-        let image = UIGraphicsImageRenderer(size: size).image { _ in mark.draw(in: CGRect(origin: .zero, size: size)) }
-            .withRenderingMode(.alwaysOriginal)
-        return UIAction(title: "", image: image, discoverabilityTitle: "Comment") { _ in handler() }
+        UIAction(title: "Comment Work42") { _ in handler() }
     }
 
-    /// The menu action that dictates the comment: a microphone with the 42 mark at its corner, no word. It is first on the menu,
-    /// ahead of "Comment". The caller says what choosing it does (start dictation aimed at the highlighted text).
+    /// "Dictate Work42", first on the menu: the caller starts dictation aimed at the highlighted text.
     @MainActor
     public static func dictateAction(_ handler: @escaping () -> Void) -> UIAction {
-        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        guard let mic = UIImage(systemName: "mic.fill", withConfiguration: config)?.withTintColor(.label, renderingMode: .alwaysOriginal)
-        else { return UIAction(title: "Dictate") { _ in handler() } }
-        guard let mark = work42Mark42Image else {
-            return UIAction(title: "", image: mic, discoverabilityTitle: "Dictate a comment") { _ in handler() }
-        }
-        let side: CGFloat = 26
-        let canvas = CGSize(width: side, height: side)
-        let badge: CGFloat = 12
-        let image = UIGraphicsImageRenderer(size: canvas).image { _ in
-            mic.draw(in: CGRect(x: 1, y: (side - mic.size.height) / 2, width: mic.size.width, height: mic.size.height))
-            mark.draw(in: CGRect(x: side - badge, y: side - badge * mark.size.height / max(mark.size.width, 1), width: badge,
-                                 height: badge * mark.size.height / max(mark.size.width, 1)))
-        }.withRenderingMode(.alwaysOriginal)
-        return UIAction(title: "", image: image, discoverabilityTitle: "Dictate a comment") { _ in handler() }
+        UIAction(title: "Dictate Work42") { _ in handler() }
     }
 }
 #endif

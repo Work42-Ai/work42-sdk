@@ -35,18 +35,23 @@ public struct ConversationActor: Sendable, Hashable {
     public let isMe: Bool
     /// A profile photo shown in the avatar's glass ring instead of the initials, when there is one.
     public let imageURL: URL?
+    /// True when the actor's messages sit in a bubble tinted with `color` (a person in the session), instead of the neutral one.
+    public let tintsBubble: Bool
 
     public init(id: String, name: String, initials: String, color: Color, isMe: Bool) {
         self.init(id: id, name: name, initials: initials, color: color, isMe: isMe, imageURL: nil)
     }
 
-    public init(id: String, name: String, initials: String, color: Color, isMe: Bool, imageURL: URL?) {
+    public init(
+        id: String, name: String, initials: String, color: Color, isMe: Bool, imageURL: URL?, tintsBubble: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.initials = initials
         self.color = color
         self.isMe = isMe
         self.imageURL = imageURL
+        self.tintsBubble = tintsBubble
     }
 }
 
@@ -114,7 +119,8 @@ public struct ConversationBubble<Content: View>: View {
         } else if context.labeled, let actor = context.actor {
             HStack(alignment: .top, spacing: 8) {
                 if context.showsLabel {
-                    GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize, imageURL: actor.imageURL)
+                    Work42Avatar(
+                        initials: actor.initials, color: actor.color, imageURL: actor.imageURL, size: .nearest(to: avatarSize))
                 } else {
                     Color.clear.frame(width: avatarSize, height: 1)
                 }
@@ -122,13 +128,19 @@ public struct ConversationBubble<Content: View>: View {
                     if context.showsLabel {
                         caption(actor, nameFirst: true).padding(.horizontal, 6).padding(.top, 2)
                     }
-                    ChatBubble(side: .leading, style: .neutral, content: content)
+                    ChatBubble(side: .leading, style: Self.style(for: actor), content: content)
                         .transformEnvironment(\.chatBubbleContainerWidth) { $0 = $0 > 0 ? max(1, $0 - avatarSize - 8) : 0 }
                 }
             }
         } else {
-            ChatBubble(side: .leading, style: .neutral, content: content)
+            ChatBubble(side: .leading, style: Self.style(for: context.actor), content: content)
         }
+    }
+
+    /// The bubble of someone else: tinted with their colour when they ask for it (a person in the session), else neutral.
+    private static func style(for actor: ConversationActor?) -> ChatBubbleStyle {
+        if let actor, actor.tintsBubble { return .speaker(actor.color) }
+        return .neutral
     }
 
     /// My run in a conversation that labels everyone: the time and my name above the bubble, my
@@ -144,7 +156,7 @@ public struct ConversationBubble<Content: View>: View {
                     .transformEnvironment(\.chatBubbleContainerWidth) { $0 = $0 > 0 ? max(1, $0 - avatarSize - 8) : 0 }
             }
             if context.showsLabel {
-                GlassAvatar(initials: actor.initials, color: actor.color, size: avatarSize, imageURL: actor.imageURL)
+                Work42Avatar(initials: actor.initials, color: actor.color, imageURL: actor.imageURL, size: .nearest(to: avatarSize))
             } else {
                 Color.clear.frame(width: avatarSize, height: 1)
             }
@@ -311,45 +323,18 @@ public struct ConversationMessageRow<Content: View>: View {
     }
 }
 
-/// The flat avatar of a run, in the chip language of the provider pill: a translucent fill of the
-/// actor's colour with a hairline stroke, and the mark (a template provider logo, or the initials)
-/// drawn in that colour. `DT.resolveChipTint` keeps a near-black colour (Codex) legible in dark mode.
+/// The avatar of a run's header: the shared `Work42Avatar`, an agent's (the template provider logo in the actor's
+/// colour) when there is a logo and no photo, else the person's (photo or initials).
 struct ConversationAvatar: View {
     let actor: ConversationActor
     let logo: Image?
 
-    @Environment(\.colorScheme) private var colorScheme
-    /// The actor's profile photo, once loaded. Until then (or if it never loads) the initials show.
-    @State private var photo: PlatformImage?
-
     var body: some View {
-        let size = ConversationMetrics.avatarSize
-        let tint = DT.resolveChipTint(actor.color, colorScheme: colorScheme)
-        ZStack {
-            Circle().fill(tint.fill)
-            Circle().strokeBorder(tint.stroke, lineWidth: 0.5)
-            if let photo {
-                Image(platformImage: photo)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size - 1, height: size - 1)
-                    .clipShape(Circle())
-            } else if let logo {
-                logo
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size * 0.5, height: size * 0.5)
-            } else {
-                Text(actor.initials)
-                    .font(.system(size: 11, weight: .semibold))
-            }
-        }
-        .foregroundStyle(tint.foreground)
-        .frame(width: size, height: size)
-        .task(id: actor.imageURL) {
-            guard let url = actor.imageURL else { photo = nil; return }
-            photo = await GlassAvatarImageCache.shared.image(for: url)
+        let size = Work42AvatarSize.nearest(to: ConversationMetrics.avatarSize)
+        if let logo, actor.imageURL == nil {
+            Work42Avatar(agentMark: logo, tint: actor.color, size: size)
+        } else {
+            Work42Avatar(initials: actor.initials, color: actor.color, imageURL: actor.imageURL, size: size)
         }
     }
 }
@@ -930,6 +915,17 @@ private final class ConversationScrollMetrics {
     var appendGrowthTarget: Int?
     /// The pending trim back to one page after re-pinning; cancelled when the reader scrolls again.
     var trimTask: Task<Void, Never>?
+    /// An older page asked of the host (`ConversationLoadMore`) and not yet arrived (WOR-642): what `items` looked like when it
+    /// was asked for, so the page is recognised when it lands in front.
+    var remote: RemoteRequest?
+    /// What the host last offered through `.conversationLoadMore(_:)`, kept here for the paging methods.
+    var loadMore: ConversationLoadMore?
+
+    struct RemoteRequest {
+        var generation: Int
+        var firstID: AnyHashable?
+        var count: Int
+    }
 }
 
 // MARK: - Labels
@@ -988,6 +984,10 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
     ///   - date: When the item happened (drives dividers and the label time).
     ///   - row: The row for an item. `ConversationBubble` does the standard placement.
     ///   - footer: Content after the last row and inside the scroll (typing indicator, queued messages).
+    ///
+    /// History the host keeps (the iPad's, where the Mac holds the older messages) is asked for with the
+    /// `.conversationLoadMore(_:)` modifier on this view, not a parameter: a stored property or a changed init would break every
+    /// plugin built against this SDK (see `PublicLayoutStabilityTests`).
     public init(
         items: [Item],
         pageSize: Int,
@@ -1116,9 +1116,58 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
         }
     }
 
+    /// The reader reached the top and everything held is shown: ask the host for an older page. Nothing is held yet; the reader's
+    /// place is held once the page arrives (`remotePageArrived`), because the host may take longer than a hold runs.
+    private func requestRemotePage(generation: Int) {
+        metrics.remote = ConversationScrollMetrics.RemoteRequest(
+            generation: generation, firstID: items.first.map { AnyHashable($0.id) }, count: items.count)
+        metrics.loadMore?.load()
+    }
+
+    /// `items` changed at the front or the host finished: a page landed, or the request ended with nothing to show.
+    private func remotePageArrived() {
+        guard let request = metrics.remote else { return }
+        let prepended = ConversationRemoteLoad.prepended(
+            firstBefore: request.firstID, countBefore: request.count,
+            firstNow: items.first.map { AnyHashable($0.id) }, countNow: items.count)
+        guard let added = prepended else {
+            // Still waiting: the request is out. Ended with nothing in front (it failed, or the host had nothing): the next
+            // upward move may ask again.
+            if !(metrics.loadMore?.isLoading ?? false) {
+                metrics.remote = nil
+                metrics.paging.pageDone(
+                    generation: request.generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                    placed: false)
+            }
+            return
+        }
+        metrics.remote = nil
+        // Hold the reader's place before the window grows to take the page in, exactly as for a page of what is held.
+        let started = scroller.begin(generation: request.generation) { done, outcome in
+            metrics.paging.pageDone(
+                generation: done, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                placed: outcome.hasPrefix("settled"))
+        }
+        if !started {
+            metrics.paging.pageDone(
+                generation: request.generation, offsetFromTop: max(0, -metrics.topOffset), viewportHeight: viewportHeight,
+                placed: false)
+        }
+        // Lines held back during a gesture are counted from the front: the page moves every index, so the held count moves with it.
+        // The window itself grows with `shownCount` below, which keeps the rendered rows a superset (the new page is shown).
+        if let held = heldCount { heldCount = held + added }
+    }
+
     // MARK: Body
 
+    /// The environment is read in a nested view, never here: a stored `@Environment` would change this struct's size.
     public var body: some View {
+        ConversationLoadMoreReader { loadMore in content(loadMore: loadMore) }
+    }
+
+    private func content(loadMore: ConversationLoadMore?) -> some View {
+        // Kept for the paging methods, which are not passed it.
+        metrics.loadMore = loadMore
         let shown = shownCount
         let windowStart = ConversationLayout.renderedStart(itemCount: shown, renderCount: renderCount)
         let hiddenOlder = windowStart
@@ -1157,6 +1206,26 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
+                    }
+                    // History the host keeps: its loader while a page is on its way, and why the last request failed.
+                    if let loadMore, hiddenOlder == 0 {
+                        if loadMore.isLoading {
+                            Loader42(style: .brand)
+                                .frame(width: 28, height: 28)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        } else if let error = loadMore.error {
+                            HStack(spacing: 8) {
+                                Text(error)
+                                    .font(.system(size: DT.f11))
+                                    .foregroundStyle(.red)
+                                Button("Retry") { loadMore.load() }
+                                    .font(.system(size: DT.f11, weight: .semibold))
+                                    .buttonStyle(.plain)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                        }
                     }
                     ForEach(rowKeys, id: \.id) { key in
                         let item = items[key.index]
@@ -1251,10 +1320,17 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                 let direction: ConversationPaging.Direction =
                     !previous.isFinite || top == previous ? .none : (top > previous ? .up : .down)
                 let hidden = ConversationLayout.renderedStart(itemCount: shownCount, renderCount: renderCount)
+                // Older than the window: a page of what is held, or, once all of it is shown, one the host can send.
                 guard let generation = metrics.paging.readerMoved(
-                    offsetFromTop: max(0, -top), direction: direction, viewportHeight: viewportHeight, hasOlder: hidden > 0
+                    offsetFromTop: max(0, -top), direction: direction, viewportHeight: viewportHeight,
+                    hasOlder: ConversationRemoteLoad.hasOlder(
+                        hiddenOlder: hidden, hasMore: loadMore?.hasMore ?? false, isLoading: loadMore?.isLoading ?? false)
                 ) else { return }
-                loadOlderPage(generation: generation)
+                if hidden > 0 {
+                    loadOlderPage(generation: generation)
+                } else {
+                    requestRemotePage(generation: generation)
+                }
             } }
             // The scroll view starts at the bottom and STAYS there while content grows, as long as
             // the user has not scrolled away: following needs no scrollTo at all.
@@ -1286,12 +1362,16 @@ public struct ConversationView<Item: Identifiable, Row: View, Footer: View>: Vie
                     renderCount += count - lastItemCount
                 }
             }
+            // A page from the host lands in front of `items` (and a request that ended says so by `isLoading` going false).
+            .onChange(of: items.first.map { AnyHashable($0.id) }) { _, _ in remotePageArrived() }
+            .onChange(of: loadMore?.isLoading ?? false) { _, _ in remotePageArrived() }
             // Appended lines are not a page load. A page's hold was begun before the window grew (`loadOlderPage`).
             .onChange(of: renderCount) { oldCount, newCount in
                 guard newCount > oldCount, metrics.appendGrowthTarget == newCount else { return }
                 metrics.appendGrowthTarget = nil
             }
             .onChange(of: resetKey) { _, _ in
+                metrics.remote = nil
                 isPinnedToBottom = true
                 heldCount = nil
                 renderCount = pageSize

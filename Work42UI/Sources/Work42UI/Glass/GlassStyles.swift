@@ -95,18 +95,20 @@ struct GlassPlainCapsule: ViewModifier {
 /// Glass icon-only button — matches the size + padding of the
 /// system title-bar toolbar buttons (`.buttonStyle(.glass)` with
 /// a circular border shape) so toolbar clusters across the app
-/// read as one consistent family of medallions.
+/// read as one consistent family of medallions. Every one has the same
+/// diameter (`GlassMetrics.iconButtonDiameter`), whatever its glyph's width:
+/// a circle sized by its glyph made `sidebar.left` bigger than `chevron.left`.
 struct GlassIconButton: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .frame(minWidth: 18, minHeight: 18)
+                .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
                 .controlSize(GlassMetrics.controlSize)
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
         } else {
             content
-                .frame(width: 36, height: 36)
+                .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
                 .background(.regularMaterial, in: Circle())
                 .overlay(
                     Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
@@ -288,6 +290,22 @@ enum GlassMetrics {
         .extraLarge
         #else
         .regular
+        #endif
+    }
+
+    /// The one diameter of every `glassIconButton()` circle (WOR-720, AC160).
+    ///
+    /// A glass circle is its label plus the control size's padding, but never smaller than the control size's height, so each
+    /// circle used to follow its glyph: `chevron.left` (about 12 pt wide) sat at the control's minimum height while `sidebar.left`
+    /// (about 24 pt wide at the 17 pt body size) was padded out to a larger circle. The value is the larger of the two, the
+    /// `sidebar.left` circle, estimated from Apple's control-size metrics (glyph width plus the glass style's side padding, about
+    /// 10 pt a side on iPad's regular size, about 9 pt on the Mac's extra large), not read off a device: check it against the old
+    /// `sidebar.left` button and change this number, nothing else, if the estimate is off.
+    static var iconButtonDiameter: CGFloat {
+        #if os(macOS)
+        40
+        #else
+        44
         #endif
     }
 }
