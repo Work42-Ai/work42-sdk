@@ -92,20 +92,16 @@ struct GlassPlainCapsule: ViewModifier {
     }
 }
 
-/// Glass icon-only button — matches the size + padding of the
-/// system title-bar toolbar buttons (`.buttonStyle(.glass)` with
-/// a circular border shape) so toolbar clusters across the app
-/// read as one consistent family of medallions. Every one has the same
-/// diameter (`GlassMetrics.iconButtonDiameter`), whatever its glyph's width:
-/// a circle sized by its glyph made `sidebar.left` bigger than `chevron.left`.
+/// Glass icon-only button — a family of identical medallions so toolbar
+/// clusters across the app read as one. Every one is the same circle
+/// (`GlassMetrics.iconButtonDiameter`), whatever its glyph's width. On macOS /
+/// iPadOS 26 the glass itself is the frame (`GlassIconButtonStyle`): framing the
+/// Button only reserved space while `.buttonStyle(.glass)` sized the glass from
+/// the label plus its padding, which made `sidebar.left` wider than `chevron.left`.
 struct GlassIconButton: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            content
-                .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
-                .controlSize(GlassMetrics.controlSize)
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
+            content.buttonStyle(GlassIconButtonStyle())
         } else {
             content
                 .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
@@ -115,6 +111,21 @@ struct GlassIconButton: ViewModifier {
                 )
                 .buttonStyle(.plain)
         }
+    }
+}
+
+/// The Liquid Glass circle of a `GlassIconButton`: the label is framed at the
+/// one diameter and the interactive glass is drawn in that circle, so the glass
+/// is exactly the diameter whatever the label. Presses scale it to 0.94.
+@available(macOS 26.0, *)
+private struct GlassIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: GlassMetrics.iconButtonDiameter, height: GlassMetrics.iconButtonDiameter)
+            .glassEffect(.regular.interactive(), in: Circle())
+            .contentShape(Circle())
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -297,15 +308,15 @@ enum GlassMetrics {
     ///
     /// A glass circle is its label plus the control size's padding, but never smaller than the control size's height, so each
     /// circle used to follow its glyph: `chevron.left` (about 12 pt wide) sat at the control's minimum height while `sidebar.left`
-    /// (about 24 pt wide at the 17 pt body size) was padded out to a larger circle. The value is the larger of the two, the
-    /// `sidebar.left` circle, estimated from Apple's control-size metrics (glyph width plus the glass style's side padding, about
-    /// 10 pt a side on iPad's regular size, about 9 pt on the Mac's extra large), not read off a device: check it against the old
-    /// `sidebar.left` button and change this number, nothing else, if the estimate is off.
+    /// (about 24 pt wide at the 17 pt body size) was padded out to a larger circle. On the Mac the value is the larger of the two
+    /// (40, estimated from the extra large control size). On iPad it is the regular control's own minimum circle, 34, which is
+    /// what the usual buttons were: the first estimate there, the larger `sidebar.left` circle at 44, read as far too big on the
+    /// iPad Pro (WOR-739). Change this number, nothing else, to resize every glass icon button on a platform.
     static var iconButtonDiameter: CGFloat {
         #if os(macOS)
         40
         #else
-        44
+        34
         #endif
     }
 }
