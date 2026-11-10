@@ -31,17 +31,20 @@ struct LiveThemeReactive: ViewModifier {
     /// resolves to identical tokens (same appearance) is a no-op, so redundant
     /// posts never trigger a JS eval / style recalc.
     @State private var lastPushedJSON = ""
+    /// This window's theme (the iPad shows one per window): only its own changes re-theme the page, with its own tokens.
+    @Environment(\.themeScope) private var themeScope
 
     func body(content: Content) -> some View {
         content.onReceive(
             NotificationCenter.default.publisher(for: .work42ThemeDidChange)
-        ) { _ in
+        ) { note in
+            guard note.isThemeChange(for: themeScope) else { return }
             applyLiveTheme()
         }
     }
 
     private func applyLiveTheme() {
-        let tokens = CanvasTheme.currentColorTokens()
+        let tokens = ThemeRuntime.withScope(themeScope) { CanvasTheme.currentColorTokens() }
         guard
             let data = try? JSONSerialization.data(withJSONObject: tokens),
             let json = String(data: data, encoding: .utf8)

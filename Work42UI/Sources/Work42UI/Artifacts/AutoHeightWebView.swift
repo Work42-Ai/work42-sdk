@@ -111,9 +111,12 @@ public struct AutoHeightWebView: PlatformViewRepresentable {
         // Re-fetch on theme change: the artifact server bakes the ACTIVE
         // theme's resolved tokens into the served shell CSS, so an
         // already-rendered card must reload to match a new theme (AC9).
+        let themeScope = context.environment.themeScope
         coordinator.themeObserver = NotificationCenter.default.addObserver(
             forName: .work42ThemeDidChange, object: nil, queue: .main
-        ) { [weak webView] _ in
+        ) { [weak webView] note in
+            // Only this window's own theme (or the global one) reloads the card.
+            guard note.isThemeChange(for: themeScope) else { return }
             // Queue is .main; hop is safe (WKWebView is main-actor).
             MainActor.assumeIsolated { _ = webView?.reload() }
         }
