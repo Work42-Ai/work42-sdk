@@ -106,7 +106,17 @@ public final class AnnotationRegistry {
     public static let shared = AnnotationRegistry()
 
     /// Which window is focused. Tests inject their own.
-    public var focus: WindowFocus = .shared
+    public var focus: WindowFocus = .shared {
+        didSet { dropSelectionsOfClosedWindows(of: focus) }
+    }
+
+    /// A registry of its own: tests and previews use one; the app uses `shared`.
+    public init() { dropSelectionsOfClosedWindows(of: focus) }
+
+    /// A window that closes takes its highlight with it, so a window later given the same identifier does not find it.
+    private func dropSelectionsOfClosedWindows(of focus: WindowFocus) {
+        focus.onUnregister { [weak self] id in self?.windowSelections[id] = nil }
+    }
 
     private var windowSelections: [WindowFocus.ID: CommentableSelection] = [:]
     private var unscopedSelection: CommentableSelection?
@@ -115,6 +125,12 @@ public final class AnnotationRegistry {
     public var active: CommentableSelection? {
         if let window = focus.lastFocused, let selection = windowSelections[window] { return selection }
         return unscopedSelection
+    }
+
+    /// The window `active` belongs to: nil when it is the shared slot's (or there is none). What consumed it clears it with this.
+    public var activeWindow: WindowFocus.ID? {
+        if let window = focus.lastFocused, windowSelections[window] != nil { return window }
+        return nil
     }
 
     /// A surface's selection became live (or a comment dialog opened) in `window` (nil: the shared slot).

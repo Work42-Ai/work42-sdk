@@ -33,7 +33,10 @@ struct WindowModelTests {
 
         #expect(focus.keyWindow == idb)
         #expect(focus.lastFocused == idb)
-        #expect(focus.order == [idb, ida])
+        #expect(focus.order == [idb], "a window nobody has been in yet is not in the focus order")
+
+        focus.becameKey(ida)
+        #expect(focus.order == [ida, idb])
     }
 
     @Test("a window registered while it is key is focused at once")
@@ -100,7 +103,7 @@ struct WindowModelTests {
         let (ida, idb) = (ObjectIdentifier(a), ObjectIdentifier(b))
         focus.register(ida, isKey: true)
         focus.register(idb, isKey: false)
-        let targets = ComposerTargets<WindowFocus.ID>(focusedKey: { focus.lastFocused })
+        let targets = ComposerTargets<WindowFocus.ID, Composer>(focusedKey: { focus.lastFocused })
         let sentA = Box(), sentB = Box()
 
         targets.update(composer(sent: sentA), for: ida)
@@ -119,7 +122,7 @@ struct WindowModelTests {
         let focus = WindowFocus()
         let a = NSObject()
         let ida = ObjectIdentifier(a)
-        let targets = ComposerTargets<WindowFocus.ID>(focusedKey: { focus.lastFocused })
+        let targets = ComposerTargets<WindowFocus.ID, Composer>(focusedKey: { focus.lastFocused })
         targets.update(composer(), for: ida)
         #expect(targets.target == nil, "no focused window: no target")
 
@@ -203,6 +206,36 @@ struct WindowModelTests {
         #expect(annotations.active?.excerpt == "window")
         annotations.clear(in: ida)
         #expect(annotations.active?.excerpt == "shared")
+    }
+
+    @Test("a window that closes takes its highlight with it, so a window given the same identifier later finds none")
+    func closedWindowDropsItsHighlight() {
+        let focus = WindowFocus()
+        let a = NSObject()
+        let ida = ObjectIdentifier(a)
+        focus.register(ida, isKey: true)
+        let annotations = registry(focus)
+        annotations.present(selection("in A"), in: ida)
+
+        focus.unregister(ida)
+        focus.register(ida, isKey: true)
+
+        #expect(annotations.active == nil)
+    }
+
+    @Test("`activeWindow` names the window the active highlight is in, and nothing for the shared slot")
+    func activeWindowNamesTheWindow() {
+        let focus = WindowFocus()
+        let a = NSObject()
+        let ida = ObjectIdentifier(a)
+        focus.register(ida, isKey: true)
+        let annotations = registry(focus)
+
+        annotations.present(selection("shared"))
+        #expect(annotations.activeWindow == nil)
+
+        annotations.present(selection("window"), in: ida)
+        #expect(annotations.activeWindow == ida)
     }
 
     @Test("highlightUsedUp clears that window's selection and posts the window it concerns")
