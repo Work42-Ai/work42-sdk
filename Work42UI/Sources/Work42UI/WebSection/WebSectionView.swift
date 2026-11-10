@@ -1366,8 +1366,9 @@ public struct WebSectionView: PlatformViewRepresentable {
     /// same `dataStoreKey` always resolves to the same persistent
     /// store across launches. Uses a fixed namespace + an FNV-1a hash
     /// of the key to fill the 16 UUID bytes (RFC-4122 variant/version
-    /// bits set), avoiding any dependency on CryptoKit.
-    static func stableIdentifier(forKey key: String) -> UUID {
+    /// bits set), avoiding any dependency on CryptoKit. Public so a host that must name a store it did not open (the iPad removing
+    /// the shared stores it kept before accounts had their own) maps a key to the same identifier the web views use.
+    public static func stableIdentifier(forKey key: String) -> UUID {
         // Fixed namespace prefix so our identifiers are unlikely to
         // collide with any default/other store UUID.
         var bytes = [UInt8](repeating: 0, count: 16)
