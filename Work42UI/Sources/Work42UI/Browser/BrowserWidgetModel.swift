@@ -258,6 +258,8 @@ public final class BrowserWidgetModel: ObservableObject {
     /// Jira/PR/Canvas never do, since their URL is re-derived from task/PR/
     /// canvas-server state on every launch rather than user-typed.
     private let persistenceKey: String?
+    /// Where the tab list is kept: the app's standard defaults, or a suite a caller keeps apart (a device's per-account suite).
+    private let defaults: UserDefaults
 
     // MARK: - Init
 
@@ -265,12 +267,14 @@ public final class BrowserWidgetModel: ObservableObject {
         canEditURL: Bool = true,
         presetSelector: String = "",
         initialURL: URL? = nil,
-        persistenceKey: String? = nil
+        persistenceKey: String? = nil,
+        defaults: UserDefaults = .standard
     ) {
         self.canEditURL = canEditURL
         self.presetSelector = presetSelector
         self.persistenceKey = persistenceKey
-        if let persistenceKey, let restored = BrowserTabsStore.load(forKey: persistenceKey) {
+        self.defaults = defaults
+        if let persistenceKey, let restored = BrowserTabsStore.load(forKey: persistenceKey, defaults: defaults) {
             self.tabs = restored.tabs
             self.activeTabId = restored.activeTabId
             let active = restored.tabs.first { $0.id == restored.activeTabId }
@@ -288,7 +292,7 @@ public final class BrowserWidgetModel: ObservableObject {
     private func persistTabsIfNeeded() {
         onTabsMutated?()
         guard let persistenceKey else { return }
-        BrowserTabsStore.save(tabs: tabs, activeTabId: activeTabId, forKey: persistenceKey)
+        BrowserTabsStore.save(tabs: tabs, activeTabId: activeTabId, forKey: persistenceKey, defaults: defaults)
     }
 
     // MARK: - Single-URL Actions
@@ -772,17 +776,18 @@ public enum BrowserTabsStore {
         "browser:\(tabId.uuidString)"
     }
 
-    /// Persists the given tab list + active selection under `key`.
-    public static func save(tabs: [BrowserTab], activeTabId: UUID?, forKey key: String) {
+    /// Persists the given tab list + active selection under `key`, in `defaults` (the app's standard defaults unless a caller keeps
+    /// its tabs apart, as a device does per account).
+    public static func save(tabs: [BrowserTab], activeTabId: UUID?, forKey key: String, defaults: UserDefaults = .standard) {
         let snapshot = Snapshot(tabs: tabs, activeTabId: activeTabId)
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
-        UserDefaults.standard.set(data, forKey: defaultsKey(for: key))
+        defaults.set(data, forKey: defaultsKey(for: key))
     }
 
-    /// Restores the tab list + active selection saved under `key`, or nil if
+    /// Restores the tab list + active selection saved under `key` in `defaults`, or nil if
     /// nothing was ever saved (a widget instance's first launch).
-    public static func load(forKey key: String) -> (tabs: [BrowserTab], activeTabId: UUID?)? {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey(for: key)),
+    public static func load(forKey key: String, defaults: UserDefaults = .standard) -> (tabs: [BrowserTab], activeTabId: UUID?)? {
+        guard let data = defaults.data(forKey: defaultsKey(for: key)),
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data)
         else { return nil }
         return (snapshot.tabs, snapshot.activeTabId)
