@@ -169,9 +169,13 @@ public class PolicyWebView: WKWebView {
         } else if clearingSelection == nil {
             clearingSelection = NotificationCenter.default.addObserver(
                 forName: .work42ClearTextSelection, object: nil, queue: .main
-            ) { [weak self] _ in
+            ) { [weak self] note in
+                // Only the window the highlight was in (WOR-752): another window's page keeps its selection.
+                let named = note.namedWindow
                 MainActor.assumeIsolated {
-                    self?.evaluateJavaScript("(function(){var s=window.getSelection(); if(s){ s.removeAllRanges(); }})()", completionHandler: nil)
+                    guard let self else { return }
+                    if let named, named != WindowFocus.id(of: self) { return }
+                    self.evaluateJavaScript("(function(){var s=window.getSelection(); if(s){ s.removeAllRanges(); }})()", completionHandler: nil)
                 }
             }
         }

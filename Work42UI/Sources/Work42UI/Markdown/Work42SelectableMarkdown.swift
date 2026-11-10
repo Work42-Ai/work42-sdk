@@ -864,8 +864,14 @@ public struct Work42SelectableProse: UIViewRepresentable {
         func observeSelectionClearing(of textView: UITextView) {
             clearing = NotificationCenter.default.addObserver(
                 forName: .work42ClearTextSelection, object: nil, queue: .main
-            ) { [weak textView] _ in
-                MainActor.assumeIsolated { textView?.selectedTextRange = nil }
+            ) { [weak textView] note in
+                // Only the window the highlight was in (WOR-752): another window's text keeps its selection.
+                let named = note.namedWindow
+                MainActor.assumeIsolated {
+                    guard let textView else { return }
+                    if let named, named != WindowFocus.id(of: textView) { return }
+                    textView.selectedTextRange = nil
+                }
             }
         }
 
