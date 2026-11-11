@@ -818,7 +818,9 @@ public struct Work42SelectableProse: UIViewRepresentable {
         view.delegate = context.coordinator
         context.coordinator.observeSelectionClearing(of: view)
         // The Pencil squeeze dictates into the highlight here exactly as this view's "Dictate Work42" item does (AC166).
-        Work42SelectionDictation.register(context.coordinator) { [weak view, weak coordinator = context.coordinator] in
+        Work42SelectionDictation.register(
+            context.coordinator, window: { [weak view] in view.flatMap { WindowFocus.id(of: $0) } }
+        ) { [weak view, weak coordinator = context.coordinator] in
             guard let view, let onDictate = coordinator?.onDictate, let range = view.selectedTextRange, !range.isEmpty else { return false }
             let text = MarkdownInlineCodeSpans.plain(view.attributedText, in: view.selectedRange)
             guard !text.isEmpty else { return false }
