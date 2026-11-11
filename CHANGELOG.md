@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.13.0
+
+- **ABI generation `15`.** A window of the app is now a first-class thing: theme, focus, the highlight and the composer target are kept
+  per window, not once for the process. That changes the binary contract of existing symbols (below), so plugins built for SDK 2.0.0 to
+  2.12.x (ABI 14 or older) must be rebuilt; a host on ABI 15 rejects them before calling their entry point. **No source changes are
+  needed:** every changed signature keeps its old call form (`defaults:`, `window:` and `in:` take defaults), so a plugin that rebuilds
+  against 2.13.0 compiles as it is.
+- **Changed binary contract (source compatible).** `BrowserTabsStore.save(tabs:activeTabId:forKey:)` and `load(forKey:)` gain
+  `defaults: UserDefaults = .standard`; `Work42SelectionDictation.register(_:dictate:)` gains `window:` (default `{ nil }`) and
+  `dictateHighlight()` gains `in:` (default `nil`); `AnnotationRegistry.active` is computed from the focused window's selection, and
+  `present(_:)` / `clear()` call the new `present(_:in:)` / `clear(in:)` with `nil`.
+- **Per-window theme (WOR-758).** `ThemeRuntime` keeps a theme per scope next to the global one (`update(_:scope:)`, `current(scope:)`,
+  `generation(scope:)`, `withScope(_:_:)`, `Notification.isThemeChange(for:)`); a window's views read their scope through
+  `ThemeScopeTrait` / `EnvironmentValues.themeScope`, so each window draws with its own colours. Markdown, artifact and auto-height
+  web views follow their scope. `BrowserWorkspace.scoped(_:scope:)`, `SignInCookieStore.install(_:onlyInto:)`, `WebSectionLiveView.dataStoreKey`
+  and `WebSectionView.stableIdentifier(forKey:)` serve the same per-window use.
+- **Shared window rules (WOR-759 to WOR-761).** `WindowFocus` (the key window, the last focused window kept while the app is in the
+  background, the fallback on close), `ComposerTargets` (the target is the focused window's composer; registering never retargets), a
+  per-window `AnnotationRegistry` (`activeWindow`, `focus`, `highlightUsedUp(in:)`) and `View.providesWindowFocusID()` /
+  `EnvironmentValues.windowFocusID`, so Return, dictation, the Pencil and a comment on a highlight act only in the window the user is
+  in. The Mac and the iPad follow the same rules.
+- **Release builds compile on Swift 6.3 (WOR-763).** The optimizer crashed (signal 11, `EarlyPerfInliner`) on `ComposerTargets`'s
+  implicit deinit in a Release build; it now has its own `@_optimize(none) deinit {}`.
+
 ## 2.12.1
 
 - **ABI generation stays `14`.** No public symbol, type or init changed; plugins built for 2.12.0 and earlier 2.x releases need no
