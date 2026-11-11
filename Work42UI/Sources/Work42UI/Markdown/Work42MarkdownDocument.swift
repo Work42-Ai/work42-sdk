@@ -55,6 +55,8 @@ public struct Work42MarkdownDocument: View {
     }
 
     @Environment(\.pendingComments) private var pendingComments
+    /// The window the document is in: its selection belongs to that window (WOR-752).
+    @Environment(\.windowFocusID) private var windowID
     @State private var presenter = MarkdownPreviewCommentPresenter()
 
     private let text: String
@@ -137,7 +139,7 @@ public struct Work42MarkdownDocument: View {
             onSelectionChanged: { start, end, excerpt in
                 publishAnnotation(start: start, end: end, excerpt: excerpt)
             },
-            onSelectionCleared: { AnnotationRegistry.shared.clear() },
+            onSelectionCleared: { [windowID] in AnnotationRegistry.shared.clear(in: windowID) },
             artifactURLResolver: (artifactsEnabled ? sessionId : nil).map { sid in
                 { (artifactId: String) in ArtifactRuntime.url(sessionId: sid, artifactId: artifactId) }
             },
@@ -165,6 +167,6 @@ public struct Work42MarkdownDocument: View {
                     startLine: start, endLine: end, excerpt: excerpt, body: body
                 ))
             }
-        ))
+        ), in: windowID)
     }
 }

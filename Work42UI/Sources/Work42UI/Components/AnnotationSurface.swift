@@ -98,18 +98,63 @@ public struct WholeWidgetCommentTarget {
     }
 }
 
-/// Holds the CURRENT live commentable selection (one at a time — you can only
-/// highlight in one surface at a time). Surfaces publish/clear; dictation reads.
+/// Holds the live commentable selection of each window (a window has one at a time — you can only highlight in one surface of a window
+/// at a time). Surfaces publish/clear; dictation reads the focused window's. A surface that does not say its window uses the shared
+/// slot, which behaves exactly as the one global selection did.
 @MainActor
 public final class AnnotationRegistry {
     public static let shared = AnnotationRegistry()
 
-    public private(set) var active: CommentableSelection?
+    /// Which window is focused. Tests inject their own.
+    public var focus: WindowFocus = .shared {
+        didSet { dropSelectionsOfClosedWindows(of: focus) }
+    }
+
+    /// A registry of its own: tests and previews use one; the app uses `shared`.
+    public init() { dropSelectionsOfClosedWindows(of: focus) }
+
+    /// A window that closes takes its highlight with it, so a window later given the same identifier does not find it.
+    private func dropSelectionsOfClosedWindows(of focus: WindowFocus) {
+        focus.onUnregister { [weak self] id in self?.windowSelections[id] = nil }
+    }
+
+    private var windowSelections: [WindowFocus.ID: CommentableSelection] = [:]
+    private var unscopedSelection: CommentableSelection?
+
+    /// The focused window's selection, else the one that named no window.
+    public var active: CommentableSelection? {
+        if let window = focus.lastFocused, let selection = windowSelections[window] { return selection }
+        return unscopedSelection
+    }
+
+    /// The window `active` belongs to: nil when it is the shared slot's (or there is none). What consumed it clears it with this.
+    public var activeWindow: WindowFocus.ID? {
+        if let window = focus.lastFocused, windowSelections[window] != nil { return window }
+        return nil
+    }
+
+    /// A surface's selection became live (or a comment dialog opened) in `window` (nil: the shared slot).
+    public func present(_ selection: CommentableSelection, in window: WindowFocus.ID?) {
+        if let window { windowSelections[window] = selection } else { unscopedSelection = selection }
+    }
+
+    /// A surface's selection cleared (deselect / Esc / dialog dismissed) in `window` (nil: the shared slot). Another window's is kept.
+    public func clear(in window: WindowFocus.ID?) {
+        if let window { windowSelections[window] = nil } else { unscopedSelection = nil }
+    }
 
     /// A surface's selection became live (or a comment dialog opened).
-    public func present(_ selection: CommentableSelection) { active = selection }
+    public func present(_ selection: CommentableSelection) { present(selection, in: nil) }
     /// A surface's selection cleared (deselect / Esc / dialog dismissed).
-    public func clear() { active = nil }
+    public func clear() { clear(in: nil) }
+
+    /// The highlight in `window` has done its job (a dictated comment was delivered): its selection goes, and the selectable text and
+    /// web views of that window (every window's, when `window` is nil) drop theirs.
+    public func highlightUsedUp(in window: WindowFocus.ID?) {
+        clear(in: window)
+        let info: [AnyHashable: Any]? = window.map { [Notification.Name.work42WindowUserInfoKey: $0] }
+        NotificationCenter.default.post(name: .work42ClearTextSelection, object: nil, userInfo: info)
+    }
 
     /// Provider for a WHOLE-WIDGET comment target (comments-on-widgets.3),
     /// registered by the session panel. Returns a target for the currently

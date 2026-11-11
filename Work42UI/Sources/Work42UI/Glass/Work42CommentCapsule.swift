@@ -24,6 +24,23 @@ public extension Notification.Name {
     /// Posted by whatever finished with a highlight (a dictated comment was delivered): every selectable text view and web view drops
     /// its text selection, since the highlight has done its job.
     static let work42ClearTextSelection = Notification.Name("work42.clearTextSelection")
+
+    /// `userInfo` key of `work42ClearTextSelection`: the window (a `WindowFocus.ID`) whose highlight was used up. Absent: every window's.
+    nonisolated static let work42WindowUserInfoKey = "window"
+}
+
+public extension Notification {
+    /// The window this note names (`work42ClearTextSelection`), nil when it names none.
+    nonisolated var namedWindow: WindowFocus.ID? {
+        userInfo?[Notification.Name.work42WindowUserInfoKey] as? WindowFocus.ID
+    }
+
+    /// Whether this note concerns content in `window`: a note that names no window concerns everything, one that names a window only
+    /// that window's content (`window` nil, a view in no window yet, then only matches a note that names none).
+    nonisolated func concernsWindow(_ window: WindowFocus.ID?) -> Bool {
+        guard let named = namedWindow else { return true }
+        return named == window
+    }
 }
 
 #if !canImport(AppKit)

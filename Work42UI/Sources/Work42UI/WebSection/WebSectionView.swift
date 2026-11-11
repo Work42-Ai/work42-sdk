@@ -1366,8 +1366,9 @@ public struct WebSectionView: PlatformViewRepresentable {
     /// same `dataStoreKey` always resolves to the same persistent
     /// store across launches. Uses a fixed namespace + an FNV-1a hash
     /// of the key to fill the 16 UUID bytes (RFC-4122 variant/version
-    /// bits set), avoiding any dependency on CryptoKit.
-    static func stableIdentifier(forKey key: String) -> UUID {
+    /// bits set), avoiding any dependency on CryptoKit. Public so a host that must name a store it did not open (the iPad removing
+    /// the shared stores it kept before accounts had their own) maps a key to the same identifier the web views use.
+    public static func stableIdentifier(forKey key: String) -> UUID {
         // Fixed namespace prefix so our identifiers are unlikely to
         // collide with any default/other store UUID.
         var bytes = [UInt8](repeating: 0, count: 16)
@@ -1522,18 +1523,24 @@ public final class WebSectionLiveView {
     /// Only persistent views take part in the sign-in import: they reload when it finishes, and show its banner.
     public let isPersistent: Bool
 
+    /// The key of the persistent data store this view keeps its cookies in; nil for an ephemeral view. A sign-in import aimed at
+    /// particular stores (`SignInCookieStore.install(_:onlyInto:)`) reloads only the views whose key it names.
+    public let dataStoreKey: String?
+
     /// Observes `.work42BrowserCookiesImported`. Removed in `teardown()`.
     private var cookieImportObserver: NSObjectProtocol?
 
-    init(webView: WKWebView, coordinator: WebSectionView.Coordinator, isPersistent: Bool) {
+    init(webView: WKWebView, coordinator: WebSectionView.Coordinator, isPersistent: Bool, dataStoreKey: String? = nil) {
         self.webView = webView
         self.coordinator = coordinator
         self.isPersistent = isPersistent
+        self.dataStoreKey = isPersistent ? dataStoreKey : nil
         if isPersistent {
             cookieImportObserver = NotificationCenter.default.addObserver(
                 forName: .work42BrowserCookiesImported, object: nil, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.reloadAfterCookieImport() }
+            ) { [weak self] note in
+                let keys = note.userInfo?[Notification.work42DataStoreKeysUserInfoKey] as? [String]
+                MainActor.assumeIsolated { self?.reloadAfterCookieImport(storeKeys: keys) }
             }
         }
         // Wire the coordinator's status callback so every nav-delegate event
@@ -1671,11 +1678,20 @@ public final class WebSectionLiveView {
         webView.evaluateJavaScript("window.__w42Picker?.stop()", completionHandler: nil)
     }
 
-    /// A sign-in import just wrote cookies: a persistent view showing a web page reloads to pick them up.
-    private func reloadAfterCookieImport() {
-        guard !isTornDown, isPersistent,
+    /// A sign-in import just wrote cookies: a persistent view showing a web page reloads to pick them up. `storeKeys` is the list of
+    /// stores the import was aimed at; a view in none of them has nothing new to pick up. Nil (an import into every store) reloads all.
+    func reloadAfterCookieImport(storeKeys: [String]?) {
+        guard !isTornDown, isPersistent, Self.importReaches(viewKey: dataStoreKey, storeKeys: storeKeys),
               let scheme = webView.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
         reload()
+    }
+
+    /// Whether a sign-in import aimed at `storeKeys` wrote into the store of a view keyed `viewKey`. An import with no list went into
+    /// every store; a view with no key (ephemeral) is never reached by a list.
+    nonisolated static func importReaches(viewKey: String?, storeKeys: [String]?) -> Bool {
+        guard let storeKeys else { return true }
+        guard let viewKey else { return false }
+        return storeKeys.contains(viewKey)
     }
 
     /// Reload the current page in the cached webview.
@@ -2178,7 +2194,8 @@ extension WebSectionView {
     ) -> WebSectionLiveView {
         let coordinator = Coordinator(selector: spec.selector, onSignal: onSignal)
         let webView = buildWebView(spec: spec, onSignal: onSignal, coordinator: coordinator)
-        return WebSectionLiveView(webView: webView, coordinator: coordinator, isPersistent: !spec.ephemeral)
+        return WebSectionLiveView(
+            webView: webView, coordinator: coordinator, isPersistent: !spec.ephemeral, dataStoreKey: spec.dataStoreKey)
     }
 
     /// Wraps a web view WebKit already created (a `window.open` popup) in a live view, without loading anything:
@@ -2205,7 +2222,8 @@ extension WebSectionView {
                 controller: webView.configuration.userContentController
             )
         }
-        return WebSectionLiveView(webView: webView, coordinator: coordinator, isPersistent: !spec.ephemeral)
+        return WebSectionLiveView(
+            webView: webView, coordinator: coordinator, isPersistent: !spec.ephemeral, dataStoreKey: spec.dataStoreKey)
     }
 }
 

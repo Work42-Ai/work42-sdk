@@ -132,6 +132,8 @@ struct MarkdownWebView: PlatformViewRepresentable {
     private let onArtifactExpand: ((String) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
+    /// The window's theme: the document bakes theme tokens into its CSS, so it composes with its own window's, not the process's.
+    @Environment(\.themeScope) private var themeScope
 
     init(
         text: String,
@@ -248,6 +250,7 @@ struct MarkdownWebView: PlatformViewRepresentable {
         context.coordinator.onSelectionChanged = onSelectionChanged
         context.coordinator.onSelectionCleared = onSelectionCleared
         context.coordinator.trailingHTML = trailingHTML
+        context.coordinator.themeScope = themeScope
         context.coordinator.load(webView, text: text, dark: colorScheme == .dark)
         return webView
     }
@@ -266,6 +269,7 @@ struct MarkdownWebView: PlatformViewRepresentable {
         context.coordinator.onDiagramExpand = onDiagramExpand
         context.coordinator.onArtifactExpand = onArtifactExpand
         context.coordinator.trailingHTML = trailingHTML
+        context.coordinator.themeScope = themeScope
         context.coordinator.reloadIfNeeded(webView, text: text, dark: colorScheme == .dark)
         // Comment-only changes update the marks in place (no reload, so scroll +
         // any live selection survive).
@@ -359,6 +363,9 @@ struct MarkdownWebView: PlatformViewRepresentable {
             self.artifactTitleResolver = artifactTitleResolver
         }
 
+        /// The theme scope of the window this document is in (empty: the global theme), kept current by `updateWebView`.
+        var themeScope = ""
+
         func load(_ webView: WKWebView, text: String, dark: Bool) {
             // Preprocess [[artifact:<id>]] tokens before cmark conversion.
             // When a resolver is provided, standalone token lines are replaced
@@ -383,18 +390,21 @@ struct MarkdownWebView: PlatformViewRepresentable {
             // the markdown. The caller pre-rewrote its local <img> srcs (they
             // may resolve against different base dirs than the doc's own).
             fragment += trailingHTML
-            let html = MarkdownDocumentTemplate.compose(
-                fragment: fragment,
-                dark: dark,
-                accent: Self.accent(dark: dark),
-                commentsEnabled: commentsEnabled,
-                // Inject bridge CSS+JS when a resolver is wired in (the script
-                // is a no-op if the preprocessor found no tokens, so we don't
-                // track anyArtifacts here — keeping it always-on when the
-                // resolver is present avoids a second reload if the spec is
-                // later edited to add a token).
-                injectArtifactBridge: artifactURLResolver != nil
-            )
+            // Composed with this window's theme: the template resolves the theme's tokens into the document's CSS.
+            let html = ThemeRuntime.withScope(themeScope) {
+                MarkdownDocumentTemplate.compose(
+                    fragment: fragment,
+                    dark: dark,
+                    accent: Self.accent(dark: dark),
+                    commentsEnabled: commentsEnabled,
+                    // Inject bridge CSS+JS when a resolver is wired in (the script
+                    // is a no-op if the preprocessor found no tokens, so we don't
+                    // track anyArtifacts here — keeping it always-on when the
+                    // resolver is present avoids a second reload if the spec is
+                    // later edited to add a token).
+                    injectArtifactBridge: artifactURLResolver != nil
+                )
+            }
             webView.loadHTMLString(html, baseURL: baseURL)
             lastKey = key(text: text, dark: dark)
             // Re-apply on the next load (didFinish) — reset so applyComments runs.
@@ -426,7 +436,7 @@ struct MarkdownWebView: PlatformViewRepresentable {
             // tokens at compose time, so a same-mode theme swap (same text,
             // same dark flag, new token values) must still read as stale and
             // trigger a re-compose on the next updateNSView (AC9).
-            "\(dark)|\(ThemeRuntime.generation)|\(commentsEnabled)|\(baseURL?.path ?? "")|\(artifactURLResolver != nil)|\(text.hashValue)|\(trailingHTML.hashValue)"
+            "\(dark)|\(ThemeRuntime.generation(scope: themeScope))|\(commentsEnabled)|\(baseURL?.path ?? "")|\(artifactURLResolver != nil)|\(text.hashValue)|\(trailingHTML.hashValue)"
         }
 
         // MARK: Comment marks

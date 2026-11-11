@@ -62,6 +62,12 @@ nonisolated public struct SignInCookieExport: Codable, Sendable, Equatable {
     public static func decode(_ data: Data) -> SignInCookieExport? { try? JSONDecoder().decode(SignInCookieExport.self, from: data) }
 }
 
+extension Notification {
+    /// The `userInfo` key of `.work42BrowserCookiesImported` that lists the data-store keys an import was aimed at (a `[String]`).
+    /// A notification without it was an import into every store, and every persistent web view reloads.
+    nonisolated public static let work42DataStoreKeysUserInfoKey = "dataStoreKeys"
+}
+
 @MainActor
 public enum SignInCookieStore {
     private static let log = Logger(subsystem: "com.work42.browser", category: "signin-copy")
@@ -101,6 +107,36 @@ public enum SignInCookieStore {
         }
         log.info("installed \(cookies.count) cookies into \(identifiers.count) stores")
         NotificationCenter.default.post(name: .work42BrowserCookiesImported, object: nil)
+        return cookies.count
+    }
+
+    /// The stores `install(_:onlyInto:)` has written to, kept for the life of the process. A persistent store whose last instance is
+    /// released drops a cookie that was written to it and never opened by a web view (measured: it reads back empty), so an import
+    /// into a store nobody has opened yet must keep the store alive. A web view opened later shares it by identifier.
+    private static var retained: [UUID: WKWebsiteDataStore] = [:]
+
+    private static func retainedStore(forKey key: String) -> WKWebsiteDataStore {
+        let identifier = WebSectionView.stableIdentifier(forKey: key)
+        if let kept = retained[identifier] { return kept }
+        let made = WKWebsiteDataStore(forIdentifier: identifier)
+        retained[identifier] = made
+        return made
+    }
+
+    /// Writes the cookies into the stores of `keys` and no others, overwriting the same name, domain and path; then only the open
+    /// persistent web views on those stores reload. A device that keeps one set of stores per account uses this, so one account's
+    /// import never touches another's. Returns how many cookies were written; names and values are never logged.
+    @discardableResult
+    public static func install(_ export: SignInCookieExport, onlyInto keys: [String]) async -> Int {
+        let cookies = export.cookies.prefix(maxCookies).compactMap(\.httpCookie)
+        guard !cookies.isEmpty, !keys.isEmpty else { return 0 }
+        for key in keys {
+            let dataStore = retainedStore(forKey: key)
+            for cookie in cookies { await dataStore.httpCookieStore.setCookie(cookie) }
+        }
+        log.info("installed \(cookies.count) cookies into \(keys.count) named stores")
+        NotificationCenter.default.post(
+            name: .work42BrowserCookiesImported, object: nil, userInfo: [Notification.work42DataStoreKeysUserInfoKey: keys])
         return cookies.count
     }
 }

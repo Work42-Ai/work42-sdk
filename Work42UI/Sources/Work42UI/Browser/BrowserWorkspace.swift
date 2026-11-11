@@ -66,18 +66,26 @@ public final class BrowserWorkspace {
     /// A CSS selector a custom widget isolates on its plain pages (a Jira or GitHub address keeps its own preset); nil or empty
     /// shows the whole page.
     @ObservationIgnored private let genericSelector: String?
+    /// Keeps every page's data store apart per owner (a device's account): each persistent store key gets `@<scope>` appended, the
+    /// Jira and GitHub PR presets and plain pages alike. Nil leaves the keys as they are.
+    @ObservationIgnored private let dataStoreScope: String?
     /// The URL each tab's web view was first built with. A tab that navigates keeps its view, so the pin does not move.
     public private(set) var pins: [UUID: URL] = [:]
+
+    /// The data store key `key` becomes inside `scope`: one stable name per (key, scope), so a scope's logins are never another's.
+    public static func scoped(_ key: String, scope: String) -> String { "\(key)@\(scope)" }
 
     /// Joins `model` to `store`: wires the new-tab and close-tab callbacks, makes sure there is a tab to type into, and pins
     /// the addresses the tabs already have.
     public init(
-        model: BrowserWidgetModel, store: any WebSectionLiveStore, genericDataStoreKey: String? = nil, genericSelector: String? = nil
+        model: BrowserWidgetModel, store: any WebSectionLiveStore, genericDataStoreKey: String? = nil, genericSelector: String? = nil,
+        dataStoreScope: String? = nil
     ) {
         self.model = model
         self.store = store
         self.genericDataStoreKey = genericDataStoreKey
         self.genericSelector = genericSelector
+        self.dataStoreScope = dataStoreScope
         model.onNewTab = { [weak model] in _ = model?.openTab(url: nil, title: "New Tab", icon: "globe") }
         model.onTabClosed = { [weak self] id in self?.release(tab: id) }
         model.showInTab = { [weak self] id, url in self?.show(url, inTab: id) }
@@ -130,6 +138,7 @@ public final class BrowserWorkspace {
             if let genericDataStoreKey { spec.dataStoreKey = genericDataStoreKey }
             if let genericSelector, !genericSelector.isEmpty { spec.selector = genericSelector }
         }
+        applyScope(to: &spec)
         let live = store.liveView(for: spec, cacheKey: key)
         // A page the person clicked to (not typed) is kept on the tab, so a restored tab reopens the real page.
         live.onURLChange = { [weak model] landed in
@@ -140,6 +149,12 @@ public final class BrowserWorkspace {
         // A window the page opens becomes a tab next to this one (sign-in popups, target=_blank).
         live.popupHandler = { [weak self] popup in self?.adoptPopup(popup, openedBy: tab) ?? false }
         return live
+    }
+
+    /// Moves a persistent spec into this workspace's scope; an ephemeral spec has no store to scope.
+    private func applyScope(to spec: inout WebSectionSpec) {
+        guard let dataStoreScope, !spec.ephemeral else { return }
+        spec.dataStoreKey = Self.scoped(spec.dataStoreKey, scope: dataStoreScope)
     }
 
     /// The cache slot of a plain tab's page.
@@ -164,7 +179,10 @@ public final class BrowserWorkspace {
         // The popup's own request decides what loads; the tab needs a URL to render at all, and the page's real address
         // replaces this one as soon as it lands.
         let blank = URL(string: "about:blank")!
-        let spec = URLIntentResolver.spec(for: URLIntentResolver.classify(blank), url: blank)
+        var spec = URLIntentResolver.spec(for: URLIntentResolver.classify(blank), url: blank)
+        // The popup's web view already shares its opener's store; the spec's key is what the live view reports it by.
+        if let genericDataStoreKey { spec.dataStoreKey = genericDataStoreKey }
+        applyScope(to: &spec)
         let live = store.adopt(popup, spec: spec, cacheKey: Self.cacheKey(of: id))
         live.onClose = { [weak self] in
             // WebKit is inside its own close callback: let it return before the view is torn down.

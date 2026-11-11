@@ -29,7 +29,13 @@ extension PlatformColor {
         }
         #else
         let box = UncheckedProvider(provider)
-        return UIColor { traits in box.provider(traits.userInterfaceStyle == .dark) }
+        return UIColor { traits in
+            let isDark = traits.userInterfaceStyle == .dark
+            // A window's own theme (ThemeScopeTrait): the provider reads `ThemeRuntime.current` and gets that scope's. A trait
+            // collection with no scope keeps the scope already in force, e.g. when content composes inside `withScope`.
+            guard let scope = traits.themeScope else { return box.provider(isDark) }
+            return ThemeRuntime.withScope(scope) { box.provider(isDark) }
+        }
         #endif
     }
 

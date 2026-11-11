@@ -11,6 +11,8 @@ public enum Work42SelectionDictation {
     private struct Entry {
         weak var owner: AnyObject?
         var stamp: Int
+        /// The window the owner is in, asked when a squeeze comes (the owner may move); nil: not known.
+        let window: @MainActor () -> WindowFocus.ID?
         let dictate: @MainActor () async -> Bool
     }
 
@@ -19,12 +21,16 @@ public enum Work42SelectionDictation {
 
     /// Registers `owner`'s action: it dictates a comment on the owner's live highlight and returns true, or returns false when the
     /// owner has no highlight. Registering again replaces the action and keeps the owner's place in the order. Held weakly.
-    public static func register(_ owner: AnyObject, dictate: @escaping @MainActor () async -> Bool) {
+    /// `window` says which window the owner is in, so a squeeze in one window never dictates into another window's highlight.
+    public static func register(
+        _ owner: AnyObject, window: @escaping @MainActor () -> WindowFocus.ID? = { nil },
+        dictate: @escaping @MainActor () async -> Bool
+    ) {
         entries.removeAll { $0.owner == nil }
         if let index = entries.firstIndex(where: { $0.owner === owner }) {
-            entries[index] = Entry(owner: owner, stamp: entries[index].stamp, dictate: dictate)
+            entries[index] = Entry(owner: owner, stamp: entries[index].stamp, window: window, dictate: dictate)
         } else {
-            entries.append(Entry(owner: owner, stamp: 0, dictate: dictate))
+            entries.append(Entry(owner: owner, stamp: 0, window: window, dictate: dictate))
         }
     }
 
@@ -40,9 +46,11 @@ public enum Work42SelectionDictation {
     }
 
     /// Asks the owners, the most recently highlighted first, and stops at the first that dictates. False when none has a highlight.
-    public static func dictateHighlight() async -> Bool {
+    /// With a `window`, only owners in that window are asked (an owner whose window is not known is asked too); without one, all.
+    public static func dictateHighlight(in window: WindowFocus.ID? = nil) async -> Bool {
         entries.removeAll { $0.owner == nil }
         for entry in entries.sorted(by: { $0.stamp > $1.stamp }) where entry.owner != nil {
+            if let window, let owned = entry.window(), owned != window { continue }
             if await entry.dictate() { return true }
         }
         return false

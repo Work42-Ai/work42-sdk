@@ -43,6 +43,8 @@ public struct CommentComposerPopover: View {
 
     @State private var draft: String = ""
     @FocusState private var bodyFocused: Bool
+    /// The window this popover is in: dictation in another window must not comment here.
+    @Environment(\.windowFocusID) private var windowID
 
     public init(
         sourceLabel: String,
@@ -113,9 +115,9 @@ public struct CommentComposerPopover: View {
                     isPresented = false
                     onCommit(body)
                 }
-            ))
+            ), in: windowID)
         }
-        .onDisappear { AnnotationRegistry.shared.clear() }
+        .onDisappear { AnnotationRegistry.shared.clear(in: windowID) }
     }
 
     private var excerptView: some View {

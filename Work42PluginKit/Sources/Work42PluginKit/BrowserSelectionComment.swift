@@ -63,6 +63,8 @@ struct BrowserSelectionCommentLayer: ViewModifier {
     @State private var selectionPageTitle: String?
     @State private var hasSelection = false
     @State private var showingComposer = false
+    /// The window the browser is in: its selection belongs to that window, never another's (WOR-752).
+    @Environment(\.windowFocusID) private var windowID
 
     func body(content: Content) -> some View {
         content
@@ -142,7 +144,7 @@ struct BrowserSelectionCommentLayer: ViewModifier {
                     excerpt: text,
                     screenRect: webViewScreenRect(),
                     makeComment: { body in submit(body: body) }
-                ))
+                ), in: windowID)
             }
         }
     }
@@ -182,7 +184,7 @@ struct BrowserSelectionCommentLayer: ViewModifier {
         selectionPageURL = nil
         selectionPageTitle = nil
         showingComposer = false
-        AnnotationRegistry.shared.clear()
+        AnnotationRegistry.shared.clear(in: windowID)
     }
 
     // MARK: - Labels
