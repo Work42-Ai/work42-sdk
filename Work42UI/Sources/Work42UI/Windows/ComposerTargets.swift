@@ -37,6 +37,10 @@ public final class ComposerTargets<Key: Hashable, Value> {
         self.focusedKey = focusedKey
     }
 
+    // Its own deinit, left unoptimized: on Swift 6.3 the optimizer's inliner (`EarlyPerfInliner`) crashes with signal 11 on this generic
+    // class's implicit one in a Release build, which stops the whole app from building.
+    @_optimize(none) deinit {}
+
     /// Publishes (or refreshes) `key`'s composer. This never changes the target.
     public func update(_ composer: Value, for key: Key) { composers[key] = composer }
 
