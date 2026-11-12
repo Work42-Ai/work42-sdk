@@ -17,6 +17,33 @@
 
 import Foundation
 
+// MARK: - Instances
+
+/// Which instance of a widget something belongs to: one session, one widget, and for a personal widget one device.
+///
+/// Every browser-based widget is its own instance. Its tabs, history, scroll and page state belong to that instance alone and are never
+/// shared with another session or, for a personal widget, another device. Only the website data store underneath (cookies and logins, named
+/// by `dataStoreKey`) may be shared between instances. `cacheKey` is the key the SDK's caches use for the instance, so two keys that differ
+/// in any part never meet.
+nonisolated public struct InstanceKey: Sendable, Hashable, Codable {
+    public let sessionID: String
+    public let widgetID: String
+    /// The device the instance lives on. Set for a personal widget (each device has its own), nil for a shared or hosted one.
+    public let deviceID: String?
+
+    public init(sessionID: String, widgetID: String, deviceID: String? = nil) {
+        self.sessionID = sessionID
+        self.widgetID = widgetID
+        self.deviceID = deviceID
+    }
+
+    /// `<session>/<widget>`, or `<session>/<widget>@<device>` for a personal widget's instance on a device. The session part is the same
+    /// scope `BrowserSurfaceCache.scopedKey` puts before a surface's key, so a shared instance keeps the key it always had.
+    public var cacheKey: String {
+        deviceID.map { "\(sessionID)/\(widgetID)@\($0)" } ?? "\(sessionID)/\(widgetID)"
+    }
+}
+
 // MARK: - Scopes
 
 /// One thing a collaborator can be allowed to do in a widget (for a browser: `view`, `navigate`, `act`). The id is lowercase and stable:

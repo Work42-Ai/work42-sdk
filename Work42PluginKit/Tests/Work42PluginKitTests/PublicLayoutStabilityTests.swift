@@ -41,6 +41,8 @@ struct PublicLayoutStabilityTests {
         #expect(MemoryLayout<ResolvedAnnotation>.size == 32)
         #expect(MemoryLayout<WidgetPillAppIcon>.size == 32)
         #expect(MemoryLayout<WidgetPillActionButtonStyle>.size == 16)
+        // ABI generation 16 (SDK 2.14.0): `InstanceKey` is two strings and an optional string.
+        #expect(MemoryLayout<InstanceKey>.size == 48)
     }
 
     // Added with WOR-70, measured at SDK 1.2.0 (ABI generation 11). `WidgetBackgroundServices` is what a widget's
