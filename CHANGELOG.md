@@ -5,7 +5,7 @@
 - **ABI generation `16`.** Collaboration is part of the SDK: `SessionServices` gained `actor` and `collaboration`, `WidgetIntentSpec` its
   audience, scope and per-viewer fields, `WidgetStorageService` the per-person requirements, and `Work42Widget` `collaboration` and
   `scopes`. Plugins built for ABI 15 or older must be rebuilt; **no source changes are needed**, every addition has a default.
-- **`WidgetCollaboration`**: `.shared(conflict:cursors:)` (the default), `.personal(watchers:agentControl:)`, `.hosted(input:)`.
+- **`WidgetCollaboration`**: `.shared(conflict:cursors:)` (the default), `.personal(agentControl:)`, `.hosted(input:)`.
   **`WidgetScopeSpec`** names what a collaborator can be allowed to do (`Work42Widget.scopes`, default one `use` scope).
 - **Intents:** `requiring(_:)`, `forAudience(_:)` (`WidgetAudience`: owners, members, workflow roles, `.primaryDeviceOnly`),
   `allowingAgents()` (agents cannot press an intent unless it says so) and `perViewer(title:isEnabled:isConfirmed:)`, so a button reads

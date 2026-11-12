@@ -660,6 +660,9 @@ public protocol Work42Widget: AnyObject {
     /// What a collaborator can be allowed to do in this widget; `WidgetIntentSpec.requires` names one. Default: a single `use` scope.
     var scopes: [WidgetScopeSpec] { get }
 
+    /// What a personal widget tells a device following this one: its tabs and the one in front. Default: no tabs.
+    func followSummary(services: SessionServices) -> FollowSummary
+
     /// The widget became live in a session (opened in a tab, or restored
     /// with a saved layout). Acquire resources here — never earlier: the
     /// instance existing does NOT mean the widget is on screen.
@@ -757,6 +760,9 @@ extension Work42Widget {
 
     /// Default: one scope, `use`.
     public var scopes: [WidgetScopeSpec] { [.use] }
+
+    /// Default: no tabs to tell.
+    public func followSummary(services: SessionServices) -> FollowSummary { .none }
 
     /// Default lifecycle: nothing to acquire.
     public func activate(services: SessionServices) {}

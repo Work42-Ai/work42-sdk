@@ -100,8 +100,18 @@ struct CollaborationTests {
             report: WidgetCursorReport(anchor: .text(path: "a.swift", version: 3, line: 4, column: 5), selectionEnd: .point(x: 0.5, y: 1), isClick: true))
         let back = try JSONDecoder().decode(WidgetCursor.self, from: JSONEncoder().encode(value))
         #expect(back == value)
-        let kind = WidgetCollaboration.personal(watchers: .withPermission, agentControl: .withPermission)
+        let kind = WidgetCollaboration.personal(agentControl: .withPermission)
         #expect(try JSONDecoder().decode(WidgetCollaboration.self, from: JSONEncoder().encode(kind)) == kind)
+    }
+
+    @Test("a follow summary names the tabs and the one in front, and a selection outside the tabs names none (WOR-796)")
+    func followSummary() throws {
+        let summary = FollowSummary(tabs: ["Docs", "Inbox"], selected: 1)
+        #expect(summary.selected == 1)
+        #expect(FollowSummary(tabs: ["Docs"], selected: 3).selected == nil)
+        #expect(FollowSummary(tabs: ["Docs"], selected: -1).selected == nil)
+        #expect(FollowSummary.none.tabs.isEmpty && FollowSummary.none.selected == nil)
+        #expect(try JSONDecoder().decode(FollowSummary.self, from: JSONEncoder().encode(summary)) == summary)
     }
 
     @Test("a host with no session of several people has one member and no cursors")

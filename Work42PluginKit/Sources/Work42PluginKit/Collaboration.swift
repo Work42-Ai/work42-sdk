@@ -83,16 +83,6 @@ nonisolated public enum WidgetCursorKind: Sendable, Hashable, Codable {
     case page
 }
 
-/// Who may watch a personal widget.
-nonisolated public enum WidgetWatchers: Sendable, Hashable, Codable {
-    /// Nobody: it is the person's own.
-    case nobody
-    /// People the person allows, one at a time.
-    case withPermission
-    /// Everyone in the session.
-    case everyone
-}
-
 /// Whether an agent may drive a personal widget, on the person's own device.
 nonisolated public enum WidgetAgentControl: Sendable, Hashable, Codable {
     case never
@@ -111,13 +101,32 @@ nonisolated public enum WidgetHostedInput: Sendable, Hashable, Codable {
 nonisolated public enum WidgetCollaboration: Sendable, Hashable, Codable {
     /// One state for the whole session: a file, a plan, a board.
     case shared(conflict: WidgetConflictPolicy, cursors: WidgetCursorKind)
-    /// One state per person: each has their own browser, and others may watch it.
-    case personal(watchers: WidgetWatchers, agentControl: WidgetAgentControl)
+    /// One state per device: each has its own browser. Who watches it is not the widget's to say: following a device (approved by that
+    /// device, for the whole session) shows its personal widgets read-only, and the host draws that, not the widget.
+    case personal(agentControl: WidgetAgentControl)
     /// It runs on one device (a simulator, a terminal) and others see it and, with permission, type into it.
     case hosted(input: WidgetHostedInput)
 
     /// What a widget is when it says nothing.
     public static let `default`: WidgetCollaboration = .shared(conflict: .lastWriteWins, cursors: .none)
+}
+
+/// What a personal widget tells the devices that follow it about itself: its tabs, and which one is in front. The follower's header
+/// draws these read-only next to the live picture (WOR-796).
+nonisolated public struct FollowSummary: Sendable, Hashable, Codable {
+    /// The titles of the widget's tabs, in order.
+    public let tabs: [String]
+    /// The index of the tab in front, nil when none is.
+    public let selected: Int?
+
+    public init(tabs: [String], selected: Int? = nil) {
+        self.tabs = tabs
+        // A selection outside the tabs names nothing.
+        self.selected = selected.flatMap { tabs.indices.contains($0) ? $0 : nil }
+    }
+
+    /// What a widget with no tabs says.
+    public static let none = FollowSummary(tabs: [])
 }
 
 // MARK: - Collaborators
