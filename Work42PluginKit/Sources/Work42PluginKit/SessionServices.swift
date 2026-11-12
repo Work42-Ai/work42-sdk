@@ -234,6 +234,19 @@ nonisolated public protocol WidgetStorageService: Sendable {
     /// Delete the entry at `key` from THIS widget's own namespace. No-op (not
     /// a throw) when the key is absent.
     func delete(key: String) async throws
+
+    /// The acting person's own value at `key` in this widget's namespace (SDK 2.14.0), or nil when they have not set one.
+    /// Another person's value under the same key is a different value. Default: throws, for a host that keeps no per-person state.
+    func person(key: String) async throws -> WidgetJSONValue?
+
+    /// Set the acting person's own value at `key`. Only they write it. Default: throws.
+    func setPerson(key: String, value: WidgetJSONValue) async throws
+
+    /// Remove the acting person's own value at `key`. No-op when they have none. Default: throws.
+    func deletePerson(key: String) async throws
+
+    /// Every person's value at `key`, by the person's id (who approved, who has read it). Read-only. Default: throws.
+    func people(key: String) async throws -> [String: WidgetJSONValue]
 }
 
 // MARK: - Pill
@@ -377,6 +390,12 @@ nonisolated public struct SessionServices: Sendable {
     /// (s3). `nil` only when neither is available.
     public let worktreePath: String?
 
+    /// Who is acting now: the person at this device, or the agent whose call this is (SDK 2.14.0, ABI 16).
+    public let actor: WidgetCollaborator
+
+    /// Who is in the session and where their cursors are (SDK 2.14.0, ABI 16).
+    public let collaboration: any WidgetCollaborationService
+
     public init(
         composer: any WidgetComposerService,
         shell: any WidgetShellService,
@@ -385,8 +404,12 @@ nonisolated public struct SessionServices: Sendable {
         pill: any WidgetPillService,
         tools: any WidgetToolService = UnavailableWidgetToolService(),
         sessionId: String? = nil,
-        worktreePath: String? = nil
+        worktreePath: String? = nil,
+        actor: WidgetCollaborator = .solo,
+        collaboration: (any WidgetCollaborationService)? = nil
     ) {
+        self.actor = actor
+        self.collaboration = collaboration ?? SoloWidgetCollaborationService(actor: actor)
         self.composer = composer
         self.shell = shell
         self.intents = intents

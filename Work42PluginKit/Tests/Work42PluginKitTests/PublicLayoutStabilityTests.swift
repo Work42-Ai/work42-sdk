@@ -23,9 +23,10 @@ struct PublicLayoutStabilityTests {
 
     // ABI generation 13 (SDK 2.8.0): `BrowserSurface` holds an optional `SessionServices`, which grew by the 40-byte
     // `tools` existential: 384 -> 424. Widgets built for ABI 12 or older are rejected by the loader.
+    // ABI generation 16 (SDK 2.14.0): `SessionServices` gained `actor` and `collaboration`: 424 -> 536.
     @Test("BrowserSurface keeps the layout widgets built against this ABI generation expect")
     func browserSurface() {
-        #expect(MemoryLayout<BrowserSurface>.size == 424)
+        #expect(MemoryLayout<BrowserSurface>.size == 536)
         #expect(MemoryLayout<BrowserSurface>.alignment == 8)
     }
 
@@ -34,7 +35,8 @@ struct PublicLayoutStabilityTests {
         #expect(MemoryLayout<BrowserSurfaceSpec>.size == 88)
         #expect(MemoryLayout<WebSelection>.size == 88)
         #expect(MemoryLayout<WidgetHeaderLabel>.size == 120)
-        #expect(MemoryLayout<WidgetIntentSpec>.size == 240)
+        // ABI generation 16 (SDK 2.14.0): `WidgetIntentSpec` gained `requires`, `audience`, `agents` and the three per-viewer closures: 240 -> 320.
+        #expect(MemoryLayout<WidgetIntentSpec>.size == 320)
         #expect(MemoryLayout<WidgetLinkIntentSpec>.size == 24)
         #expect(MemoryLayout<ResolvedAnnotation>.size == 32)
         #expect(MemoryLayout<WidgetPillAppIcon>.size == 32)
@@ -48,7 +50,8 @@ struct PublicLayoutStabilityTests {
     func servicesAndValueTypes() {
         // ABI generation 13 (SDK 2.8.0): each gained `tools` (one 40-byte existential): 192 -> 232, 232 -> 272.
         #expect(MemoryLayout<WidgetBackgroundServices>.size == 232)
-        #expect(MemoryLayout<SessionServices>.size == 272)
+        // ABI generation 16 (SDK 2.14.0): `SessionServices` gained `actor` (a struct) and `collaboration` (an existential): 272 -> 384.
+        #expect(MemoryLayout<SessionServices>.size == 384)
         #expect(MemoryLayout<UnavailableWidgetToolService>.size == 0)
         #expect(MemoryLayout<NoopWidgetSessionActivityService>.size == 0)
         #expect(MemoryLayout<WidgetServiceError>.size == 32)
