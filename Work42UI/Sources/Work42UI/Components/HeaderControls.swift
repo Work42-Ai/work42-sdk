@@ -124,14 +124,26 @@ public struct HeaderPill: View {
         HStack(spacing: 0) {
             ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                 if index > 0 { Rectangle().fill(DT.chipStroke).frame(width: 1, height: TileMetrics.controlHeight) }
-                button(segment)
+                HeaderSegmentButton(segment, onTint: onTint)
             }
         }
         .frame(height: TileMetrics.controlHeight)
         .tileControlSurface()
     }
+}
 
-    private func button(_ segment: HeaderSegment) -> some View {
+/// One `HeaderSegment` drawn as a button at the control height. `HeaderPill` draws its segments with it; a host that already owns a
+/// pill (the tile's controls capsule) draws a widget's header actions with it too, so they look the same either way.
+public struct HeaderSegmentButton: View {
+    private let segment: HeaderSegment
+    private let onTint: Color
+
+    public init(_ segment: HeaderSegment, onTint: Color = DT.red) {
+        self.segment = segment
+        self.onTint = onTint
+    }
+
+    public var body: some View {
         Button(action: segment.action) {
             HStack(spacing: 4) {
                 Image(systemName: segment.systemImage)
@@ -152,6 +164,15 @@ public struct HeaderPill: View {
         .accessibilityLabel(segment.label)
         .accessibilityAddTraits(segment.isOn ? .isSelected : [])
         .help(segment.label)
+    }
+}
+
+/// A divider at the control height, the hairline between two segments of a pill.
+public struct HeaderSegmentDivider: View {
+    public init() {}
+
+    public var body: some View {
+        Rectangle().fill(DT.chipStroke).frame(width: 1, height: TileMetrics.controlHeight)
     }
 }
 

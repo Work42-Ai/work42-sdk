@@ -62,10 +62,14 @@ nonisolated public struct WidgetMinSize: Codable, Sendable, Equatable {
 /// ADDITIONALLY promotes it to a visible button in the tab-bar row beside
 /// `+ Add Widget`, shown while this widget is open in the active tab — the
 /// SAME intent either way, never a second behavior surface ("all the
-/// buttons in the end should be just intents").
+/// buttons in the end should be just intents"). `.header` ADDITIONALLY draws it as a
+/// segment of the widget's header pill, beside the tile's people, "···" and ✕ (SDK 2.14.0,
+/// ABI 16): the same intent again, drawn by the host at the header's control size, so a
+/// widget never builds a header button of its own.
 public enum WidgetIntentPlacement: Sendable, Hashable {
     case palette
     case actionArea
+    case header
 }
 
 /// How an `.actionArea`-promoted intent renders as a button. Ignored
