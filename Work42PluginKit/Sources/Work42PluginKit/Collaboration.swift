@@ -16,6 +16,7 @@
 // and intents that everyone in the session may press and agents may not.
 
 import Foundation
+import Work42UI
 
 // MARK: - Instances
 
@@ -156,6 +157,9 @@ nonisolated public struct WidgetCollaborator: Sendable, Hashable, Codable, Ident
     public let isPrimaryDevice: Bool
     /// A stable key the host draws their colour from, so a person looks the same in every widget.
     public let colorKey: String
+    /// An agent's identity (`SupportedAgents`: its name, colour and mark), so a widget draws it exactly as the app does with
+    /// `AgentAvatarView` and `AgentMark`; nil for a person.
+    public let agent: AgentIdentity?
 
     public init(
         id: String,
@@ -164,7 +168,8 @@ nonisolated public struct WidgetCollaborator: Sendable, Hashable, Codable, Ident
         role: Role? = nil,
         workflowRoles: [String] = [],
         isPrimaryDevice: Bool = true,
-        colorKey: String? = nil
+        colorKey: String? = nil,
+        agent: AgentIdentity? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -174,6 +179,8 @@ nonisolated public struct WidgetCollaborator: Sendable, Hashable, Codable, Ident
         self.workflowRoles = Set(workflowRoles).sorted()
         self.isPrimaryDevice = isPrimaryDevice
         self.colorKey = colorKey ?? id
+        // An agent always has an identity (the generic one when the host does not say which), and a person never does.
+        self.agent = kind == .agent ? (agent ?? SupportedAgents.identity(for: "")) : nil
     }
 
     public var isAgent: Bool { kind == .agent }

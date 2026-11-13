@@ -133,6 +133,26 @@ The library's selectable views share highlights on their own:
 `SharedSelectionTextHost`) and `SharedSelectionWebSurface` for a page (through
 `SharedPageSelections`). A widget built from them needs no code of its own.
 
+## Agents
+
+An agent in a session (Claude, Codex) looks the same wherever it is drawn, because who it is is defined once, in
+`SupportedAgents`. `SupportedAgents.identity(for: "claude")` gives an `AgentIdentity`: its `name`, its brand `color` (avatar, chips,
+glow), its `pointer` colour (the dart and its tag), its `markAsset` and whether the mark keeps its colours (`markKeepsColor`), a
+fallback `symbol`, and the `markTile` it sits on when shown large. An id the SDK does not define reads as a generic "Agent" with no
+mark, so a provider added later still has a name and a colour.
+
+A widget that meets an agent as a collaborator reads `WidgetCollaborator.agent` (nil for a person) and draws it with the SDK:
+
+```swift
+if let agent = collaborator.agent {
+    AgentAvatarView(agent, size: 22, acting: isActing)   // its mark in its colour, ringed while it acts
+    AgentMark(agent, size: 14)                            // the mark alone
+    Text(agent.name).foregroundStyle(agent.tint)
+}
+```
+
+Do not write an agent's colour, name or logo into a widget: ask the catalog, so the widget follows the app when an agent is added.
+
 ## Comments name their instance
 
 A comment made in a widget carries the instance it came from:

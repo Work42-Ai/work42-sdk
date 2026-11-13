@@ -27,6 +27,12 @@
   quotes and finds a highlight in text the way the page script does. The library's selectable views do this on their own.
 - **`PersonDart`** and `PersonDartView`: the one dart every person's pointer and highlight end is drawn with, their colour and name, with
   typing dots while they write or dictate a comment.
+- **The supported agents are defined once (WOR-773).** `SupportedAgents` (`claude`, `codex`, `identity(for:)`, `isSupported(_:)`) and
+  `AgentIdentity` (id, name, brand `color`, `pointer` colour, `markAsset`, `markKeepsColor`, `symbol`, `tagGlyph`, `markTile`) say
+  who an agent is, with `AgentColor` for the colours (Foundation only, so a model layer can name an agent). `AgentMarks` finds the
+  bundled mark files, `AgentMark` draws one and `AgentAvatarView` draws an agent's avatar, ringed while it acts. A
+  `WidgetCollaborator` that is an agent carries its `agent` identity, so a plugin draws an agent exactly as the app does. Every
+  place in the app that names or draws an agent reads it from here; no other definition of an agent's name, colour or mark remains.
 - **Comments name their instance.** `PendingComment.instance` (whose instance, on what device) and `PendingComment.widget` (the widget
   kind, over `widgetType`) make `widgetId` an id the device and widget tools take; `PendingCommentsStore.instanceOwner` and
   `defaultInstanceOwner` stamp it when a comment is added.

@@ -31,8 +31,10 @@ From 2.14.0 it also includes the collaboration visuals and ids: `WidgetInstanceI
 `PersonDart` / `PersonDartView`, `FollowModeView` / `FollowModeHeaderModel`, the
 shared selections (`SharedSelectionHub`, `SharedSelectionPlace`,
 `SharedSelectionTextSurface`, `SharedSelectionTextHost`, `SharedSelectionWebSurface`,
-`SharedPageSelections`, `SharedSelectionText`), and `PendingComment.instance` /
-`widget` with `PendingCommentsStore.instanceOwner`.
+`SharedPageSelections`, `SharedSelectionText`), `PendingComment.instance` /
+`widget` with `PendingCommentsStore.instanceOwner`, and the supported agents
+(`SupportedAgents`, `AgentIdentity`, `AgentColor`, `AgentMarks`, `AgentMark`,
+`AgentAvatarView`; `WidgetCollaborator.agent` in `Work42PluginKit`).
 
 See `Collaboration.md` for how a widget uses them.
 
