@@ -155,6 +155,8 @@ public struct BrowserChromeRow: View {
                     onSelect: { id in model.selectTab(id) },
                     onClose:  { id in model.closeTab(id) }
                 )
+                // Someone else's tabs: shown, never switched or closed from here.
+                .disabled(model.isReadOnly)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -236,6 +238,7 @@ public struct BrowserChromeRow: View {
                 .help("Forward")
                 .accessibilityLabel("Forward")
             }
+            .disabled(model.isReadOnly)
             .frame(height: Self.controlGroupHeight)
 
             // URL capsule — dominant flex element. The + new-tab control lives
@@ -255,7 +258,17 @@ public struct BrowserChromeRow: View {
                 }
                 .buttonStyle(.plain)
                 .help("New tab")
-                if model.canEditURL {
+                .disabled(model.isReadOnly)
+                if model.isReadOnly {
+                    // Someone else's address: it can be selected and copied, not edited.
+                    Text(model.urlDraft)
+                        .font(.system(size: DT.f13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if model.canEditURL {
                     TextField("Search or enter website name", text: $model.urlDraft)
                         .textFieldStyle(.plain)
                         .font(.system(size: DT.f13))
@@ -297,7 +310,7 @@ public struct BrowserChromeRow: View {
             .tileControlSurface()
             .contentShape(Capsule())
             .onTapGesture {
-                if model.canEditURL { isURLFieldFocused = true }
+                if model.canEditURL, !model.isReadOnly { isURLFieldFocused = true }
             }
 
             // Trailing controls: picker | accessory? | zoom? | loading?
@@ -346,6 +359,7 @@ public struct BrowserChromeRow: View {
                     LoadingIndicator(size: .small)
                 }
             }
+            .disabled(model.isReadOnly)
             .frame(height: Self.controlGroupHeight)
 
             // Widget controls (⋯ move menu + ✕ close) handed down by

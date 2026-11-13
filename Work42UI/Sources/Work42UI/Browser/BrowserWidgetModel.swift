@@ -102,6 +102,10 @@ public final class BrowserWidgetModel: ObservableObject {
     /// Whether the user can type a new URL in the capsule. False for Canvas (loopback URL is fixed).
     public let canEditURL: Bool
 
+    /// Someone else's browser, shown to read only (following another device): the chrome draws as usual, every control is disabled,
+    /// and the address can be selected and copied but not edited.
+    public var isReadOnly: Bool = false
+
     /// Kept for call-site compatibility. The preset selector UI has been
     /// removed (humble-harbor.6); this value is no longer applied via the
     /// toggle. Preset selectors for GitHub and Jira come from
