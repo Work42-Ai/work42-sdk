@@ -216,6 +216,9 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
     /// (`w_widget_github_yan_ipad`) and an agent acts in the page the person pointed at. Nil for a shared or hosted widget, which has
     /// one instance. The store fills it in from where the comment is made (`PendingCommentsStore.instanceOwner`).
     public var instance: WidgetInstanceID.Owner?
+    /// The widget (kind id) the comment was made in, when its source alone does not say: a page highlighted in a plugin built on a
+    /// browser is a `.browserHighlight` like one in the Browser, but it is that plugin's widget (WOR-798). Nil: the source's widget.
+    public let widget: String?
 
     public init(
         id: UUID = UUID(),
@@ -224,7 +227,8 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         endLine: Int,
         excerpt: String,
         body: String,
-        instance: WidgetInstanceID.Owner? = nil
+        instance: WidgetInstanceID.Owner? = nil,
+        widget: String? = nil
     ) {
         self.id = id
         self.source = source
@@ -233,6 +237,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         self.excerpt = excerpt
         self.body = body
         self.instance = instance
+        self.widget = widget
     }
 
     /// Human-readable label for the composer card — e.g.
@@ -364,6 +369,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
     /// `PendingCommentCard.icon(forKindTag:)`). This is what travels to the
     /// agent as the drivable widget's `type` (comments-on-widgets AC6).
     public var widgetType: String? {
+        if let widget { return widget }
         switch source {
         case .spec:              return "spec"
         case .file:               return "files"
@@ -491,7 +497,9 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
                 .split(separator: "\n", omittingEmptySubsequences: false)
                 .map { "> \($0)" }
                 .joined(separator: "\n")
-            var block = "On \(pageUrl), the user is pointing at `\(selector)`:\n\(widgetHintLine)\(quote)\n\n\(body)"
+            // A text highlight has no element to name; an element pick does.
+            let what = selector.isEmpty ? "the user highlighted this text" : "the user is pointing at `\(selector)`"
+            var block = "On \(pageUrl), \(what):\n\(widgetHintLine)\(quote)\n\n\(body)"
             if let screenshotPath {
                 block += "\nScreenshot: \(screenshotPath)"
             }
@@ -796,7 +804,8 @@ public final class PendingCommentsStore: ObservableObject {
             endLine: old.endLine,
             excerpt: old.excerpt,
             body: old.body,
-            instance: old.instance
+            instance: old.instance,
+            widget: old.widget
         )
     }
 

@@ -30,4 +30,15 @@ struct WidgetInstanceIDTests {
         #expect(store.comments[0].serializedBlock.contains("device `w_browser_yan-rodriguez_ipad`"))
         #expect(store.comments[1].widgetId == "w_artifacts", "a shared widget has one instance")
     }
+
+    @Test("a page highlighted in a plugin built on a browser names that plugin's widget, not the Browser")
+    func pluginBrowserComment() {
+        let store = PendingCommentsStore()
+        store.instanceOwner = { $0 == "widget:linear-spec" ? self.yanIPad : nil }
+        store.append(PendingComment(
+            source: .browserHighlight(pageUrl: "https://linear.app/doc", selector: "", excerpt: "Hi", screenshotPath: nil),
+            startLine: 0, endLine: 0, excerpt: "Hi", body: "this", widget: "widget:linear-spec"))
+        #expect(store.comments[0].widgetId == "w_widget_linear-spec_yan-rodriguez_ipad")
+        #expect(store.comments[0].serializedBlock.contains("On https://linear.app/doc, the user highlighted this text:"))
+    }
 }
