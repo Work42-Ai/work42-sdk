@@ -42,13 +42,16 @@ public struct SharedPageSelection: Codable, Equatable, Sendable {
     public var fill: String
     public var start: PageQuote
     public var end: PageQuote?
+    /// This is the person the reader follows: each new selection of theirs is scrolled to, smoothly.
+    public var followed: Bool
 
-    public init(name: String, color: String, fill: String, start: PageQuote, end: PageQuote? = nil) {
+    public init(name: String, color: String, fill: String, start: PageQuote, end: PageQuote? = nil, followed: Bool = false) {
         self.name = name
         self.color = color
         self.fill = fill
         self.start = start
         self.end = end
+        self.followed = followed
     }
 }
 
@@ -85,11 +88,19 @@ public final class SharedPageSelections {
     /// The content controllers that already carry the script.
     private static let installed = NSHashTable<WKUserContentController>.weakObjects()
 
-    /// Draws `selections` (everyone else's), replacing what was drawn. Kept, so a page that reloads draws them again.
-    public func show(_ selections: [SharedPageSelection]) {
-        guard selections != shown else { return }
+    /// Draws `selections` (everyone else's), replacing what was drawn. Kept, so a page that reloads draws them again. Answers how many
+    /// were found in the page and drawn, or nil when nothing changed (or the page could not be asked).
+    @discardableResult
+    public func show(_ selections: [SharedPageSelection]) async -> Int? {
+        guard selections != shown else { return nil }
         shown = selections
-        draw()
+        return await drawCounting()
+    }
+
+    private func drawCounting() async -> Int? {
+        guard let json = try? JSONEncoder().encode(shown), let text = String(data: json, encoding: .utf8) else { return nil }
+        let value = try? await webView?.evaluateJavaScript("window.__w42Shared ? window.__w42Shared.show(\(text)) : -1")
+        return (value as? NSNumber)?.intValue
     }
 
     /// What this person has selected in the page now, read from the page itself: `.nothing` when no text is selected, `.unknown`
@@ -304,9 +315,21 @@ public final class SharedPageSelections {
         (document.head || document.documentElement).appendChild(styleSheet);
         return styleSheet;
       }
+      var followedKey = '';
+      // A new selection of the person followed comes into view, centred, smoothly; the same one again does not move the page.
+      function bringIntoView(selection, rects) {
+        var key = JSON.stringify([selection.start, selection.end]);
+        if (key === followedKey) { return; }
+        followedKey = key;
+        var top = rects[0].top, bottom = rects[rects.length - 1].bottom;
+        if (top >= 0 && bottom <= window.innerHeight) { return; }
+        var target = window.scrollY + top - Math.max(0, (window.innerHeight - (bottom - top)) / 2);
+        window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      }
       function draw() {
-        if (!document.body) { return; }
-        var shadow = layer(), css = '', highlights = window.CSS && CSS.highlights && window.Highlight;
+        if (!document.body) { return 0; }
+        var drawn = 0, shadow = layer(), css = '', highlights = window.CSS && CSS.highlights && window.Highlight;
+        if (!current.some(function (s) { return s.followed; })) { followedKey = ''; }
         shadow.innerHTML = '';
         if (highlights) {
           Array.from(CSS.highlights.keys()).forEach(function (key) { if (key.indexOf('w42s') === 0) { CSS.highlights.delete(key); } });
@@ -318,6 +341,8 @@ public final class SharedPageSelections {
           if (!range) { return; }
           var rects = Array.from(range.getClientRects()).filter(function (r) { return r.width > 0 && r.height > 0; });
           if (!rects.length) { return; }
+          drawn++;
+          if (selection.followed) { bringIntoView(selection, rects); }
           if (highlights) {
             CSS.highlights.set('w42s' + i, new Highlight(range));
             css += '::highlight(w42s' + i + '){background-color:' + selection.fill + ';}';
@@ -354,11 +379,12 @@ public final class SharedPageSelections {
           shadow.appendChild(tag);
         });
         sheet().textContent = css;
+        return drawn;
       }
       var redraw = null;
       window.addEventListener('resize', function () { clearTimeout(redraw); redraw = setTimeout(draw, 100); });
       window.__w42Shared = {
-        show: function (selections) { current = selections || []; draw(); },
+        show: function (selections) { current = selections || []; return draw(); },
         // What is selected now, as JSON ('null' for nothing): read by the host on its own beat, so a selection change no event
         // reported (or one whose message was lost) still reaches the others.
         snapshot: function () { return JSON.stringify(snapshot()); }
