@@ -298,66 +298,48 @@ public final class SharedPageSelections {
         return range;
       }
 
-      // Drawing: highlights through CSS.highlights (no change to the page), tags in a shadow root of our own.
+      // Drawing: a fixed layer over the viewport, in a shadow root of our own, painted from each selection's rectangles on screen.
+      // Plain boxes, not the CSS highlight API: taking them out takes the highlight away at once, and being over the viewport
+      // they are right whichever element scrolls (a page whose body scrolls included). Repainted on every scroll and resize.
       function layer() {
         if (host && host.isConnected) { return root; }
         host = document.createElement('div');
         host.setAttribute('data-w42-shared', '');
-        host.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483647;';
+        host.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:2147483647;';
         document.documentElement.appendChild(host);
         root = host.attachShadow({ mode: 'open' });
         return root;
       }
-      function sheet() {
-        if (styleSheet && styleSheet.isConnected) { return styleSheet; }
-        styleSheet = document.createElement('style');
-        styleSheet.setAttribute('data-w42-shared', '');
-        (document.head || document.documentElement).appendChild(styleSheet);
-        return styleSheet;
-      }
       var followedKey = '';
       // A new selection of the person followed comes into view, centred, smoothly; the same one again does not move the page.
-      function bringIntoView(selection, rects) {
+      function bringIntoView(selection, range) {
         var key = JSON.stringify([selection.start, selection.end]);
         if (key === followedKey) { return; }
         followedKey = key;
-        var top = rects[0].top, bottom = rects[rects.length - 1].bottom;
-        if (top >= 0 && bottom <= window.innerHeight) { return; }
-        var target = window.scrollY + top - Math.max(0, (window.innerHeight - (bottom - top)) / 2);
-        window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        var box = range.getBoundingClientRect();
+        if (box.top >= 0 && box.bottom <= window.innerHeight) { return; }
+        var element = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+        if (element && element.scrollIntoView) { element.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
       }
-      function draw() {
-        if (!document.body) { return 0; }
-        var drawn = 0, shadow = layer(), css = '', highlights = window.CSS && CSS.highlights && window.Highlight;
-        if (!current.some(function (s) { return s.followed; })) { followedKey = ''; }
+      // The selections found in the page, kept between paints: found again only when the list changes.
+      var found = [];
+      function paint() {
+        var shadow = layer();
         shadow.innerHTML = '';
-        if (highlights) {
-          Array.from(CSS.highlights.keys()).forEach(function (key) { if (key.indexOf('w42s') === 0) { CSS.highlights.delete(key); } });
-        }
-        var index = current.length ? textIndex() : null;
-        current.forEach(function (selection, i) {
-          var range = null;
-          try { range = rangeOf(selection, index); } catch (e) { range = null; }
-          if (!range) { return; }
-          var rects = Array.from(range.getClientRects()).filter(function (r) { return r.width > 0 && r.height > 0; });
+        found.forEach(function (item) {
+          var selection = item.selection;
+          var rects = Array.from(item.range.getClientRects()).filter(function (r) { return r.width > 0 && r.height > 0; });
           if (!rects.length) { return; }
-          drawn++;
-          if (selection.followed) { bringIntoView(selection, rects); }
-          if (highlights) {
-            CSS.highlights.set('w42s' + i, new Highlight(range));
-            css += '::highlight(w42s' + i + '){background-color:' + selection.fill + ';}';
-          } else {
-            rects.forEach(function (r) {
-              var box = document.createElement('div');
-              box.style.cssText = 'position:absolute;left:' + (r.left + window.scrollX) + 'px;top:' + (r.top + window.scrollY) +
-                'px;width:' + r.width + 'px;height:' + r.height + 'px;background:' + selection.fill + ';border-radius:2px;';
-              shadow.appendChild(box);
-            });
-          }
+          rects.forEach(function (r) {
+            var box = document.createElement('div');
+            box.style.cssText = 'position:absolute;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' +
+              r.height + 'px;background:' + selection.fill + ';border-radius:2px;';
+            shadow.appendChild(box);
+          });
           // Their dart at the end of what they selected, its tip on the last character, and their name at its tail: the same
           // stemless dart every pointer is drawn with.
           var lastRect = rects[rects.length - 1];
-          var tipX = lastRect.right + window.scrollX, tipY = lastRect.top + window.scrollY + lastRect.height * 0.5;
+          var tipX = lastRect.right, tipY = lastRect.top + lastRect.height * 0.5;
           var dart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           dart.setAttribute('width', '18');
           dart.setAttribute('height', '21');
@@ -378,11 +360,34 @@ public final class SharedPageSelections {
             ';color:#fff;font:600 10px -apple-system,system-ui,sans-serif;line-height:15px;white-space:nowrap;';
           shadow.appendChild(tag);
         });
-        sheet().textContent = css;
-        return drawn;
       }
-      var redraw = null;
-      window.addEventListener('resize', function () { clearTimeout(redraw); redraw = setTimeout(draw, 100); });
+      function draw() {
+        if (!document.body) { return 0; }
+        // Anything an earlier build drew with the highlight API goes too.
+        if (window.CSS && CSS.highlights) {
+          Array.from(CSS.highlights.keys()).forEach(function (key) { if (key.indexOf('w42s') === 0) { CSS.highlights.delete(key); } });
+        }
+        if (styleSheet && styleSheet.isConnected) { styleSheet.textContent = ''; }
+        if (!current.some(function (s) { return s.followed; })) { followedKey = ''; }
+        var index = current.length ? textIndex() : null;
+        found = [];
+        current.forEach(function (selection) {
+          var range = null;
+          try { range = rangeOf(selection, index); } catch (e) { range = null; }
+          if (range) { found.push({ selection: selection, range: range }); }
+        });
+        paint();
+        found.forEach(function (item) { if (item.selection.followed) { bringIntoView(item.selection, item.range); } });
+        return found.length;
+      }
+      var frame = 0;
+      function repaintSoon() {
+        if (frame || !found.length) { return; }
+        frame = requestAnimationFrame(function () { frame = 0; paint(); });
+      }
+      // Any element scrolling (capture: scroll does not bubble) and the window resizing move the boxes with the text.
+      document.addEventListener('scroll', repaintSoon, true);
+      window.addEventListener('resize', function () { repaintSoon(); });
       window.__w42Shared = {
         show: function (selections) { current = selections || []; return draw(); },
         // What is selected now, as JSON ('null' for nothing): read by the host on its own beat, so a selection change no event
