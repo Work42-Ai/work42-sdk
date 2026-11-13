@@ -116,8 +116,13 @@ public struct CommentComposerPopover: View {
                     onCommit(body)
                 }
             ), in: windowID)
+            // The others see this person writing a comment on their highlight: the typing dots on their dart (WOR-773 §6).
+            SharedSelectionHub.shared.setActivity(.typing)
         }
-        .onDisappear { AnnotationRegistry.shared.clear(in: windowID) }
+        .onDisappear {
+            AnnotationRegistry.shared.clear(in: windowID)
+            SharedSelectionHub.shared.endActivity(.typing)
+        }
     }
 
     private var excerptView: some View {

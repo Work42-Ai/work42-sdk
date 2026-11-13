@@ -36,16 +36,42 @@ public nonisolated enum PersonDart {
     /// - Parameter yUp: `true` for a bottom-left, y-up context (a bitmap); `false` for a top-left, y-down one (a flipped view, SwiftUI).
     /// - Parameter scale: a press or an appearance changes the dart's size, never the name's.
     /// - Parameter angle: the dart turned about its tip (an agent thinking wiggles it), in radians.
+    /// - Parameter typing: the person is writing or dictating (a comment on their highlight): the typing dots follow the name, at
+    ///   `time` (seconds on any steady clock; redraw about 30 times a second while it is on).
     public static func draw(
         in ctx: CGContext, tip at: CGPoint, color: CGColor, name: String? = nil, unit: CGFloat = 1, scale: CGFloat = 1,
-        angle: CGFloat = 0, yUp: Bool = false
+        angle: CGFloat = 0, yUp: Bool = false, typing: Bool = false, time: TimeInterval = 0
     ) {
         drawDart(in: ctx, tip: at, color: color, unit: unit * scale, angle: angle, yUp: yUp)
         if let name {
             let down: CGFloat = yUp ? -1 : 1
             drawTag(
                 in: ctx, text: name, at: CGPoint(x: at.x + tagOffset.width * unit, y: at.y + down * tagOffset.height * unit),
-                color: color, unit: unit, yUp: yUp)
+                color: color, unit: unit, yUp: yUp, typing: typing, time: time)
+        }
+    }
+
+    // MARK: The typing dots
+
+    /// 0…1, dot `index`'s turn to rise at `time`: each of the three a little after the one before. The chat's typing row moves the
+    /// same way.
+    public static func typingPulse(index: Int, time: TimeInterval) -> Double {
+        max(0, sin(time * 5.0 - Double(index) * 0.7))
+    }
+
+    /// The space the dots take after the name, in units.
+    static let dotsWidth: CGFloat = 14
+    static let dotSize: CGFloat = 2.6
+
+    private static func drawDots(in ctx: CGContext, after x: CGFloat, midY: CGFloat, unit: CGFloat, yUp: Bool, time: TimeInterval) {
+        let down: CGFloat = yUp ? -1 : 1
+        for index in 0..<3 {
+            let pulse = typingPulse(index: index, time: time)
+            let size = dotSize * unit
+            let cx = x + (2 + CGFloat(index) * 4.6) * unit
+            let cy = midY - down * 1.6 * unit * CGFloat(pulse)
+            ctx.setFillColor(CGColor(gray: 1, alpha: 0.45 + 0.55 * pulse))
+            ctx.fillEllipse(in: CGRect(x: cx - size / 2, y: cy - size / 2, width: size, height: size))
         }
     }
 
@@ -78,10 +104,10 @@ public nonisolated enum PersonDart {
     /// A pill of `color` with white bold `text`: its top-left at `at` (its top-centre when `centered`), below it on the screen.
     public static func drawTag(
         in ctx: CGContext, text: String, at anchor: CGPoint, color: CGColor, unit: CGFloat = 1, centered: Bool = false,
-        alpha: CGFloat = 1, yUp: Bool = false
+        alpha: CGFloat = 1, yUp: Bool = false, typing: Bool = false, time: TimeInterval = 0
     ) {
         guard alpha > 0 else { return }
-        let metrics = tagMetrics(text, unit: unit)
+        let metrics = tagMetrics(text, unit: unit, typing: typing)
         let left = centered ? anchor.x - metrics.size.width / 2 : anchor.x
         // The pill's rectangle in context coordinates: below the anchor in y-down, below it (smaller y) in y-up.
         let bottom = yUp ? anchor.y - metrics.size.height : anchor.y
@@ -97,24 +123,32 @@ public nonisolated enum PersonDart {
         let baseline = yUp ? rect.minY + padY + fontSize * 0.22 : rect.minY + padY + fontSize * 0.78
         ctx.textPosition = CGPoint(x: rect.minX + fontSize * 0.55 - metrics.bounds.minX, y: baseline)
         CTLineDraw(metrics.line, ctx)
+        if typing {
+            drawDots(
+                in: ctx, after: rect.minX + fontSize * 0.55 + metrics.bounds.width, midY: rect.midY, unit: unit, yUp: yUp, time: time)
+        }
         ctx.restoreGState()
     }
 
     /// How big a name pill is.
-    public static func tagSize(_ text: String, unit: CGFloat = 1) -> CGSize { tagMetrics(text, unit: unit).size }
+    public static func tagSize(_ text: String, unit: CGFloat = 1, typing: Bool = false) -> CGSize {
+        tagMetrics(text, unit: unit, typing: typing).size
+    }
 
     /// Everything the dart and its name cover, from the tip, on a y-down screen: what a view holding them has to be.
-    public static func bounds(name: String?, unit: CGFloat = 1) -> CGRect {
+    public static func bounds(name: String?, unit: CGFloat = 1, typing: Bool = false) -> CGRect {
         let margin = 2 * unit   // the edge and the shadow
         var rect = CGRect(x: -margin, y: -margin, width: (16.8 - tip.x) * unit + 2 * margin, height: (20.5 - tip.y) * unit + 2 * margin)
         if let name {
-            let size = tagSize(name, unit: unit)
+            let size = tagSize(name, unit: unit, typing: typing)
             rect = rect.union(CGRect(origin: CGPoint(x: tagOffset.width * unit, y: tagOffset.height * unit), size: size))
         }
         return rect
     }
 
-    private static func tagMetrics(_ text: String, unit: CGFloat) -> (line: CTLine, bounds: CGRect, size: CGSize, fontSize: CGFloat) {
+    private static func tagMetrics(
+        _ text: String, unit: CGFloat, typing: Bool = false
+    ) -> (line: CTLine, bounds: CGRect, size: CGSize, fontSize: CGFloat) {
         let fontSize = max(9, 4.4 * unit)
         let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
         let attributes: [NSAttributedString.Key: Any] = [
@@ -123,7 +157,7 @@ public nonisolated enum PersonDart {
         ]
         let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
         let bounds = CTLineGetBoundsWithOptions(line, [])
-        let size = CGSize(width: bounds.width + 2 * fontSize * 0.55, height: fontSize * 1.5)
+        let size = CGSize(width: bounds.width + 2 * fontSize * 0.55 + (typing ? dotsWidth * unit : 0), height: fontSize * 1.5)
         return (line, bounds, size, fontSize)
     }
 }

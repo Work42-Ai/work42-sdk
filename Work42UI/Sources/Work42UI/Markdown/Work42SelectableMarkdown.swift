@@ -582,6 +582,8 @@ public struct Work42SelectableProse: NSViewRepresentable {
         let view = SelectableProseTextView()
         view.delegate = context.coordinator
         context.coordinator.view = view
+        // Its highlights are shared with the session's others, and theirs drawn here (WOR-773 §6).
+        context.coordinator.shared = SharedSelectionTextSurface(textView: view)
         configure(view, context: context)
         view.setProse(text, styler: context.environment.markdownInlineCodeStyler.resolve, dark: context.environment.colorScheme == .dark)
         return view
@@ -590,6 +592,12 @@ public struct Work42SelectableProse: NSViewRepresentable {
     public func updateNSView(_ view: SelectableProseTextView, context: Context) {
         configure(view, context: context)
         view.setProse(text, styler: context.environment.markdownInlineCodeStyler.resolve, dark: context.environment.colorScheme == .dark)
+        context.coordinator.shared?.layoutChanged()
+    }
+
+    public static func dismantleNSView(_ view: SelectableProseTextView, coordinator: Coordinator) {
+        coordinator.shared?.detach()
+        coordinator.shared = nil
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize, nsView view: SelectableProseTextView, context: Context) -> CGSize? {
@@ -600,6 +608,7 @@ public struct Work42SelectableProse: NSViewRepresentable {
     private func configure(_ view: SelectableProseTextView, context: Context) {
         context.coordinator.onOpenLink = onOpenLink
         context.coordinator.onSelectionChange = onSelectionChange
+        context.coordinator.shared?.place = context.environment.sharedSelectionPlace
         view.linkOpener = onOpenLink
     }
 
@@ -608,6 +617,7 @@ public struct Work42SelectableProse: NSViewRepresentable {
         weak var view: SelectableProseTextView?
         var onOpenLink: ((URL) -> Void)?
         var onSelectionChange: ((String, CGRect) -> Void)?
+        var shared: SharedSelectionTextSurface?
 
         public func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
@@ -617,6 +627,7 @@ public struct Work42SelectableProse: NSViewRepresentable {
         }
 
         public func textViewDidChangeSelection(_ notification: Notification) {
+            shared?.selectionChanged()
             guard let view, let report = onSelectionChange else { return }
             let selection = view.selectedFirstLine()
             report(selection.text, selection.rect)
@@ -817,6 +828,8 @@ public struct Work42SelectableProse: UIViewRepresentable {
         view.textContainer.lineFragmentPadding = 0
         view.delegate = context.coordinator
         context.coordinator.observeSelectionClearing(of: view)
+        // Its highlights are shared with the session's others, and theirs drawn here (WOR-773 §6).
+        context.coordinator.shared = SharedSelectionTextSurface(textView: view)
         // The Pencil squeeze dictates into the highlight here exactly as this view's "Dictate Work42" item does (AC166).
         Work42SelectionDictation.register(
             context.coordinator, window: { [weak view] in view.flatMap { WindowFocus.id(of: $0) } }
@@ -835,6 +848,8 @@ public struct Work42SelectableProse: UIViewRepresentable {
         context.coordinator.onSelectionChange = onSelectionChange
         context.coordinator.onComment = onComment
         context.coordinator.onDictate = onDictate
+        context.coordinator.shared?.place = context.environment.sharedSelectionPlace
+        defer { context.coordinator.shared?.layoutChanged() }
         // The host's styler dresses its chosen inline code spans (stages). A styled text holds attachments, which never
         // compare equal, so what was given and how it was dressed decide whether to set it again (which drops the selection).
         let dark = context.environment.colorScheme == .dark
@@ -852,7 +867,14 @@ public struct Work42SelectableProse: UIViewRepresentable {
         return view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
     }
 
+    public static func dismantleUIView(_ view: UITextView, coordinator: Coordinator) {
+        coordinator.shared?.detach()
+        coordinator.shared = nil
+    }
+
+    @MainActor
     public final class Coordinator: NSObject, UITextViewDelegate {
+        var shared: SharedSelectionTextSurface?
         var onOpenLink: ((URL) -> Void)?
         var onSelectionChange: ((String, CGRect) -> Void)?
         var onComment: ((String, CGRect) -> Void)?
@@ -908,6 +930,7 @@ public struct Work42SelectableProse: UIViewRepresentable {
         }
 
         public func textViewDidChangeSelection(_ textView: UITextView) {
+            shared?.selectionChanged()
             guard let range = textView.selectedTextRange, !range.isEmpty else {
                 onSelectionChange?("", .zero)
                 return

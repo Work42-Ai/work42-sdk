@@ -49,10 +49,12 @@ public struct SharedPageSelection: Codable, Equatable, Sendable {
     public var followed: Bool
     /// They selected backwards: their dart is at the start of the selection, where they are, not its end.
     public var backward: Bool
+    /// They are writing or dictating a comment on it: the typing dots follow their name.
+    public var activity: SharedSelectionActivity?
 
     public init(
         name: String, color: String, fill: String, start: PageQuote, end: PageQuote? = nil, followed: Bool = false,
-        backward: Bool = false
+        backward: Bool = false, activity: SharedSelectionActivity? = nil
     ) {
         self.name = name
         self.color = color
@@ -61,6 +63,7 @@ public struct SharedPageSelection: Codable, Equatable, Sendable {
         self.end = end
         self.followed = followed
         self.backward = backward
+        self.activity = activity
     }
 }
 
@@ -341,9 +344,14 @@ public final class SharedPageSelections {
       }
       // The selections found in the page, kept between paints: found again only when the list changes.
       var found = [];
+      // The typing dots in a name pill: three, each rising a little after the one before, as `PersonDart` draws them.
+      var DOTS_CSS = '@keyframes w42dot{0%,100%{transform:translateY(0);opacity:.45}25%{transform:translateY(-1.6px);opacity:1}' +
+        '50%{transform:translateY(0);opacity:.45}}.w42dots{display:inline-flex;gap:2px;margin-left:4px;vertical-align:middle}' +
+        '.w42dots i{width:2.6px;height:2.6px;border-radius:50%;background:#fff;animation:w42dot 1.26s ease-in-out infinite}' +
+        '.w42dots i:nth-child(2){animation-delay:.14s}.w42dots i:nth-child(3){animation-delay:.28s}';
       function paint() {
         var shadow = layer();
-        shadow.innerHTML = '';
+        shadow.innerHTML = '<style>' + DOTS_CSS + '</style>';
         found.forEach(function (item) {
           var selection = item.selection;
           var rects = Array.from(item.range.getClientRects()).filter(function (r) { return r.width > 0 && r.height > 0; });
@@ -377,6 +385,13 @@ public final class SharedPageSelections {
           tag.style.cssText = 'position:absolute;left:' + (tipX + \#(PersonDart.tagOffset.width)) + 'px;top:' +
             (tipY + \#(PersonDart.tagOffset.height)) + 'px;padding:0 5px;border-radius:999px;background:' + selection.color +
             ';color:#fff;font:700 9px Helvetica,-apple-system,sans-serif;line-height:13.5px;white-space:nowrap;';
+          // Writing or dictating a comment on it: the typing dots after the name.
+          if (selection.activity) {
+            var dots = document.createElement('span');
+            dots.className = 'w42dots';
+            dots.innerHTML = '<i></i><i></i><i></i>';
+            tag.appendChild(dots);
+          }
           shadow.appendChild(tag);
         });
       }
