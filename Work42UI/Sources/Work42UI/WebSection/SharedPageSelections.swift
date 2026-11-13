@@ -28,10 +28,13 @@ public struct PageQuote: Codable, Equatable, Sendable {
 public struct PageSelectionReport: Codable, Equatable, Sendable {
     public var start: PageQuote
     public var end: PageQuote?
+    /// The person selected from the end back to the start: the end they are at (where their dart goes) is the start.
+    public var backward: Bool?
 
-    public init(start: PageQuote, end: PageQuote? = nil) {
+    public init(start: PageQuote, end: PageQuote? = nil, backward: Bool? = nil) {
         self.start = start
         self.end = end
+        self.backward = backward
     }
 }
 
@@ -44,14 +47,20 @@ public struct SharedPageSelection: Codable, Equatable, Sendable {
     public var end: PageQuote?
     /// This is the person the reader follows: each new selection of theirs is scrolled to, smoothly.
     public var followed: Bool
+    /// They selected backwards: their dart is at the start of the selection, where they are, not its end.
+    public var backward: Bool
 
-    public init(name: String, color: String, fill: String, start: PageQuote, end: PageQuote? = nil, followed: Bool = false) {
+    public init(
+        name: String, color: String, fill: String, start: PageQuote, end: PageQuote? = nil, followed: Bool = false,
+        backward: Bool = false
+    ) {
         self.name = name
         self.color = color
         self.fill = fill
         self.start = start
         self.end = end
         self.followed = followed
+        self.backward = backward
     }
 }
 
@@ -207,9 +216,18 @@ public final class SharedPageSelections {
           ? norm(range.toString()).trim() : '';
         if (!text) { return null; }
         var prefix = textBefore(range), suffix = textAfter(range);
-        if (text.length <= MAX_QUOTE) { return { start: { quote: text, prefix: prefix, suffix: suffix } }; }
-        return { start: { quote: text.slice(0, HALF).trim(), prefix: prefix, suffix: '' },
-                 end: { quote: text.slice(-HALF).trim(), prefix: '', suffix: suffix } };
+        // Selected from the end back to the start: the focus (where the person is) comes before the anchor.
+        var a = selection.anchorNode, f = selection.focusNode, backward = false;
+        if (a && f) {
+          backward = a === f ? selection.focusOffset < selection.anchorOffset
+            : !!(a.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_PRECEDING);
+        }
+        var result = text.length <= MAX_QUOTE
+          ? { start: { quote: text, prefix: prefix, suffix: suffix } }
+          : { start: { quote: text.slice(0, HALF).trim(), prefix: prefix, suffix: '' },
+              end: { quote: text.slice(-HALF).trim(), prefix: '', suffix: suffix } };
+        if (backward) { result.backward = true; }
+        return result;
       }
       function report() {
         var now = snapshot();
@@ -220,7 +238,7 @@ public final class SharedPageSelections {
         var key = JSON.stringify(now);
         if (key === last) { return; }
         last = key;
-        post({ type: 'select', start: now.start, end: now.end });
+        post({ type: 'select', start: now.start, end: now.end, backward: now.backward });
       }
       document.addEventListener('selectionchange', function () {
         clearTimeout(timer);
@@ -336,10 +354,10 @@ public final class SharedPageSelections {
               r.height + 'px;background:' + selection.fill + ';border-radius:2px;';
             shadow.appendChild(box);
           });
-          // Their dart at the end of what they selected, its tip on the last character, and their name at its tail: the same
-          // stemless dart every pointer is drawn with.
-          var lastRect = rects[rects.length - 1];
-          var tipX = lastRect.right, tipY = lastRect.top + lastRect.height * 0.5;
+          // Their dart where they are in the selection (its end, or its start when they selected backwards), and their name at
+          // its tail: the same stemless dart every pointer is drawn with.
+          var edge = selection.backward ? rects[0] : rects[rects.length - 1];
+          var tipX = selection.backward ? edge.left : edge.right, tipY = edge.top + edge.height * 0.5;
           var dart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           dart.setAttribute('width', '18');
           dart.setAttribute('height', '21');
