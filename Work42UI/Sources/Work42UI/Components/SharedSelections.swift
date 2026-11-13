@@ -241,14 +241,20 @@ public enum SharedSelectionText {
     static let maxQuote = 200
     static let half = 96
 
-    /// `range` of `text` (UTF-16) as quotes; nil for an empty highlight.
-    public static func quote(_ range: NSRange, in text: String) -> (start: PageQuote, end: PageQuote?)? {
+    /// `range` of `text` (UTF-16) as quotes; nil for an empty highlight, unless `caret`: a caret is quoted as the words either side
+    /// of it, with no quote of its own.
+    public static func quote(_ range: NSRange, in text: String, caret: Bool = false) -> (start: PageQuote, end: PageQuote?)? {
         let ns = text as NSString
-        guard range.location != NSNotFound, range.length > 0, NSMaxRange(range) <= ns.length else { return nil }
-        let selected = norm(ns.substring(with: range)).trimmingCharacters(in: .whitespaces)
-        guard !selected.isEmpty else { return nil }
+        guard range.location != NSNotFound, NSMaxRange(range) <= ns.length else { return nil }
         let before = norm(ns.substring(to: range.location))
         let after = norm(ns.substring(from: NSMaxRange(range)))
+        if range.length == 0 {
+            // Exact context, not trimmed: where the caret is inside the spaces matters.
+            guard caret, !(before.isEmpty && after.isEmpty) else { return nil }
+            return (PageQuote(quote: "", prefix: String(before.suffix(context)), suffix: String(after.prefix(context))), nil)
+        }
+        let selected = norm(ns.substring(with: range)).trimmingCharacters(in: .whitespaces)
+        guard !selected.isEmpty else { return nil }
         let prefix = String(before.suffix(context)).trimmingLeading()
         let suffix = String(after.prefix(context)).trimmingTrailing()
         if selected.count <= maxQuote { return (PageQuote(quote: selected, prefix: prefix, suffix: suffix), nil) }
@@ -259,6 +265,7 @@ public enum SharedSelectionText {
 
     /// Where a highlight is in `text` (UTF-16), nil when its words are not there.
     public static func range(start: PageQuote, end: PageQuote?, in text: String) -> NSRange? {
+        if start.quote.isEmpty { return caret(start, in: text).map { NSRange(location: $0, length: 0) } }
         guard let first = find(start, in: text, from: 0) else { return nil }
         var upper = NSMaxRange(first)
         if let end {
@@ -266,6 +273,26 @@ public enum SharedSelectionText {
             upper = NSMaxRange(last)
         }
         return NSRange(location: first.location, length: max(0, upper - first.location))
+    }
+
+    /// Where a caret is: between its prefix and its suffix. The words after it are looked for (the words before it at the end of the
+    /// text), and the match whose other side agrees wins.
+    static func caret(_ quote: PageQuote, in text: String) -> Int? {
+        let ns = text as NSString
+        let after = quote.suffix.trimmingCharacters(in: .whitespaces)
+        let before = quote.prefix.trimmingCharacters(in: .whitespaces)
+        if after.isEmpty {
+            guard !before.isEmpty, let match = find(PageQuote(quote: before, prefix: "", suffix: ""), in: text, from: 0) else {
+                return nil
+            }
+            // Nothing after it: the caret is at the end of the text, after the words before it and the spaces that follow them.
+            let trailing = quote.prefix.count - quote.prefix.trimmingTrailing().count
+            return min(ns.length, NSMaxRange(match) + trailing)
+        }
+        guard let match = find(PageQuote(quote: after, prefix: quote.prefix, suffix: ""), in: text, from: 0) else { return nil }
+        // Spaces between the caret and the words after it were part of the suffix.
+        let leading = quote.suffix.count - quote.suffix.trimmingLeading().count
+        return max(0, min(ns.length, match.location - leading))
     }
 
     /// The best match of `quote`'s words in `text` at or after `from`: the one whose surroundings agree most, the first among equals.

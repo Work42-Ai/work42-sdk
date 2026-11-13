@@ -583,7 +583,7 @@ public struct Work42SelectableProse: NSViewRepresentable {
         view.delegate = context.coordinator
         context.coordinator.view = view
         // Its highlights are shared with the session's others, and theirs drawn here (WOR-773 §6).
-        context.coordinator.shared = SharedSelectionTextSurface(textView: view)
+        context.coordinator.shared = SharedSelectionTextSurface(host: view)
         configure(view, context: context)
         view.setProse(text, styler: context.environment.markdownInlineCodeStyler.resolve, dark: context.environment.colorScheme == .dark)
         return view
@@ -829,7 +829,7 @@ public struct Work42SelectableProse: UIViewRepresentable {
         view.delegate = context.coordinator
         context.coordinator.observeSelectionClearing(of: view)
         // Its highlights are shared with the session's others, and theirs drawn here (WOR-773 §6).
-        context.coordinator.shared = SharedSelectionTextSurface(textView: view)
+        context.coordinator.shared = SharedSelectionTextSurface(host: view)
         // The Pencil squeeze dictates into the highlight here exactly as this view's "Dictate Work42" item does (AC166).
         Work42SelectionDictation.register(
             context.coordinator, window: { [weak view] in view.flatMap { WindowFocus.id(of: $0) } }
