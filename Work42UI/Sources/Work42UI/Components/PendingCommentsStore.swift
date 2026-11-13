@@ -212,6 +212,10 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
     /// what they're commenting on without leaving the chat.
     public let excerpt: String
     public var body: String
+    /// Whose instance of a personal widget (a browser) the comment was made in, so its widget id names that instance
+    /// (`w_widget_github_yan_ipad`) and an agent acts in the page the person pointed at. Nil for a shared or hosted widget, which has
+    /// one instance. The store fills it in from where the comment is made (`PendingCommentsStore.instanceOwner`).
+    public var instance: WidgetInstanceID.Owner?
 
     public init(
         id: UUID = UUID(),
@@ -219,7 +223,8 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         startLine: Int,
         endLine: Int,
         excerpt: String,
-        body: String
+        body: String,
+        instance: WidgetInstanceID.Owner? = nil
     ) {
         self.id = id
         self.source = source
@@ -227,6 +232,7 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         self.endLine = endLine
         self.excerpt = excerpt
         self.body = body
+        self.instance = instance
     }
 
     /// Human-readable label for the composer card — e.g.
@@ -348,17 +354,6 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// `"w_" + kindId` with colons mapped to underscores (e.g. `widget:github`
-    /// becomes `w_widget_github`) — reproduced inline rather than calling
-    /// `Flow42Core.WidgetRuntime.runtimeId(forKindId:)` (task42-plugin-
-    /// conversion, s5): Work42UI must never depend on Flow42Core, which
-    /// plugins don't link at all. Single source of truth for the derivation
-    /// stays `WidgetRuntime.runtimeId(forKindId:)` in Flow42Core — this is a
-    /// verbatim reproduction, same policy `Work42DB.StorageValue` documents
-    /// for a cross-target primitive.
-    private static func widgetRuntimeId(forKindId kindId: String) -> String {
-        "w_" + kindId.replacingOccurrences(of: ":", with: "_")
-    }
 
     /// The kind id (`WidgetRuntime.Descriptor.type`) of the session widget this
     /// comment originated from, or nil when the comment has no owning widget
@@ -388,13 +383,11 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// The stable, agent-addressable id of the originating widget —
-    /// `w_<kindId>` with colons mapped to underscores, matching
-    /// `SessionDetailPanel.widgetRuntimeId(for:)` /
-    /// `WidgetRuntime.runtimeId(forKindId:)` so the `widget_*` tools
-    /// resolves it. Nil when `widgetType` is nil (comments-on-widgets AC6).
+    /// The agent-addressable id of the widget instance the comment was made in (`WidgetInstanceID`): `w_<kindId>` for a shared or
+    /// hosted widget, `w_<kindId>_<person>_<device>` for one person's instance of a personal one. The same id the `widget_*` and
+    /// `device_*` tools take. Nil when `widgetType` is nil (comments-on-widgets AC6).
     public var widgetId: String? {
-        widgetType.map(Self.widgetRuntimeId(forKindId:))
+        widgetType.map { WidgetInstanceID.runtimeID(kindID: $0, owner: instance) }
     }
 
     /// One agent-facing line telling the agent it can inspect or drive the
@@ -407,7 +400,12 @@ public struct PendingComment: Identifiable, Equatable, Sendable {
     /// so callers can interpolate it inline.
     var widgetHintLine: String {
         guard let id = widgetId, let type = widgetType else { return "" }
-        return "Widget: `\(id)` (type `\(type)`) — inspect or drive it with `widget_list` and `widget_invoke` (id `\(id)`).\n"
+        guard let instance else {
+            return "Widget: `\(id)` (type `\(type)`) — inspect or drive it with `widget_list` and `widget_invoke` (id `\(id)`).\n"
+        }
+        // One person's own instance: the page they pointed at is theirs, on their device.
+        return "Widget: `\(id)` (type `\(type)`, \(instance.person)'s on their \(instance.device)) — drive this instance with "
+            + "`device_start` (device `\(id)`), or its intents with `widget_invoke` (id `\(id)`).\n"
     }
 
     /// Wraps `block` with the lean `[[comment:<kindTag>]] ... [[/comment]]`
@@ -722,6 +720,14 @@ public final class PendingCommentsStore: ObservableObject {
     /// wire it without Work42UI needing to know `ChatSession` exists.
     public var persistence: (any PendingCommentsPersisting)?
 
+    /// This device's own instance of a widget, by widget type (kind id): the person and device for a personal widget, nil for a shared
+    /// or hosted one. The host sets it, since only it knows who is here and which widgets are personal; a comment appended without an
+    /// instance gets this one, so whatever surface made it, its id names the instance the person was looking at (WOR-798).
+    public var instanceOwner: (@MainActor (String) -> WidgetInstanceID.Owner?)?
+
+    /// The same, for every store that has no `instanceOwner` of its own: what the host says once for all of this device's sessions.
+    public static var defaultInstanceOwner: (@MainActor (String) -> WidgetInstanceID.Owner?)?
+
     public init() {}
 
     /// Animated centrally (not left to each call site) so every caller —
@@ -737,6 +743,10 @@ public final class PendingCommentsStore: ObservableObject {
     /// — the same text `serializedForPrompt()` would send — so the comment
     /// survives tab switches, panel close, and app restart (AC2).
     public func append(_ comment: PendingComment) {
+        var comment = comment
+        if comment.instance == nil, let type = comment.widgetType {
+            comment.instance = (instanceOwner ?? Self.defaultInstanceOwner)?(type)
+        }
         withAnimation(.spring(response: 0.46, dampingFraction: 0.72)) {
             comments.append(comment)
         }
@@ -785,7 +795,8 @@ public final class PendingCommentsStore: ObservableObject {
             startLine: old.startLine,
             endLine: old.endLine,
             excerpt: old.excerpt,
-            body: old.body
+            body: old.body,
+            instance: old.instance
         )
     }
 
