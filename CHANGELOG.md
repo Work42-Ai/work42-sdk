@@ -12,6 +12,24 @@
   differently for each person. `permits(_:)`, `title(for:)`, `isEnabled(for:)` and `isConfirmed(for:)` read them.
 - **`WidgetCollaborator`**, **`WidgetCollaborationService`** (`members()`, `cursors()`, `report(_:)`), `WidgetAnchor` and
   `WidgetCursorReport`; `storage.person`, `setPerson`, `deletePerson` and `people` keep a value per person.
+- **Instances (WOR-798).** `InstanceKey` (session, widget, and the device for a personal widget; `cacheKey`) keeps one instance's tabs,
+  history and page state apart from every other. `WidgetInstanceID` makes the one id agents and people use for an instance: `w_<kind>`
+  for a shared or hosted widget, `w_<kind>_<person>_<device>` for one device's instance of a personal widget (`runtimeID(kindID:owner:)`,
+  `names(_:instanceOf:)`, `slug(_:)`). `Work42Widget.hostCollaboration` is what the host treats a widget as (a browser-backed widget
+  that declares nothing is personal), `WidgetCollaboration.isPersonal`, and `InstanceKey.runtimeID(owner:)`.
+- **Follow mode (WOR-796).** `Work42Widget.followSummary(services:)` returns a `FollowSummary` (its tabs and the one in front) for the
+  devices that follow this one; `FollowModeView` and `FollowModeHeaderModel` draw the read-only header ("Following <name> · <device>")
+  over the followed device's live picture.
+- **Shared selections (WOR-773 §6).** Everyone's highlight is shown to everyone in the session. `SharedSelectionHub` is the one place
+  highlights go through (`report`, `setActivity`, `connect`, `update`, `remote(in:)`, `observe`); `SharedSelectionPlace` and
+  `EnvironmentValues.sharedSelectionPlace` say which widget a surface is in. `SharedSelectionTextSurface` (with `SharedSelectionTextHost`)
+  and `SharedSelectionWebSurface` (through `SharedPageSelections`) report a person's highlight and draw the others'; `SharedSelectionText`
+  quotes and finds a highlight in text the way the page script does. The library's selectable views do this on their own.
+- **`PersonDart`** and `PersonDartView`: the one dart every person's pointer and highlight end is drawn with, their colour and name, with
+  typing dots while they write or dictate a comment.
+- **Comments name their instance.** `PendingComment.instance` (whose instance, on what device) and `PendingComment.widget` (the widget
+  kind, over `widgetType`) make `widgetId` an id the device and widget tools take; `PendingCommentsStore.instanceOwner` and
+  `defaultInstanceOwner` stamp it when a comment is added.
 
 ## 2.13.0
 
