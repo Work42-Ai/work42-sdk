@@ -61,7 +61,7 @@ import SwiftUI
 public struct BrowserChromeRow: View {
 
     /// Shared outer height for the three Liquid Glass control groups.
-    private static let controlGroupHeight: CGFloat = TileMetrics.controlHeight
+    private static var controlGroupHeight: CGFloat { TileMetrics.controlHeight }
 
     public let icon: String          // SF Symbol name for the widget type (e.g. "globe", "ticket")
     public let iconImageData: Data?  // Bundled brand mark; `icon` remains the fallback.
@@ -200,7 +200,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoBack ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -216,7 +216,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -230,7 +230,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoForward ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -253,7 +253,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: Self.controlGroupHeight, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -332,7 +332,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(model.isPicking ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
