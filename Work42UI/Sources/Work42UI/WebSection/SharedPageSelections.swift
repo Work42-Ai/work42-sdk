@@ -355,27 +355,28 @@ public final class SharedPageSelections {
             shadow.appendChild(box);
           });
           // Their dart where they are in the selection (its end, or its start when they selected backwards), and their name at
-          // its tail: the same stemless dart every pointer is drawn with.
+          // its tail: `PersonDart`, the same dart every pointer is drawn with.
           var edge = selection.backward ? rects[0] : rects[rects.length - 1];
           var tipX = selection.backward ? edge.left : edge.right, tipY = edge.top + edge.height * 0.5;
           var dart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          dart.setAttribute('width', '18');
-          dart.setAttribute('height', '21');
+          dart.setAttribute('width', '20');
+          dart.setAttribute('height', '23');
           dart.setAttribute('viewBox', '0 0 20 23');
-          dart.style.cssText = 'position:absolute;overflow:visible;left:' + (tipX - 2.7) + 'px;top:' + (tipY - 2.25) + 'px;';
+          dart.style.cssText = 'position:absolute;overflow:visible;left:' + (tipX - \#(PersonDart.tip.x)) + 'px;top:' +
+            (tipY - \#(PersonDart.tip.y)) + 'px;filter:drop-shadow(0 0.6px 0.8px rgba(0,0,0,0.3));';
           var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', 'M3 2.5 L3 20.5 L8.8 15.6 L16.8 15.2 Z');
+          path.setAttribute('d', '\#(PersonDart.svgPath)');
           path.setAttribute('fill', selection.color);
-          path.setAttribute('stroke', 'white');
-          path.setAttribute('stroke-width', '1.6');
+          path.setAttribute('stroke', 'rgba(255,255,255,0.92)');
+          path.setAttribute('stroke-width', '\#(PersonDart.edgeWidth)');
           path.setAttribute('stroke-linejoin', 'round');
           dart.appendChild(path);
           shadow.appendChild(dart);
           var tag = document.createElement('div');
           tag.textContent = selection.name;
-          tag.style.cssText = 'position:absolute;left:' + (tipX + 11) + 'px;top:' + (tipY + 13) +
-            'px;padding:1px 6px;border-radius:999px;background:' + selection.color +
-            ';color:#fff;font:600 10px -apple-system,system-ui,sans-serif;line-height:15px;white-space:nowrap;';
+          tag.style.cssText = 'position:absolute;left:' + (tipX + \#(PersonDart.tagOffset.width)) + 'px;top:' +
+            (tipY + \#(PersonDart.tagOffset.height)) + 'px;padding:0 5px;border-radius:999px;background:' + selection.color +
+            ';color:#fff;font:700 9px Helvetica,-apple-system,sans-serif;line-height:13.5px;white-space:nowrap;';
           shadow.appendChild(tag);
         });
       }
