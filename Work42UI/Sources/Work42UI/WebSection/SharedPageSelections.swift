@@ -92,6 +92,26 @@ public final class SharedPageSelections {
         draw()
     }
 
+    /// What this person has selected in the page now, read from the page itself: `.nothing` when no text is selected, `.unknown`
+    /// when the page could not be asked (it is loading). The host reads it on its own beat, so the others mirror the selection as it
+    /// is, whatever events were missed.
+    public func currentSelection() async -> CurrentSelection {
+        guard let webView,
+              let value = try? await webView.evaluateJavaScript("window.__w42Shared ? window.__w42Shared.snapshot() : undefined"),
+              let text = value as? String
+        else { return .unknown }
+        guard text != "null", let data = text.data(using: .utf8),
+              let report = try? JSONDecoder().decode(PageSelectionReport.self, from: data)
+        else { return .nothing }
+        return .selected(report)
+    }
+
+    public enum CurrentSelection: Equatable, Sendable {
+        case unknown
+        case nothing
+        case selected(PageSelectionReport)
+    }
+
     /// Stops reporting and drawing: what this drew goes, and the page script falls silent.
     public func detach() {
         shown = []
@@ -167,27 +187,29 @@ public final class SharedPageSelections {
         return norm(r.toString()).slice(0, CONTEXT).trimEnd();
       }
       var timer = null, last = '';
-      function report() {
+      // The selection now, as the report the host is sent; null when nothing is selected.
+      function snapshot() {
         var selection = window.getSelection();
         var empty = !selection || selection.rangeCount === 0 || selection.isCollapsed;
         var range = empty ? null : selection.getRangeAt(0);
-        var text = range && !isOurs(range.commonAncestorContainer) && document.body.contains(range.commonAncestorContainer)
+        var text = range && document.body && !isOurs(range.commonAncestorContainer) && document.body.contains(range.commonAncestorContainer)
           ? norm(range.toString()).trim() : '';
-        if (!text) {
+        if (!text) { return null; }
+        var prefix = textBefore(range), suffix = textAfter(range);
+        if (text.length <= MAX_QUOTE) { return { start: { quote: text, prefix: prefix, suffix: suffix } }; }
+        return { start: { quote: text.slice(0, HALF).trim(), prefix: prefix, suffix: '' },
+                 end: { quote: text.slice(-HALF).trim(), prefix: '', suffix: suffix } };
+      }
+      function report() {
+        var now = snapshot();
+        if (!now) {
           if (last !== '') { last = ''; post({ type: 'clear' }); }
           return;
         }
-        var prefix = textBefore(range), suffix = textAfter(range), message;
-        if (text.length <= MAX_QUOTE) {
-          message = { type: 'select', start: { quote: text, prefix: prefix, suffix: suffix } };
-        } else {
-          message = { type: 'select', start: { quote: text.slice(0, HALF).trim(), prefix: prefix, suffix: '' },
-                      end: { quote: text.slice(-HALF).trim(), prefix: '', suffix: suffix } };
-        }
-        var key = JSON.stringify(message);
+        var key = JSON.stringify(now);
         if (key === last) { return; }
         last = key;
-        post(message);
+        post({ type: 'select', start: now.start, end: now.end });
       }
       document.addEventListener('selectionchange', function () {
         clearTimeout(timer);
@@ -307,19 +329,40 @@ public final class SharedPageSelections {
               shadow.appendChild(box);
             });
           }
+          // Their dart at the end of what they selected, its tip on the last character, and their name at its tail: the same
+          // stemless dart every pointer is drawn with.
           var lastRect = rects[rects.length - 1];
+          var tipX = lastRect.right + window.scrollX, tipY = lastRect.top + window.scrollY + lastRect.height * 0.5;
+          var dart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          dart.setAttribute('width', '18');
+          dart.setAttribute('height', '21');
+          dart.setAttribute('viewBox', '0 0 20 23');
+          dart.style.cssText = 'position:absolute;overflow:visible;left:' + (tipX - 2.7) + 'px;top:' + (tipY - 2.25) + 'px;';
+          var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', 'M3 2.5 L3 20.5 L8.8 15.6 L16.8 15.2 Z');
+          path.setAttribute('fill', selection.color);
+          path.setAttribute('stroke', 'white');
+          path.setAttribute('stroke-width', '1.6');
+          path.setAttribute('stroke-linejoin', 'round');
+          dart.appendChild(path);
+          shadow.appendChild(dart);
           var tag = document.createElement('div');
           tag.textContent = selection.name;
-          tag.style.cssText = 'position:absolute;left:' + (lastRect.right + window.scrollX) + 'px;top:' +
-            (lastRect.top + window.scrollY - 17) + 'px;transform:translateX(-50%);padding:1px 6px;border-radius:999px;background:' +
-            selection.color + ';color:#fff;font:600 10px -apple-system,system-ui,sans-serif;line-height:15px;white-space:nowrap;';
+          tag.style.cssText = 'position:absolute;left:' + (tipX + 11) + 'px;top:' + (tipY + 13) +
+            'px;padding:1px 6px;border-radius:999px;background:' + selection.color +
+            ';color:#fff;font:600 10px -apple-system,system-ui,sans-serif;line-height:15px;white-space:nowrap;';
           shadow.appendChild(tag);
         });
         sheet().textContent = css;
       }
       var redraw = null;
       window.addEventListener('resize', function () { clearTimeout(redraw); redraw = setTimeout(draw, 100); });
-      window.__w42Shared = { show: function (selections) { current = selections || []; draw(); } };
+      window.__w42Shared = {
+        show: function (selections) { current = selections || []; draw(); },
+        // What is selected now, as JSON ('null' for nothing): read by the host on its own beat, so a selection change no event
+        // reported (or one whose message was lost) still reaches the others.
+        snapshot: function () { return JSON.stringify(snapshot()); }
+      };
       post({ type: 'ready' });
     })();
     """#
