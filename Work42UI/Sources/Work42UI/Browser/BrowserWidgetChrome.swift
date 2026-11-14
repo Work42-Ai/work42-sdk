@@ -57,7 +57,7 @@ public func makeWebWidgetChrome(
     headerAccessory: AnyView = AnyView(EmptyView()),
     headerAccessoryPillTint: Color? = nil
 ) -> WidgetChrome<AnyView> {
-    WidgetChrome(
+    var chrome = WidgetChrome(
         title: label,
         systemImage: icon,
         minWidth: minWidth,
@@ -74,10 +74,6 @@ public func makeWebWidgetChrome(
                 onGoForward: onGoForward,
                 onStop: onStop,
                 onNavigate: onNavigate,
-                // The optional per-widget accessory (Preview's Record button)
-                // joins the shared trailing glass pill after the picker.
-                pillAccessory: headerAccessory,
-                pillTint: headerAccessoryPillTint,
                 // The engine appends its controls pill (people, move, close) after this header.
                 // Read when the header renders, so Refresh/Stop follows the live view's status.
                 webStatus: webStatus()
@@ -91,4 +87,7 @@ public func makeWebWidgetChrome(
         floatingHeader: false,
         actions: { AnyView(EmptyView()) }
     )
+    // The per-widget accessory (Preview's Record) is a segment of the tile's one pill, not a pill of its own (WOR-807).
+    chrome.pillLeading = headerAccessory
+    return chrome
 }

@@ -93,6 +93,9 @@ public struct WidgetChrome<Actions: View> {
     /// S1 anti-flash gate; `.failed` shows the message + an optional Retry button.
     /// The overlay sits ABOVE content (content stays mounted, not replaced).
     public let loadingState: WidgetLoadingState
+    /// Segments of the widget's own that lead the controls pill (the Browser's Record), drawn by the host inside the same pill as the
+    /// people, "···" and ✕, each followed by a hairline. Nil leaves the pill's base alone. Set by the widget's chrome builder.
+    public var pillLeading: AnyView? = nil
 
     public init(
         title: String,

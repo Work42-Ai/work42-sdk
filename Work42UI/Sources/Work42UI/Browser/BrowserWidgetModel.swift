@@ -333,13 +333,6 @@ public final class BrowserWidgetModel: ObservableObject {
 
     // MARK: - Picker API (lanky-pine.5 / AC1)
 
-    /// Arms element-picker mode for this tile (lanky-pine.5 / AC1).
-    /// The BrowserHighlightLayer observes `isPicking` and injects the
-    /// picker overlay into the WKWebView.
-    public func openPicker() {
-        isPicking = true
-    }
-
     /// Disarms element-picker mode for this tile (lanky-pine.5 / AC6).
     /// The BrowserHighlightLayer observes `isPicking` and removes the
     /// picker overlay from the WKWebView.

@@ -167,29 +167,6 @@ public struct BrowserChromeRow: View {
 
     private var chromeRow: some View {
         HStack(spacing: DT.s8) {
-            // Widget label (icon + name) — compact left anchor
-            HStack(spacing: 4) {
-                if let data = iconImageData, let image = PlatformImage(data: data) {
-                    Image(platformImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 11, height: 11)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                }
-                Text(label)
-                    .font(.system(size: DT.f12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .padding(.trailing, 4)
-            .overlay(alignment: .trailing) {
-                Rectangle().fill(.primary.opacity(0.07)).frame(width: 1)
-                    .offset(x: 4)
-            }
-
             // Back + Refresh + Forward grouped pill (refresh sits between the
             // two chevrons).
             TileControlGroup {
@@ -313,33 +290,11 @@ public struct BrowserChromeRow: View {
                 if model.canEditURL, !model.isReadOnly { isURLFieldFocused = true }
             }
 
-            // Trailing controls: picker | accessory? | zoom? | loading?
-            // (+ new-tab moved into the URL capsule; refresh moved into the nav pill.)
+            // Trailing controls: zoom? | loading? — only while there is something to show, so no empty pill sits in the row.
+            // (+ new-tab moved into the URL capsule; refresh moved into the nav pill; the element picker is gone and Record is
+            // a segment of the tile's pill, WOR-807.)
+            if model.zoomPercent != 100 || webStatus == .loading {
             TileControlGroup(tint: pillTint) {
-                // Element picker toggle (lanky-pine.5 / AC1). Arms/disarms the
-                // element-picker overlay in the WKWebView, wired by BrowserHighlightLayer.
-                // accentColor when active, tertiary when inactive.
-                // This is the canonical highlight affordance — replaces the old
-                // onHighlight callback button from humble-harbor.6.
-                Button {
-                    withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
-                        if model.isPicking { model.closePicker() } else { model.openPicker() }
-                    }
-                } label: {
-                    ZStack {
-                        Color.clear
-                        Image(systemName: "viewfinder")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(model.isPicking ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
-                    }
-                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Highlight element for the agent")
-
-                pillAccessory
-
                 // Zoom-percentage pill (dewy-flint.3 / AC9): shown only when the
                 // active tab's zoom is not 100%. Clicking resets zoom to 100%.
                 if model.zoomPercent != 100 {
@@ -361,6 +316,7 @@ public struct BrowserChromeRow: View {
             }
             .disabled(model.isReadOnly)
             .frame(height: Self.controlGroupHeight)
+            }
 
             // Widget controls (⋯ move menu + ✕ close) handed down by
             // WidgetChrome, pinned to this top row.
