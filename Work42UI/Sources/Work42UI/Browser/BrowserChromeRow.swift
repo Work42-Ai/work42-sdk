@@ -44,6 +44,11 @@ import UIKit
 import SwiftUI
 // WebSectionStatus is declared in Work42UI (WebSectionView.swift, lanky-pine.3)
 
+private struct AddressWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = .infinity
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 // MARK: - BrowserChromeRow
 
 /// The compact browser navigation row:
@@ -111,6 +116,55 @@ public struct BrowserChromeRow: View {
     /// macOS `NSTextField` selects all text automatically on `becomeFirstResponder`,
     /// so setting this to true both focuses and selects the current URL contents.
     @FocusState private var isURLFieldFocused: Bool
+
+    /// The address capsule's width: the widget's name before the address needs room, so it drops to the mark alone below
+    /// `namePrefixMinWidth` (WOR-807).
+    @State private var addressWidth: CGFloat = .infinity
+    static var namePrefixMinWidth: CGFloat { 280 }
+
+    /// Whether the capsule has room for the name as well as the mark.
+    static func showsName(addressWidth: CGFloat) -> Bool { addressWidth >= namePrefixMinWidth }
+
+    /// The widget's mark in the slot a favicon would take, then its name as a muted prefix and a "·" before the address
+    /// ("Browser · example.com"). Short of space only the mark stays.
+    @ViewBuilder
+    private var identityPrefix: some View {
+        HStack(spacing: DT.s4) {
+            identityMark
+            if Self.showsName(addressWidth: addressWidth) {
+                Text(label)
+                    .font(.system(size: DT.f13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                Text("·")
+                    .font(.system(size: DT.f13))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
+    @ViewBuilder
+    private var identityMark: some View {
+        if let image = iconImageData.flatMap(Self.platformImage) {
+            image.resizable().scaledToFit().frame(width: 14, height: 14)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 14, height: 14)
+        }
+    }
+
+    private static func platformImage(_ data: Data) -> Image? {
+        #if canImport(AppKit)
+        NSImage(data: data).map { Image(nsImage: $0) }
+        #else
+        UIImage(data: data).map { Image(uiImage: $0) }
+        #endif
+    }
 
     public init(
         icon: String,
@@ -236,6 +290,7 @@ public struct BrowserChromeRow: View {
                 .buttonStyle(.plain)
                 .help("New tab")
                 .disabled(model.isReadOnly)
+                identityPrefix
                 if model.isReadOnly {
                     // Someone else's address: it can be selected and copied, not edited.
                     Text(model.urlDraft)
@@ -284,6 +339,12 @@ public struct BrowserChromeRow: View {
             .padding(.horizontal, DT.s12)
             .frame(height: Self.controlGroupHeight)
             .frame(maxWidth: .infinity)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: AddressWidthKey.self, value: proxy.size.width)
+                }
+            )
+            .onPreferenceChange(AddressWidthKey.self) { addressWidth = $0 }
             .tileControlSurface()
             .contentShape(Capsule())
             .onTapGesture {
