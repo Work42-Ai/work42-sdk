@@ -1,25 +1,22 @@
+import SwiftUI
 import Testing
 
 @testable import Work42UI
 
-@Suite("The follow header (WOR-796)")
+@MainActor
+@Suite("Follow mode is the widget's own chrome, read-only (WOR-808)")
 struct FollowModeViewTests {
-    @Test("the header names the person and the device, and marks the tab in front")
-    func header() {
-        let model = FollowModeHeaderModel(name: "Alex", device: "iPad", tabs: ["Docs", "Inbox"], selected: 1)
-        #expect(model.title == "Following Alex · iPad")
-        #expect(model.tabs == ["Docs", "Inbox"] && model.selected == 1)
-        #expect(model.acting == nil)
+    @Test("the view takes a label and a colour and no header")
+    func builds() {
+        // A header of its own is gone: the session's people pill says whom this device follows, the widget's pill who is acting.
+        _ = FollowModeView(label: "Following Alex · iPad", color: .blue) { Color.clear }
     }
 
-    @Test("a selection outside the tabs marks none")
-    func outside() {
-        #expect(FollowModeHeaderModel(name: "Alex", device: "Mac", tabs: ["Docs"], selected: 4).selected == nil)
-        #expect(FollowModeHeaderModel(name: "Alex", device: "Mac", tabs: [], selected: 0).selected == nil)
-    }
-
-    @Test("an agent acting in the followed instance is said in the header")
-    func agent() {
-        #expect(FollowModeHeaderModel(name: "Alex", device: "Mac", tabs: [], selected: nil, agentActing: "Claude").acting == "Claude is acting")
+    @Test("a browser model mirrors someone else's widget read-only")
+    func readOnlyModel() {
+        let model = BrowserWidgetModel(canEditURL: false, presetSelector: "")
+        model.isReadOnly = true
+        #expect(model.isReadOnly)
+        #expect(!model.canEditURL)
     }
 }
