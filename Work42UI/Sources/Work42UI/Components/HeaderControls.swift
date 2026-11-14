@@ -39,7 +39,9 @@ public struct WidgetHeaderTitle: View {
                     .truncationMode(.middle)
             }
         }
-        .frame(minWidth: 0, alignment: .leading)
+        // The block is laid out at the control height: a name over a subtitle is a little taller than a control, and left to itself it
+        // would make its header's row taller than every other header's. The text's own line space absorbs the difference.
+        .frame(minWidth: 0, minHeight: TileMetrics.controlHeight, maxHeight: TileMetrics.controlHeight, alignment: .leading)
     }
 }
 
@@ -173,6 +175,79 @@ public struct HeaderSegmentDivider: View {
 
     public var body: some View {
         Rectangle().fill(DT.chipStroke).frame(width: 1, height: TileMetrics.controlHeight)
+    }
+}
+
+// MARK: - Tab strip
+
+/// One tab of a `HeaderTabStrip`: whatever its label draws (a mark, a name, a status dot), and an optional close.
+public struct HeaderTab<ID: Hashable>: Identifiable {
+    public let id: ID
+    public let help: String
+    public let onClose: (() -> Void)?
+    fileprivate let label: AnyView
+
+    public init<Label: View>(id: ID, help: String, onClose: (() -> Void)? = nil, @ViewBuilder label: () -> Label) {
+        self.id = id
+        self.help = help
+        self.onClose = onClose
+        self.label = AnyView(label())
+    }
+}
+
+/// A capsule of tabs, one selected, at exactly the control height so a header that holds one stays one row high. The selected tab is
+/// tinted in the accent colour; a tab with `onClose` draws its ✕.
+public struct HeaderTabStrip<ID: Hashable>: View {
+    private let tabs: [HeaderTab<ID>]
+    private let selection: ID?
+    private let onSelect: (ID) -> Void
+
+    public init(_ tabs: [HeaderTab<ID>], selection: ID?, onSelect: @escaping (ID) -> Void) {
+        self.tabs = tabs
+        self.selection = selection
+        self.onSelect = onSelect
+    }
+
+    /// The tab's height: the strip's less its 2 pt inset on each side.
+    public static var tabHeight: CGFloat { TileMetrics.controlHeight - 4 }
+
+    public var body: some View {
+        HStack(spacing: 2) {
+            ForEach(tabs) { tab in
+                let selected = tab.id == selection
+                Button { onSelect(tab.id) } label: {
+                    HStack(spacing: 5) {
+                        tab.label
+                        if let onClose = tab.onClose {
+                            Button(action: onClose) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 14, height: 14)
+                                    .background(Circle().fill(Color.primary.opacity(0.08)))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: Self.tabHeight)
+                    .background {
+                        if selected {
+                            Capsule(style: .continuous).fill(DT.systemAccent.opacity(0.16))
+                                .overlay(Capsule(style: .continuous).strokeBorder(DT.systemAccent.opacity(0.32), lineWidth: 0.5))
+                        }
+                    }
+                    .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help(tab.help)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .frame(height: TileMetrics.controlHeight)
+        .tileControlSurface()
+        .animation(.easeInOut(duration: 0.15), value: selection)
     }
 }
 
