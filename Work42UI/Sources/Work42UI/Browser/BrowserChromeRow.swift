@@ -49,6 +49,11 @@ private struct AddressWidthKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
+private struct NameWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 // MARK: - BrowserChromeRow
 
 /// The compact browser navigation row:
@@ -120,13 +125,20 @@ public struct BrowserChromeRow: View {
     /// The tile's controls pill, when the tile offers it to this header to place (see `TileHeaderControls`).
     @Environment(\.tileHeaderControls) private var hostedControls
 
-    /// The address capsule's width: the widget's name before the address needs room, so it drops to the mark alone below
-    /// `namePrefixMinWidth` (WOR-807).
+    /// The address capsule's width and the width the widget's name takes at the address font. The name before the address shows only
+    /// while the address keeps `minAddressWidth` beside it; otherwise the mark stands alone and the room goes to the address (WOR-807, N1).
     @State private var addressWidth: CGFloat = .infinity
-    static var namePrefixMinWidth: CGFloat { 280 }
+    @State private var nameWidth: CGFloat = 0
 
-    /// Whether the capsule has room for the name as well as the mark.
-    static func showsName(addressWidth: CGFloat) -> Bool { addressWidth >= namePrefixMinWidth }
+    /// What the address must keep: enough to read a host name.
+    static var minAddressWidth: CGFloat { 140 }
+    /// What the capsule spends besides the name and the address: its side padding, the "+", the mark and the gaps and "·" around the name.
+    static var identityOverhead: CGFloat { 2 * DT.s12 + TileMetrics.controlHeight + DT.s8 + 14 + 2 * DT.s4 + DT.s4 + 6 }
+
+    /// Whether the capsule has room for the name as well as the mark, with the address still readable.
+    static func showsName(addressWidth: CGFloat, nameWidth: CGFloat) -> Bool {
+        addressWidth - identityOverhead - nameWidth >= minAddressWidth
+    }
 
     /// The widget's mark in the slot a favicon would take, then its name as a muted prefix and a "·" before the address
     /// ("Browser · example.com"). Short of space only the mark stays.
@@ -134,7 +146,7 @@ public struct BrowserChromeRow: View {
     private var identityPrefix: some View {
         HStack(spacing: DT.s4) {
             identityMark
-            if Self.showsName(addressWidth: addressWidth) {
+            if Self.showsName(addressWidth: addressWidth, nameWidth: nameWidth) {
                 Text(label)
                     .font(.system(size: DT.f13))
                     .foregroundStyle(.secondary)
@@ -147,6 +159,15 @@ public struct BrowserChromeRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
+        // The name's own width, measured whether or not it is drawn, so the rule above does not flip back and forth.
+        .background(alignment: .leading) {
+            Text(label)
+                .font(.system(size: DT.f13))
+                .fixedSize()
+                .hidden()
+                .background(GeometryReader { proxy in Color.clear.preference(key: NameWidthKey.self, value: proxy.size.width) })
+        }
+        .onPreferenceChange(NameWidthKey.self) { nameWidth = $0 }
     }
 
     @ViewBuilder
