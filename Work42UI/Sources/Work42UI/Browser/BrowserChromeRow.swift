@@ -117,6 +117,9 @@ public struct BrowserChromeRow: View {
     /// so setting this to true both focuses and selects the current URL contents.
     @FocusState private var isURLFieldFocused: Bool
 
+    /// The tile's controls pill, when the tile offers it to this header to place (see `TileHeaderControls`).
+    @Environment(\.tileHeaderControls) private var hostedControls
+
     /// The address capsule's width: the widget's name before the address needs room, so it drops to the mark alone below
     /// `namePrefixMinWidth` (WOR-807).
     @State private var addressWidth: CGFloat = .infinity
@@ -215,6 +218,8 @@ public struct BrowserChromeRow: View {
             }
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.82), value: model.showsTabBar)
+        // Says the controls pill is drawn in the first row, so the tile does not draw its own beside this header.
+        .preference(key: TileHeaderHostsControlsKey.self, value: hostedControls != nil)
     }
 
     // MARK: - Chrome row
@@ -380,8 +385,13 @@ public struct BrowserChromeRow: View {
             }
 
             // Widget controls (⋯ move menu + ✕ close) handed down by
-            // WidgetChrome, pinned to this top row.
-            trailingControls
+            // WidgetChrome, pinned to this top row. A tile that offers its controls pill (`tileHeaderControls`) gets it here, so the
+            // tab bar below runs the tile's full width instead of stopping short of the pill (N3).
+            if let hostedControls {
+                hostedControls
+            } else {
+                trailingControls
+            }
         }
         .padding(.horizontal, TileMetrics.chromeRowInset)
         .frame(height: Self.controlGroupHeight)
