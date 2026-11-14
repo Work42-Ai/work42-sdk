@@ -5,9 +5,12 @@ and any session, workflow, widget, or skill contributions it provides. Build
 native sources against `Work42PluginKit.framework` and `Work42UI.framework`
 inside the installed Work42 app so the host and plugin share one runtime copy.
 
-The current public contract is SDK `2.14.0`, ABI `16`. A plugin package must
+The current public contract is SDK `2.15.0`, ABI `16`. A plugin package must
 declare both values. ABI mismatches are rejected before a Swift entry point is
-called, so a plugin built for an older ABI must be rebuilt.
+called, so a plugin built for an older ABI must be rebuilt. A plugin built for
+SDK `2.13.0` or `2.14.0` has the same ABI and keeps loading; only a widget that
+adopts `Work42ItemWidget` (item kinds, `2.15.0`) needs a host that has them to
+get item tiles.
 
 Every widget is collaborative: a session can hold several people, on several
 devices, and agents. A widget that declares nothing is shared. See

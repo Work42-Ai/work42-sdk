@@ -20,6 +20,9 @@ Supported contracts include:
   `WidgetCollaborationService`, `WidgetAnchor`, `WidgetCursorReport`), per-person
   storage, `InstanceKey`, `hostCollaboration`, and `FollowSummary` /
   `Work42Widget.followSummary(services:)`
+- item kinds (2.15.0): the optional `Work42ItemWidget`, the session-scoped form of
+  `WidgetItemProvider`, with `WidgetItemKind`, `WidgetItemRef`, `WidgetItemPhase`,
+  `WidgetItemInfo` and `WidgetItemSurface` from `Work42UI`
 
 ## Work42UI
 
@@ -36,7 +39,11 @@ shared selections (`SharedSelectionHub`, `SharedSelectionPlace`,
 (`SupportedAgents`, `AgentIdentity`, `AgentColor`, `AgentMarks`, `AgentMark`,
 `AgentAvatarView`; `WidgetCollaborator.agent` in `Work42PluginKit`).
 
-See `Collaboration.md` for how a widget uses them.
+From 2.15.0 it includes the item-kind contract: `WidgetItemViewers`, `WidgetItemKind`,
+`WidgetItemRef`, `WidgetItemPhase`, `WidgetItemInfo`, `WidgetItemSurface`,
+`WidgetItemProvider`, and `WidgetItemAction` with `WidgetChrome.itemAction`.
+
+See `Collaboration.md` for how a widget uses the collaboration types.
 
 App-shell coordination types, Work42 database models, Settings screens,
 session navigation, capture/recording services, and process-management types
