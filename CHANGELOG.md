@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.14.0
+
+- **ABI generation `16`.** Collaboration is part of the SDK: `SessionServices` gained `actor` and `collaboration`, `WidgetIntentSpec` its
+  audience, scope and per-viewer fields, `WidgetStorageService` the per-person requirements, and `Work42Widget` `collaboration` and
+  `scopes`. Plugins built for ABI 15 or older must be rebuilt; **no source changes are needed**, every addition has a default.
+- **`WidgetCollaboration`**: `.shared(conflict:cursors:)` (the default), `.personal(agentControl:)`, `.hosted(input:)`.
+  **`WidgetScopeSpec`** names what a collaborator can be allowed to do (`Work42Widget.scopes`, default one `use` scope).
+- **Intents:** `requiring(_:)`, `forAudience(_:)` (`WidgetAudience`: owners, members, workflow roles, `.primaryDeviceOnly`),
+  `allowingAgents()` (agents cannot press an intent unless it says so) and `perViewer(title:isEnabled:isConfirmed:)`, so a button reads
+  differently for each person. `permits(_:)`, `title(for:)`, `isEnabled(for:)` and `isConfirmed(for:)` read them.
+- **`WidgetCollaborator`**, **`WidgetCollaborationService`** (`members()`, `cursors()`, `report(_:)`), `WidgetAnchor` and
+  `WidgetCursorReport`; `storage.person`, `setPerson`, `deletePerson` and `people` keep a value per person.
+- **Instances (WOR-798).** `InstanceKey` (session, widget, and the device for a personal widget; `cacheKey`) keeps one instance's tabs,
+  history and page state apart from every other. `WidgetInstanceID` makes the one id agents and people use for an instance: `w_<kind>`
+  for a shared or hosted widget, `w_<kind>_<person>_<device>` for one device's instance of a personal widget (`runtimeID(kindID:owner:)`,
+  `names(_:instanceOf:)`, `slug(_:)`). `Work42Widget.hostCollaboration` is what the host treats a widget as (a browser-backed widget
+  that declares nothing is personal), `WidgetCollaboration.isPersonal`, and `InstanceKey.runtimeID(owner:)`.
+- **Follow mode (WOR-796).** `Work42Widget.followSummary(services:)` returns a `FollowSummary` (its tabs and the one in front) for the
+  devices that follow this one; `FollowModeView` and `FollowModeHeaderModel` draw the read-only header ("Following <name> · <device>")
+  over the followed device's live picture.
+- **Shared selections (WOR-773 §6).** Everyone's highlight is shown to everyone in the session. `SharedSelectionHub` is the one place
+  highlights go through (`report`, `setActivity`, `connect`, `update`, `remote(in:)`, `observe`); `SharedSelectionPlace` and
+  `EnvironmentValues.sharedSelectionPlace` say which widget a surface is in. `SharedSelectionTextSurface` (with `SharedSelectionTextHost`)
+  and `SharedSelectionWebSurface` (through `SharedPageSelections`) report a person's highlight and draw the others'; `SharedSelectionText`
+  quotes and finds a highlight in text the way the page script does. The library's selectable views do this on their own.
+- **`PersonDart`** and `PersonDartView`: the one dart every person's pointer and highlight end is drawn with, their colour and name, with
+  typing dots while they write or dictate a comment.
+- **The supported agents are defined once (WOR-773).** `SupportedAgents` (`claude`, `codex`, `identity(for:)`, `isSupported(_:)`) and
+  `AgentIdentity` (id, name, brand `color`, `pointer` colour, `markAsset`, `markKeepsColor`, `symbol`, `tagGlyph`, `markTile`) say
+  who an agent is, with `AgentColor` for the colours (Foundation only, so a model layer can name an agent). `AgentMarks` finds the
+  bundled mark files, `AgentMark` draws one and `AgentAvatarView` draws an agent's avatar, ringed while it acts. A
+  `WidgetCollaborator` that is an agent carries its `agent` identity, so a plugin draws an agent exactly as the app does. Every
+  place in the app that names or draws an agent reads it from here; no other definition of an agent's name, colour or mark remains.
+- **Comments name their instance.** `PendingComment.instance` (whose instance, on what device) and `PendingComment.widget` (the widget
+  kind, over `widgetType`) make `widgetId` an id the device and widget tools take; `PendingCommentsStore.instanceOwner` and
+  `defaultInstanceOwner` stamp it when a comment is added.
+
 ## 2.13.0
 
 - **ABI generation `15`.** A window of the app is now a first-class thing: theme, focus, the highlight and the composer target are kept

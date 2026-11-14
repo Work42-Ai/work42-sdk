@@ -14,12 +14,29 @@ Supported contracts include:
 - widget intents, link intents, header labels, and browser-surface hooks
 - `PluginEntryPoint`, `Work42SessionHooks`, and the exported entry-point ABI
 - `WidgetSDK` and `Work42SDKCompatibility`
+- collaboration (2.14.0): `WidgetCollaboration`, `WidgetScopeSpec`, `WidgetAudience`,
+  the intent access fields (`requiring`, `forAudience`, `allowingAgents`, `perViewer`),
+  `SessionServices.actor` and `collaboration` (`WidgetCollaborator`,
+  `WidgetCollaborationService`, `WidgetAnchor`, `WidgetCursorReport`), per-person
+  storage, `InstanceKey`, `hostCollaboration`, and `FollowSummary` /
+  `Work42Widget.followSummary(services:)`
 
 ## Work42UI
 
 Supported UI includes design tokens, theme values, cards, toolbars, loading
 states, widget chrome, browser chrome, annotation controls, Markdown views, and
 the `WebSection` surface used by plugin widgets.
+
+From 2.14.0 it also includes the collaboration visuals and ids: `WidgetInstanceID`,
+`PersonDart` / `PersonDartView`, `FollowModeView` / `FollowModeHeaderModel`, the
+shared selections (`SharedSelectionHub`, `SharedSelectionPlace`,
+`SharedSelectionTextSurface`, `SharedSelectionTextHost`, `SharedSelectionWebSurface`,
+`SharedPageSelections`, `SharedSelectionText`), `PendingComment.instance` /
+`widget` with `PendingCommentsStore.instanceOwner`, and the supported agents
+(`SupportedAgents`, `AgentIdentity`, `AgentColor`, `AgentMarks`, `AgentMark`,
+`AgentAvatarView`; `WidgetCollaborator.agent` in `Work42PluginKit`).
+
+See `Collaboration.md` for how a widget uses them.
 
 App-shell coordination types, Work42 database models, Settings screens,
 session navigation, capture/recording services, and process-management types

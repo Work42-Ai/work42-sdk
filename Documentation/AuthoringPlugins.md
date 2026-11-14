@@ -5,9 +5,14 @@ and any session, workflow, widget, or skill contributions it provides. Build
 native sources against `Work42PluginKit.framework` and `Work42UI.framework`
 inside the installed Work42 app so the host and plugin share one runtime copy.
 
-The current public contract is SDK `2.8.0`, ABI `13`. A plugin package must
+The current public contract is SDK `2.14.0`, ABI `16`. A plugin package must
 declare both values. ABI mismatches are rejected before a Swift entry point is
-called.
+called, so a plugin built for an older ABI must be rebuilt.
+
+Every widget is collaborative: a session can hold several people, on several
+devices, and agents. A widget that declares nothing is shared. See
+`Collaboration.md` for the three kinds of widget, scopes, who may press an
+intent, per-person storage, instance ids, follow mode and shared highlights.
 
 Use the `work42 plugin` commands to scaffold, inspect, build, test, install, and
 remove plugins. The complete agent workflow is delivered by the

@@ -29,9 +29,41 @@ public enum TileMetrics {
             top: (headerHeight - controlHeight) / 2, leading: headerLeading - chromeRowInset,
             bottom: (headerHeight - controlHeight) / 2, trailing: headerTrailing - chromeRowInset)
     }
-    /// The height of every control group in a header (and of the buttons in one), and the width of a button in a menu/close group.
-    public static let controlHeight: CGFloat = 28
-    public static let controlButtonWidth: CGFloat = 34
+    /// The height of every control group in a header (and of the buttons in one), and the width of a button in a menu/close group:
+    /// 28 pt and 34 pt on the Mac, 32 pt and 38 pt on a touch screen. The one source of these sizes: a header control, built-in or a
+    /// plugin's, reads them from here and never writes a number of its own (WOR-773, AC48).
+    public static func controlHeight(touch: Bool) -> CGFloat { touch ? 32 : 28 }
+    public static func buttonWidth(touch: Bool) -> CGFloat { touch ? 38 : 34 }
+    public static var controlHeight: CGFloat { controlHeight(touch: isTouch) }
+    public static var controlButtonWidth: CGFloat { buttonWidth(touch: isTouch) }
+
+    /// Whether this build draws the touch sizes (the iPad).
+    public static var isTouch: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
+    }
+
+    // MARK: A header row
+
+    /// The padding of a header row on every side (top, bottom, leading, trailing), as the Mac's `WidgetCard` pads its header.
+    public static var rowInset: CGFloat { DT.s12 }
+    /// The gap between the parts of a header row: the title block, the widget's controls, the pill.
+    public static var rowSpacing: CGFloat { DT.s8 }
+    /// A header row's height: a control's, plus the inset above and below it. 52 pt on the Mac, 56 pt on a touch screen.
+    public static func rowHeight(touch: Bool) -> CGFloat { controlHeight(touch: touch) + 2 * rowInset }
+    public static var rowHeight: CGFloat { rowHeight(touch: isTouch) }
+    /// The space above and below a control of `controlHeight` centred in a header row of `touch`'s height.
+    public static func verticalInset(controlHeight: CGFloat, touch: Bool) -> CGFloat {
+        max(0, (rowHeight(touch: touch) - controlHeight) / 2)
+    }
+    /// The title block's name and subtitle sizes: 14 and 10 pt on the Mac, a step up on a touch screen.
+    public static func titleSize(touch: Bool) -> CGFloat { DT.f12 + (touch ? 1 : 0) }
+    public static func subtitleSize(touch: Bool) -> CGFloat { 10 + (touch ? 1 : 0) }
+    public static var titleSize: CGFloat { titleSize(touch: isTouch) }
+    public static var subtitleSize: CGFloat { subtitleSize(touch: isTouch) }
 }
 
 public struct TileControlGroup<Content: View>: View {

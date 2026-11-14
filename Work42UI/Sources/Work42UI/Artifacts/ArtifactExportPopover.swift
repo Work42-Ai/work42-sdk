@@ -55,31 +55,49 @@ public struct ArtifactExportButton: View {
 
     @State private var isShowing = false
 
-    public init(title: String, onExport: @escaping (ArtifactExportFormat) -> Void) {
+    private let inHeader: Bool
+
+    /// `inHeader` draws it as a widget header's own pill (one Export segment, at the header's control size) instead of the glass
+    /// icon button a card uses.
+    public init(title: String, inHeader: Bool = false, onExport: @escaping (ArtifactExportFormat) -> Void) {
         self.title = title
+        self.inHeader = inHeader
         self.onExport = onExport
     }
 
     public var body: some View {
-        Button {
-            isShowing = true
-        } label: {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: DT.f13, weight: .medium))
+        control
+            .popover(isPresented: $isShowing, arrowEdge: .bottom) { popover }
+    }
+
+    @ViewBuilder
+    private var control: some View {
+        if inHeader {
+            HeaderPill([
+                HeaderSegment(id: "export", systemImage: "square.and.arrow.up", label: "Export \(title)") { isShowing = true }
+            ])
+        } else {
+            Button {
+                isShowing = true
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: DT.f13, weight: .medium))
+            }
+            .glassIconButton()
+            .help("Export \(title)")
+            .accessibilityLabel("Export")
         }
-        .glassIconButton()
-        .help("Export \(title)")
-        .accessibilityLabel("Export")
-        .popover(isPresented: $isShowing, arrowEdge: .bottom) {
-            ArtifactExportPopover(
-                title: title,
-                onSelect: { format in
-                    isShowing = false
-                    onExport(format)
-                },
-                onClose: { isShowing = false }
-            )
-        }
+    }
+
+    private var popover: some View {
+        ArtifactExportPopover(
+            title: title,
+            onSelect: { format in
+                isShowing = false
+                onExport(format)
+            },
+            onClose: { isShowing = false }
+        )
     }
 }
 

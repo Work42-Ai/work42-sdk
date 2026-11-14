@@ -62,10 +62,14 @@ nonisolated public struct WidgetMinSize: Codable, Sendable, Equatable {
 /// ADDITIONALLY promotes it to a visible button in the tab-bar row beside
 /// `+ Add Widget`, shown while this widget is open in the active tab — the
 /// SAME intent either way, never a second behavior surface ("all the
-/// buttons in the end should be just intents").
+/// buttons in the end should be just intents"). `.header` ADDITIONALLY draws it as a
+/// segment of the widget's header pill, beside the tile's people, "···" and ✕ (SDK 2.14.0,
+/// ABI 16): the same intent again, drawn by the host at the header's control size, so a
+/// widget never builds a header button of its own.
 public enum WidgetIntentPlacement: Sendable, Hashable {
     case palette
     case actionArea
+    case header
 }
 
 /// How an `.actionArea`-promoted intent renders as a button. Ignored
@@ -348,6 +352,83 @@ public struct WidgetIntentSpec: Sendable {
     /// caller (palette or `services.intents.execute`), never swallowed.
     public let perform: @MainActor () async throws -> Void
 
+    // MARK: Collaboration (SDK 2.14.0, ABI 16)
+    //
+    // Set with the chainable modifiers below, so every initialiser above keeps its call form.
+
+    /// The scope (`Work42Widget.scopes`) a collaborator needs to press this. Nil: any collaborator the audience allows.
+    public private(set) var requires: String? = nil
+
+    /// Which people this is for. Default: everyone in the session.
+    public private(set) var audience: WidgetAudience = .everyone
+
+    /// Whether an agent may press it. Default: not allowed.
+    public private(set) var agents: WidgetAgentAccess = .notAllowed
+
+    private var viewerTitle: (@MainActor (WidgetCollaborator) -> String)? = nil
+    private var viewerEnabled: (@MainActor (WidgetCollaborator) -> Bool)? = nil
+    private var viewerConfirmed: (@MainActor (WidgetCollaborator) -> Bool)? = nil
+
+    /// Needs `scope` (an id from `Work42Widget.scopes`).
+    public func requiring(_ scope: String) -> WidgetIntentSpec {
+        var copy = self
+        copy.requires = scope
+        return copy
+    }
+
+    /// For these people only.
+    public func forAudience(_ audience: WidgetAudience) -> WidgetIntentSpec {
+        var copy = self
+        copy.audience = audience
+        return copy
+    }
+
+    /// Lets an agent press it, as itself, when the audience and scope would otherwise allow a person.
+    public func allowingAgents() -> WidgetIntentSpec {
+        var copy = self
+        copy.agents = .allowed
+        return copy
+    }
+
+    /// The button reads differently for each viewer: any of the three may be nil to keep the viewer-independent one.
+    public func perViewer(
+        title: (@MainActor (WidgetCollaborator) -> String)? = nil,
+        isEnabled: (@MainActor (WidgetCollaborator) -> Bool)? = nil,
+        isConfirmed: (@MainActor (WidgetCollaborator) -> Bool)? = nil
+    ) -> WidgetIntentSpec {
+        var copy = self
+        copy.viewerTitle = title
+        copy.viewerEnabled = isEnabled
+        copy.viewerConfirmed = isConfirmed
+        return copy
+    }
+
+    /// Whether the label depends on who is looking, so a host knows to ask for it per viewer.
+    public var hasPerViewerTitle: Bool { viewerTitle != nil }
+
+    /// Whether `who` may press this, by audience and agent setting. Whether they hold the scope is the host's check.
+    public func permits(_ who: WidgetCollaborator) -> Bool {
+        who.isAgent ? agents == .allowed : audience.allows(who)
+    }
+
+    /// The label `who` sees: the per-viewer one, else the live `actionAreaTitle`, else the static `title`.
+    @MainActor
+    public func title(for who: WidgetCollaborator) -> String {
+        viewerTitle?(who) ?? actionAreaTitle?() ?? title
+    }
+
+    /// Whether the button is enabled for `who`.
+    @MainActor
+    public func isEnabled(for who: WidgetCollaborator) -> Bool {
+        viewerEnabled?(who) ?? isEnabled?() ?? true
+    }
+
+    /// Whether the button is confirmed for `who`: an approval is confirmed for the person who gave it, not for everyone.
+    @MainActor
+    public func isConfirmed(for who: WidgetCollaborator) -> Bool {
+        viewerConfirmed?(who) ?? isConfirmed?() ?? false
+    }
+
     /// Designated initialiser — source-compatible with all prior SDK
     /// versions. `isEnabled` defaults to `nil` (always enabled). The
     /// mangled symbol of this overload is unchanged from SDK v3, so dylibs
@@ -577,6 +658,15 @@ public protocol Work42Widget: AnyObject {
     /// `plan/subtasks`, both under namespace `plan`).
     var storageNamespace: String? { get }
 
+    /// How this widget behaves with more than one collaborator (SDK 2.14.0). Default: shared, last write wins, no cursors.
+    var collaboration: WidgetCollaboration { get }
+
+    /// What a collaborator can be allowed to do in this widget; `WidgetIntentSpec.requires` names one. Default: a single `use` scope.
+    var scopes: [WidgetScopeSpec] { get }
+
+    /// What a personal widget tells a device following this one: its tabs and the one in front. Default: no tabs.
+    func followSummary(services: SessionServices) -> FollowSummary
+
     /// The widget became live in a session (opened in a tab, or restored
     /// with a saved layout). Acquire resources here — never earlier: the
     /// instance existing does NOT mean the widget is on screen.
@@ -668,6 +758,15 @@ extension Work42Widget {
     /// Default: write to my own slug (unchanged behavior for every widget
     /// compiled before this member existed).
     public var storageNamespace: String? { nil }
+
+    /// Default: shared by the whole session, last write wins, no cursors.
+    public var collaboration: WidgetCollaboration { .default }
+
+    /// Default: one scope, `use`.
+    public var scopes: [WidgetScopeSpec] { [.use] }
+
+    /// Default: no tabs to tell.
+    public func followSummary(services: SessionServices) -> FollowSummary { .none }
 
     /// Default lifecycle: nothing to acquire.
     public func activate(services: SessionServices) {}

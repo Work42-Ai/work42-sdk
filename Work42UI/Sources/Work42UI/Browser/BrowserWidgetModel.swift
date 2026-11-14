@@ -18,11 +18,8 @@
 // hidden and the chrome looks exactly as before. Subtask .7 (GitHub PR widget)
 // calls these APIs to expose one tab per attached PR.
 //
-// Picker state (lanky-pine.5):
-// `isPicking` / `openPicker()` / `closePicker()` are the canonical
-// element-highlight affordance. The BrowserHighlightLayer (lanky-pine.6)
-// observes `isPicking` to inject/remove the picker overlay from the WKWebView.
-// BrowserChromeRow renders the viewfinder toggle button that calls these.
+// Picker state (lanky-pine.5): the element picker is gone from the UI (WOR-807), so nothing arms it any more.
+// `isPicking` and `closePicker()` remain for the BrowserHighlightLayer, which observes `isPicking` to remove the picker overlay.
 //
 // Selector API (backward-compat stubs):
 // The CSS selector-isolation UI has been removed (humble-harbor.6). The
@@ -102,6 +99,10 @@ public final class BrowserWidgetModel: ObservableObject {
     /// Whether the user can type a new URL in the capsule. False for Canvas (loopback URL is fixed).
     public let canEditURL: Bool
 
+    /// Someone else's browser, shown to read only (following another device): the chrome draws as usual, every control is disabled,
+    /// and the address can be selected and copied but not edited.
+    public var isReadOnly: Bool = false
+
     /// Kept for call-site compatibility. The preset selector UI has been
     /// removed (humble-harbor.6); this value is no longer applied via the
     /// toggle. Preset selectors for GitHub and Jira come from
@@ -134,8 +135,8 @@ public final class BrowserWidgetModel: ObservableObject {
 
     // MARK: - Picker state (lanky-pine.5 / AC1)
 
-    /// Whether element-picker mode is armed for this tile. Set by `openPicker()`
-    /// / `closePicker()`. The BrowserHighlightLayer (lanky-pine.6) observes this
+    /// Whether element-picker mode is armed for this tile. Nothing arms it now (WOR-807); `closePicker()`
+    /// clears it. The BrowserHighlightLayer (lanky-pine.6) observes this
     /// to inject/remove the picker overlay from the WKWebView.
     public var isPicking: Bool = false
 
@@ -328,13 +329,6 @@ public final class BrowserWidgetModel: ObservableObject {
     }
 
     // MARK: - Picker API (lanky-pine.5 / AC1)
-
-    /// Arms element-picker mode for this tile (lanky-pine.5 / AC1).
-    /// The BrowserHighlightLayer observes `isPicking` and injects the
-    /// picker overlay into the WKWebView.
-    public func openPicker() {
-        isPicking = true
-    }
 
     /// Disarms element-picker mode for this tile (lanky-pine.5 / AC6).
     /// The BrowserHighlightLayer observes `isPicking` and removes the

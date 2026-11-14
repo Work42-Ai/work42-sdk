@@ -94,6 +94,9 @@ let package = Package(
                 // work42-mark42.png — the brand 42 mark with its tile removed, drawn
                 // by Work42CommentCapsule (the native comment bubble).
                 .copy("Resources/work42-mark42.png"),
+                // provider-logos — the supported agents' marks (`SupportedAgents`, `AgentMarks`), shared by the app, the iPad app and
+                // every plugin that draws an agent.
+                .copy("Resources/provider-logos"),
             ],
             swiftSettings: concurrencySettings,
             // WebKit powers the reusable WebSectionView: a WKWebView that

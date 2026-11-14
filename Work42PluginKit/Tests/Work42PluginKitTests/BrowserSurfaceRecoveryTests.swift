@@ -3,6 +3,8 @@
 // A real `BrowserSurface` mounted in a window (WebKit only loads for a view that is in one), with its cache entry
 // torn down while it is on screen — the Home Jira board when its widget is deactivated around a session visit.
 // The surface must rebuild and finish loading instead of showing a spinner forever with no Refresh.
+//
+// The surface is mounted with a session scope, as the host does (WOR-794): an instance is always its session's own.
 
 import AppKit
 import Foundation
@@ -15,6 +17,9 @@ import WebKit
 @Suite("BrowserSurface recovers from a torn-down cache entry", .serialized)
 @MainActor
 struct BrowserSurfaceRecoveryTests {
+
+    /// The session scope the surfaces are mounted in.
+    private static let scope = "recovery-session"
 
     private let directory: URL
     private let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
@@ -32,15 +37,24 @@ struct BrowserSurfaceRecoveryTests {
         return url
     }
 
-    private func mount(key: String, url: URL, configure: ((BrowserWidgetModel) -> Void)? = nil) -> NSHostingView<BrowserSurface> {
-        let host = NSHostingView(rootView: BrowserSurface(
+    private func mount(key: String, url: URL, configure: ((BrowserWidgetModel) -> Void)? = nil) -> NSHostingView<AnyView> {
+        let surface = BrowserSurface(
             spec: BrowserSurfaceSpec(url: url, dataStoreKey: "w42-surface-recovery", title: "Board"),
             cacheKey: key,
             configure: configure
-        ))
+        )
+        let host = NSHostingView(rootView: AnyView(surface.environment(\.widgetCacheScope, Self.scope)))
         host.frame = window.contentView!.bounds
         window.contentView!.addSubview(host)
         return host
+    }
+
+    /// What the widget's `deactivate` does: tears the surface down in its own session's scope.
+    private func teardown(_ key: String) {
+        let cache = BrowserSurfaceCache.shared
+        cache.scope = Self.scope
+        cache.teardown(key: key)
+        cache.scope = nil
     }
 
     private func wait(timeout: TimeInterval = 60, until condition: () -> Bool) async -> Bool {
@@ -54,8 +68,8 @@ struct BrowserSurfaceRecoveryTests {
 
     /// The live view the surface currently shows for `key`, if its model and tab are cached.
     private func liveView(_ key: String) -> WebSectionLiveView? {
-        guard let tab = BrowserSurface.model(forKey: key)?.tabs.first else { return nil }
-        return BrowserSurfaceCache.shared.existing(forKey: "\(key):\(tab.id)")
+        guard let tab = BrowserSurface.model(forKey: key, scope: Self.scope)?.tabs.first else { return nil }
+        return BrowserSurfaceCache.shared.existing(forKey: "\(Self.scope)/\(key):\(tab.id)")
     }
 
     @Test("teardown while mounted: the surface rebuilds a model and a view that finishes loading")
@@ -63,15 +77,15 @@ struct BrowserSurfaceRecoveryTests {
         let key = "recovery-mounted-\(UUID().uuidString)"
         let url = try page("board.html")
         let host = mount(key: key, url: url)
-        defer { host.removeFromSuperview(); BrowserSurfaceCache.shared.teardown(key: key) }
+        defer { host.removeFromSuperview(); teardown(key) }
         #expect(await wait { liveView(key)?.status == .loaded })
         let first = liveView(key)
 
-        BrowserSurfaceCache.shared.teardown(key: key)
+        teardown(key)
 
         #expect(await wait { liveView(key)?.status == .loaded && liveView(key) !== first })
         #expect(liveView(key)?.webView.url == url)
-        #expect(BrowserSurface.model(forKey: key)?.tabs.count == 1)
+        #expect(BrowserSurface.model(forKey: key, scope: Self.scope)?.tabs.count == 1)
     }
 
     @Test("a deactivate that lands after the surface remounted does not leave it empty")
@@ -84,8 +98,8 @@ struct BrowserSurfaceRecoveryTests {
         host.removeFromSuperview()                       // Home unmounted (a session is open)
         host = mount(key: key, url: url)                 // Home shown again
         try await Task.sleep(for: .milliseconds(400))    // the remounted surface has resolved
-        BrowserSurfaceCache.shared.teardown(key: key)    // the old widget's deactivate arrives late
-        defer { host.removeFromSuperview(); BrowserSurfaceCache.shared.teardown(key: key) }
+        teardown(key)                                    // the old widget's deactivate arrives late
+        defer { host.removeFromSuperview(); teardown(key) }
 
         #expect(await wait { liveView(key)?.status == .loaded })
         #expect(liveView(key)?.webView.window != nil)
@@ -97,10 +111,10 @@ struct BrowserSurfaceRecoveryTests {
         let url = try page("board.html")
         var configured: [ObjectIdentifier] = []
         let host = mount(key: key, url: url) { configured.append(ObjectIdentifier($0)) }
-        defer { host.removeFromSuperview(); BrowserSurfaceCache.shared.teardown(key: key) }
+        defer { host.removeFromSuperview(); teardown(key) }
         #expect(await wait { liveView(key)?.status == .loaded })
 
-        BrowserSurfaceCache.shared.teardown(key: key)
+        teardown(key)
         #expect(await wait { liveView(key)?.status == .loaded && configured.count == 2 })
         #expect(configured[0] != configured[1])
     }
@@ -113,10 +127,10 @@ struct BrowserSurfaceRecoveryTests {
         #expect(await wait { liveView(key)?.status == .loaded })
 
         host.removeFromSuperview()                      // the widget closes: view goes away,
-        BrowserSurfaceCache.shared.teardown(key: key)   // then its deactivate tears the cache down
+        teardown(key)                                   // then its deactivate tears the cache down
         try await Task.sleep(for: .seconds(1))
 
-        #expect(BrowserSurface.model(forKey: key) == nil)
-        #expect(BrowserSurfaceCache.shared.existing(forKey: "\(key):anything") == nil)
+        #expect(BrowserSurface.model(forKey: key, scope: Self.scope) == nil)
+        #expect(BrowserSurfaceCache.shared.existing(forKey: "\(Self.scope)/\(key):anything") == nil)
     }
 }

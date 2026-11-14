@@ -122,7 +122,7 @@
 //
 // // In a declared intent:
 // func perform() async throws -> some IntentResult {
-//     BrowserSurface.model(forKey: id)?.openTab(url: url, title: "…")
+//     BrowserSurface.model(forKey: id, scope: services?.sessionId ?? "home")?.openTab(url: url, title: "…")
 //     return .result()
 // }
 // ```
@@ -311,9 +311,24 @@ public final class BrowserSurfaceCache {
     /// `teardown(key: id)` reaches the entries of ITS session only. Nil everywhere else.
     public var scope: String?
 
-    /// The cache key a surface in `scope` uses for `key` (`"<scope>/<key>"`; unchanged when `scope` is nil).
+    /// The namespace of a key with no session scope. A view with no scope never uses it (it gets a key of its own, see
+    /// `isolatedScope(environment:isolationID:)`), so nothing is ever cached under it and a lookup there finds nothing.
+    static let unscopedNamespace = "unscoped"
+
+    /// The cache key a surface in `scope` uses for `key` (`"<scope>/<key>"`). With no scope the key is placed in a namespace nothing
+    /// populates, never left bare: an instance is always its session's own (WOR-794, AC18).
     public static func scopedKey(_ key: String, scope: String?) -> String {
-        scope.map { "\($0)/\(key)" } ?? key
+        "\(scope ?? unscopedNamespace)/\(key)"
+    }
+
+    /// The cache key of an instance: its session, its widget and, for a personal widget, its device (WOR-794).
+    public static func scopedKey(for instance: InstanceKey) -> String { instance.cacheKey }
+
+    /// The scope a mounted surface caches under. The environment's session scope when the host gave one; otherwise a scope that belongs
+    /// to this one view (`isolated` is true), so a surface rendered outside a host never meets another surface's pages, tabs or history.
+    static func effectiveScope(environment: String?, isolationID: String) -> (scope: String, isolated: Bool) {
+        if let environment, !environment.isEmpty { return (environment, false) }
+        return ("\(unscopedNamespace)-\(isolationID)", true)
     }
 
     // MARK: - Internal model cache
@@ -393,7 +408,9 @@ public final class BrowserSurfaceCache {
     /// Call from the widget's `deactivate()` — a cached `WKWebView` is a
     /// heavyweight resource and "done means inert".
     public func teardown(key rawKey: String) {
-        tearDown(scopedKey: Self.scopedKey(rawKey, scope: scope))
+        // With no scope set the key is taken as given, as before. No view ever caches under a bare key now (an unscoped surface gets a
+        // scope of its own), so this reaches only what a caller put there directly, never another surface's instance.
+        tearDown(scopedKey: scope.map { Self.scopedKey(rawKey, scope: $0) } ?? rawKey)
     }
 
     /// `teardown(key:)` for a key that already carries its scope.
@@ -485,6 +502,10 @@ final class BrowserSurfaceState {
     }
 
     var resolution: Resolution = .resolving
+
+    /// Names this one mounted surface when the host gave it no session scope, so what it caches is its own and no other surface's.
+    /// Lives here, not on `BrowserSurface`, because a stored property there would change the struct's pinned layout (ABI).
+    let isolationID = UUID().uuidString
 
     /// Bumped to re-run a failed provider resolution (Retry button).
     var retryNonce = 0
@@ -614,12 +635,20 @@ public struct BrowserSurface: View {
 
     public var body: some View {
         // The scope is read in a nested view: a stored `@Environment` here would change this struct's size.
-        BrowserSurfaceScopeReader { scope in
-            let key = BrowserSurfaceCache.scopedKey(cacheKey, scope: scope)
+        BrowserSurfaceScopeReader { environmentScope in
+            // Every instance is its session's own (WOR-794). A surface the host gave no scope is a bug in the host: debug builds say so,
+            // and every build keeps this surface's pages to itself instead of sharing a bare key with another surface.
+            let resolved = BrowserSurfaceCache.effectiveScope(environment: environmentScope, isolationID: state.isolationID)
+            let _ = { if resolved.isolated { assertionFailure("BrowserSurface '\(cacheKey)' was rendered without a session scope (widgetCacheScope); it gets an isolated instance, but the host must set the scope.") } }()
+            let key = BrowserSurfaceCache.scopedKey(cacheKey, scope: resolved.scope)
             content(cacheKey: key)
                 // Counted while on screen, so the host lets go of a headless model only when no view shows it (WOR-644).
                 .onAppear { BrowserSurfaceCache.shared.mounted(key) }
-                .onDisappear { BrowserSurfaceCache.shared.unmounted(key) }
+                .onDisappear {
+                    BrowserSurfaceCache.shared.unmounted(key)
+                    // An isolated surface has no owner to tear it down, so it goes with its view.
+                    if resolved.isolated { BrowserSurfaceCache.shared.tearDown(scopedKey: key) }
+                }
                 // Re-runs when Retry is pressed AND when the cached model disappears while this surface is on
                 // screen (its widget was deactivated around a session visit): the surface rebuilds its model and
                 // views instead of showing a spinner with nothing behind it. Reading the cache here is what
@@ -676,7 +705,7 @@ public struct BrowserSurface: View {
     ///
     /// ```swift
     /// func perform() async throws -> some IntentResult {
-    ///     BrowserSurface.model(forKey: myWidgetId)?.openTab(url: url, title: "…")
+    ///     BrowserSurface.model(forKey: myWidgetId, scope: services?.sessionId ?? "home")?.openTab(url: url, title: "…")
     ///     return .result()
     /// }
     /// ```
@@ -684,6 +713,10 @@ public struct BrowserSurface: View {
     /// Returns nil before the surface has resolved its URL (provider still
     /// running or not yet mounted). The cache is populated in
     /// `resolveIfNeeded()` before the state flips to `.ready`.
+    ///
+    /// An instance belongs to a session (WOR-794): a surface is cached under its session's scope, so a bare key never finds one. Use
+    /// `model(forKey:scope:)` with the widget's session id.
+    @available(*, deprecated, message: "An instance belongs to a session; use model(forKey:scope:) with the widget's session id.")
     public static func model(forKey cacheKey: String) -> BrowserWidgetModel? {
         BrowserSurfaceCache.shared.existingModel(forKey: cacheKey)
     }

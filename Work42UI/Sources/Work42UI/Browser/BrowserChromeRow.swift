@@ -44,6 +44,16 @@ import UIKit
 import SwiftUI
 // WebSectionStatus is declared in Work42UI (WebSectionView.swift, lanky-pine.3)
 
+private struct AddressWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = .infinity
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct NameWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 // MARK: - BrowserChromeRow
 
 /// The compact browser navigation row:
@@ -61,7 +71,7 @@ import SwiftUI
 public struct BrowserChromeRow: View {
 
     /// Shared outer height for the three Liquid Glass control groups.
-    private static let controlGroupHeight: CGFloat = TileMetrics.controlHeight
+    private static var controlGroupHeight: CGFloat { TileMetrics.controlHeight }
 
     public let icon: String          // SF Symbol name for the widget type (e.g. "globe", "ticket")
     public let iconImageData: Data?  // Bundled brand mark; `icon` remains the fallback.
@@ -112,6 +122,74 @@ public struct BrowserChromeRow: View {
     /// so setting this to true both focuses and selects the current URL contents.
     @FocusState private var isURLFieldFocused: Bool
 
+    /// The tile's controls pill, when the tile offers it to this header to place (see `TileHeaderControls`).
+    @Environment(\.tileHeaderControls) private var hostedControls
+
+    /// The address capsule's width and the width the widget's name takes at the address font. The name before the address shows only
+    /// while the address keeps `minAddressWidth` beside it; otherwise the mark stands alone and the room goes to the address (WOR-807, N1).
+    @State private var addressWidth: CGFloat = .infinity
+    @State private var nameWidth: CGFloat = 0
+
+    /// What the address must keep: enough to read a host name.
+    static var minAddressWidth: CGFloat { 140 }
+    /// What the capsule spends besides the name and the address: its side padding, the "+", the mark and the gaps and "·" around the name.
+    static var identityOverhead: CGFloat { 2 * DT.s12 + TileMetrics.controlHeight + DT.s8 + 14 + 2 * DT.s4 + DT.s4 + 6 }
+
+    /// Whether the capsule has room for the name as well as the mark, with the address still readable.
+    static func showsName(addressWidth: CGFloat, nameWidth: CGFloat) -> Bool {
+        addressWidth - identityOverhead - nameWidth >= minAddressWidth
+    }
+
+    /// The widget's mark in the slot a favicon would take, then its name as a muted prefix and a "·" before the address
+    /// ("Browser · example.com"). Short of space only the mark stays.
+    @ViewBuilder
+    private var identityPrefix: some View {
+        HStack(spacing: DT.s4) {
+            identityMark
+            if Self.showsName(addressWidth: addressWidth, nameWidth: nameWidth) {
+                Text(label)
+                    .font(.system(size: DT.f13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                Text("·")
+                    .font(.system(size: DT.f13))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        // The name's own width, measured whether or not it is drawn, so the rule above does not flip back and forth.
+        .background(alignment: .leading) {
+            Text(label)
+                .font(.system(size: DT.f13))
+                .fixedSize()
+                .hidden()
+                .background(GeometryReader { proxy in Color.clear.preference(key: NameWidthKey.self, value: proxy.size.width) })
+        }
+        .onPreferenceChange(NameWidthKey.self) { nameWidth = $0 }
+    }
+
+    @ViewBuilder
+    private var identityMark: some View {
+        if let image = iconImageData.flatMap(Self.platformImage) {
+            image.resizable().scaledToFit().frame(width: 14, height: 14)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 14, height: 14)
+        }
+    }
+
+    private static func platformImage(_ data: Data) -> Image? {
+        #if canImport(AppKit)
+        NSImage(data: data).map { Image(nsImage: $0) }
+        #else
+        UIImage(data: data).map { Image(uiImage: $0) }
+        #endif
+    }
+
     public init(
         icon: String,
         iconImageData: Data? = nil,
@@ -155,39 +233,20 @@ public struct BrowserChromeRow: View {
                     onSelect: { id in model.selectTab(id) },
                     onClose:  { id in model.closeTab(id) }
                 )
+                // Someone else's tabs: shown, never switched or closed from here.
+                .disabled(model.isReadOnly)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.82), value: model.showsTabBar)
+        // Says the controls pill is drawn in the first row, so the tile does not draw its own beside this header.
+        .preference(key: TileHeaderHostsControlsKey.self, value: hostedControls != nil)
     }
 
     // MARK: - Chrome row
 
     private var chromeRow: some View {
         HStack(spacing: DT.s8) {
-            // Widget label (icon + name) — compact left anchor
-            HStack(spacing: 4) {
-                if let data = iconImageData, let image = PlatformImage(data: data) {
-                    Image(platformImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 11, height: 11)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                }
-                Text(label)
-                    .font(.system(size: DT.f12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .padding(.trailing, 4)
-            .overlay(alignment: .trailing) {
-                Rectangle().fill(.primary.opacity(0.07)).frame(width: 1)
-                    .offset(x: 4)
-            }
-
             // Back + Refresh + Forward grouped pill (refresh sits between the
             // two chevrons).
             TileControlGroup {
@@ -198,7 +257,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoBack ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -214,7 +273,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -228,7 +287,7 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(model.canGoForward ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
+                    .frame(width: TileMetrics.controlButtonWidth, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -236,6 +295,7 @@ public struct BrowserChromeRow: View {
                 .help("Forward")
                 .accessibilityLabel("Forward")
             }
+            .disabled(model.isReadOnly)
             .frame(height: Self.controlGroupHeight)
 
             // URL capsule — dominant flex element. The + new-tab control lives
@@ -250,12 +310,23 @@ public struct BrowserChromeRow: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AnyShapeStyle(.primary))
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: Self.controlGroupHeight, height: Self.controlGroupHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("New tab")
-                if model.canEditURL {
+                .disabled(model.isReadOnly)
+                identityPrefix
+                if model.isReadOnly {
+                    // Someone else's address: it can be selected and copied, not edited.
+                    Text(model.urlDraft)
+                        .font(.system(size: DT.f13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if model.canEditURL {
                     TextField("Search or enter website name", text: $model.urlDraft)
                         .textFieldStyle(.plain)
                         .font(.system(size: DT.f13))
@@ -294,39 +365,23 @@ public struct BrowserChromeRow: View {
             .padding(.horizontal, DT.s12)
             .frame(height: Self.controlGroupHeight)
             .frame(maxWidth: .infinity)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: AddressWidthKey.self, value: proxy.size.width)
+                }
+            )
+            .onPreferenceChange(AddressWidthKey.self) { addressWidth = $0 }
             .tileControlSurface()
             .contentShape(Capsule())
             .onTapGesture {
-                if model.canEditURL { isURLFieldFocused = true }
+                if model.canEditURL, !model.isReadOnly { isURLFieldFocused = true }
             }
 
-            // Trailing controls: picker | accessory? | zoom? | loading?
-            // (+ new-tab moved into the URL capsule; refresh moved into the nav pill.)
+            // Trailing controls: zoom? | loading? — only while there is something to show, so no empty pill sits in the row.
+            // (+ new-tab moved into the URL capsule; refresh moved into the nav pill; the element picker is gone and Record is
+            // a segment of the tile's pill, WOR-807.)
+            if model.zoomPercent != 100 || webStatus == .loading {
             TileControlGroup(tint: pillTint) {
-                // Element picker toggle (lanky-pine.5 / AC1). Arms/disarms the
-                // element-picker overlay in the WKWebView, wired by BrowserHighlightLayer.
-                // accentColor when active, tertiary when inactive.
-                // This is the canonical highlight affordance — replaces the old
-                // onHighlight callback button from humble-harbor.6.
-                Button {
-                    withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
-                        if model.isPicking { model.closePicker() } else { model.openPicker() }
-                    }
-                } label: {
-                    ZStack {
-                        Color.clear
-                        Image(systemName: "viewfinder")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(model.isPicking ? AnyShapeStyle(DT.systemAccent) : AnyShapeStyle(.tertiary))
-                    }
-                    .frame(width: TileMetrics.controlButtonWidth, height: 28)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Highlight element for the agent")
-
-                pillAccessory
-
                 // Zoom-percentage pill (dewy-flint.3 / AC9): shown only when the
                 // active tab's zoom is not 100%. Clicking resets zoom to 100%.
                 if model.zoomPercent != 100 {
@@ -346,11 +401,18 @@ public struct BrowserChromeRow: View {
                     LoadingIndicator(size: .small)
                 }
             }
+            .disabled(model.isReadOnly)
             .frame(height: Self.controlGroupHeight)
+            }
 
             // Widget controls (⋯ move menu + ✕ close) handed down by
-            // WidgetChrome, pinned to this top row.
-            trailingControls
+            // WidgetChrome, pinned to this top row. A tile that offers its controls pill (`tileHeaderControls`) gets it here, so the
+            // tab bar below runs the tile's full width instead of stopping short of the pill (N3).
+            if let hostedControls {
+                hostedControls
+            } else {
+                trailingControls
+            }
         }
         .padding(.horizontal, TileMetrics.chromeRowInset)
         .frame(height: Self.controlGroupHeight)

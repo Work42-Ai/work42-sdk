@@ -252,6 +252,8 @@ struct MarkdownWebView: PlatformViewRepresentable {
         context.coordinator.trailingHTML = trailingHTML
         context.coordinator.themeScope = themeScope
         context.coordinator.load(webView, text: text, dark: colorScheme == .dark)
+        // Its highlights are shared with the session's others, and theirs drawn here (WOR-773 §6).
+        context.coordinator.shared = SharedSelectionWebSurface(webView: webView, place: context.environment.sharedSelectionPlace)
         return webView
     }
 
@@ -270,6 +272,7 @@ struct MarkdownWebView: PlatformViewRepresentable {
         context.coordinator.onArtifactExpand = onArtifactExpand
         context.coordinator.trailingHTML = trailingHTML
         context.coordinator.themeScope = themeScope
+        context.coordinator.shared?.place = context.environment.sharedSelectionPlace
         context.coordinator.reloadIfNeeded(webView, text: text, dark: colorScheme == .dark)
         // Comment-only changes update the marks in place (no reload, so scroll +
         // any live selection survive).
@@ -286,6 +289,8 @@ struct MarkdownWebView: PlatformViewRepresentable {
     }
 
     private static func dismantleWebView(_ webView: WKWebView, coordinator: Coordinator) {
+        coordinator.shared?.detach()
+        coordinator.shared = nil
         coordinator.hideCapsule(animated: false)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.messageName)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.heightMessageName)
@@ -298,6 +303,8 @@ struct MarkdownWebView: PlatformViewRepresentable {
     public final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         static let messageName = "w42comment"
         static let heightMessageName = "w42height"
+        /// The page's part in sharing highlights.
+        var shared: SharedSelectionWebSurface?
 
         /// ResizeObserver → height messages so the host can auto-size the
         /// webview to its content (see `onContentHeight`). Measures
