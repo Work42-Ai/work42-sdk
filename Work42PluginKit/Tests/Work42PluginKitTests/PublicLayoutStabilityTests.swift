@@ -24,9 +24,11 @@ struct PublicLayoutStabilityTests {
     // ABI generation 13 (SDK 2.8.0): `BrowserSurface` holds an optional `SessionServices`, which grew by the 40-byte
     // `tools` existential: 384 -> 424. Widgets built for ABI 12 or older are rejected by the loader.
     // ABI generation 16 (SDK 2.14.0): `SessionServices` gained `actor` and `collaboration`: 424 -> 536.
+    // ABI generation 17 (SDK 2.16.0): `SessionServices` gained `files` and `platform` (two 40-byte existentials): 536 -> 616.
+    // Widgets built for ABI 16 or older are rejected by the loader.
     @Test("BrowserSurface keeps the layout widgets built against this ABI generation expect")
     func browserSurface() {
-        #expect(MemoryLayout<BrowserSurface>.size == 536)
+        #expect(MemoryLayout<BrowserSurface>.size == 616)
         #expect(MemoryLayout<BrowserSurface>.alignment == 8)
     }
 
@@ -51,9 +53,14 @@ struct PublicLayoutStabilityTests {
     @Test("the services and value types widgets receive and keep are unchanged")
     func servicesAndValueTypes() {
         // ABI generation 13 (SDK 2.8.0): each gained `tools` (one 40-byte existential): 192 -> 232, 232 -> 272.
-        #expect(MemoryLayout<WidgetBackgroundServices>.size == 232)
+        #expect(MemoryLayout<WidgetBackgroundServices>.size == 272)
         // ABI generation 16 (SDK 2.14.0): `SessionServices` gained `actor` (a struct) and `collaboration` (an existential): 272 -> 384.
-        #expect(MemoryLayout<SessionServices>.size == 384)
+        // ABI generation 17 (SDK 2.16.0): `SessionServices` gained `files` and `platform` (two 40-byte existentials): 384 -> 464.
+        // `WidgetBackgroundServices` gained `files` (one): 232 -> 272.
+        #expect(MemoryLayout<SessionServices>.size == 464)
+        #expect(MemoryLayout<WidgetFileEntry>.size == 40)
+        #expect(MemoryLayout<NoopWidgetFileService>.size == 0)
+        #expect(MemoryLayout<SystemWidgetPlatformService>.size == 0)
         #expect(MemoryLayout<UnavailableWidgetToolService>.size == 0)
         #expect(MemoryLayout<NoopWidgetSessionActivityService>.size == 0)
         #expect(MemoryLayout<WidgetServiceError>.size == 32)

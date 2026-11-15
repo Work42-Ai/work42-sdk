@@ -152,6 +152,8 @@ public enum WidgetSDK {
     /// v16 (SDK 2.14.0): collaboration. `SessionServices` gained `actor` and `collaboration`, `WidgetIntentSpec` gained its
     /// audience, scope and per-viewer fields, `WidgetStorageService` gained the per-person requirements and `Work42Widget`
     /// gained `collaboration` and `scopes`, so their layouts and witness tables changed. Plugins built for ABI 15 or older must rebuild.
+    /// v17 (SDK 2.16.0): session files and device actions. `SessionServices` gained `files` and `platform` and
+    /// `WidgetBackgroundServices` gained `files`, growing both structs by their existentials. Plugins built for ABI 16 or older must rebuild.
     nonisolated public static var abiVersion: Int32 { Work42SDKCompatibility.abiGeneration }
 
     /// C symbol name of the widget factory (`@_cdecl`). See the file
