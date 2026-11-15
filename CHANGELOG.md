@@ -17,6 +17,12 @@
   `services.tools`.
 - **`WidgetChrome.itemAction`** and **`WidgetItemAction`**: the host sets the "Open as its own widget" entry of a widget's `···` menu while
   the widget shows a detachable item. A widget never sets it.
+- **`AnnotationRegistry.present(_:in:owner:)` and `clear(in:owner:)`.** A window still has one highlight, but a surface can now name itself
+  as its owner, and `clear(in:owner:)` removes only a highlight that owner presented. Two surfaces of one window showing the same page (an
+  artifact in a gallery and as a tile) no longer clear each other's highlight on a late deselect. `present(_:in:)` and `clear(in:)` behave
+  as before.
+- **`ArtifactPreviewCard.inWidgetMark(_:)`** adds an "In a widget" mark after the card's kind and time, for an artifact that also has a
+  widget of its own. A modifier, not an initializer parameter, so the initializer plugins already call is unchanged; off by default.
 
 ## 2.14.0
 
