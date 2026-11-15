@@ -112,6 +112,8 @@ public struct ArtifactPreviewCard: View {
     public let onExpand: (String) -> Void
     /// Called when a format is chosen in the export popover. `nil` hides the export button.
     public let onExport: ((ArtifactExportFormat) -> Void)?
+    /// Whether the card says its artifact also has a widget of its own (SDK 2.15.0). Off unless `inWidgetMark(_:)` turns it on.
+    public private(set) var showsInWidgetMark = false
 
     public init(
         appearance: ArtifactCardAppearance?,
@@ -129,6 +131,14 @@ public struct ArtifactPreviewCard: View {
         self.sizeMode = sizeMode
         self.onExpand = onExpand
         self.onExport = onExport
+    }
+
+    /// The card with an "In a widget" mark after its kind and time, for an artifact that has a widget of its own. A modifier rather than
+    /// an initializer parameter, so the initializer plugins built for earlier SDKs call is unchanged.
+    public func inWidgetMark(_ on: Bool = true) -> ArtifactPreviewCard {
+        var copy = self
+        copy.showsInWidgetMark = on
+        return copy
     }
 
     public var body: some View {
@@ -152,8 +162,13 @@ public struct ArtifactPreviewCard: View {
 
     /// "Diagram · 2m ago" (or just the kind when there is no timestamp).
     private func subtitle(_ appearance: ArtifactCardAppearance) -> String {
-        guard let timestamp else { return appearance.kindLabel }
-        return "\(appearance.kindLabel) · \(Self.relativeFormatter.localizedString(for: timestamp, relativeTo: Date()))"
+        let base: String
+        if let timestamp {
+            base = "\(appearance.kindLabel) · \(Self.relativeFormatter.localizedString(for: timestamp, relativeTo: Date()))"
+        } else {
+            base = appearance.kindLabel
+        }
+        return showsInWidgetMark ? base + " · In a widget" : base
     }
 
     // MARK: - Fail-loud state

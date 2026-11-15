@@ -182,6 +182,51 @@ struct WindowModelTests {
         #expect(annotations.active == nil)
     }
 
+    @Test("an owner's late clear does not take away a highlight another surface of the window made since")
+    func clearOnlyByOwner() {
+        let focus = WindowFocus()
+        let a = NSObject()
+        let ida = ObjectIdentifier(a)
+        focus.register(ida, isKey: true)
+        let annotations = registry(focus)
+
+        annotations.present(selection("in the gallery"), in: ida, owner: "gallery")
+        annotations.present(selection("in the tile"), in: ida, owner: "tile")
+
+        annotations.clear(in: ida, owner: "gallery")
+        #expect(annotations.active?.excerpt == "in the tile", "the gallery no longer owns the highlight")
+
+        annotations.clear(in: ida, owner: "tile")
+        #expect(annotations.active == nil)
+    }
+
+    @Test("an owner cannot clear a highlight presented without one, and a plain clear still clears any")
+    func ownerVersusUnowned() {
+        let focus = WindowFocus()
+        let a = NSObject()
+        let ida = ObjectIdentifier(a)
+        focus.register(ida, isKey: true)
+        let annotations = registry(focus)
+
+        annotations.present(selection("plain"), in: ida)
+        annotations.clear(in: ida, owner: "tile")
+        #expect(annotations.active?.excerpt == "plain")
+
+        annotations.present(selection("owned"), in: ida, owner: "tile")
+        annotations.clear(in: ida)
+        #expect(annotations.active == nil, "the unscoped clear is unchanged")
+    }
+
+    @Test("the shared slot is owner-scoped too")
+    func unscopedOwner() {
+        let annotations = registry(WindowFocus())
+        annotations.present(selection("one"), in: nil, owner: "a")
+        annotations.clear(in: nil, owner: "b")
+        #expect(annotations.active?.excerpt == "one")
+        annotations.clear(in: nil, owner: "a")
+        #expect(annotations.active == nil)
+    }
+
     @Test("a surface that names no window uses the shared slot, as the one global selection did")
     func unscopedIsTheOldBehaviour() {
         let annotations = registry(WindowFocus())

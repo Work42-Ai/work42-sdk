@@ -120,6 +120,9 @@ public final class AnnotationRegistry {
 
     private var windowSelections: [WindowFocus.ID: CommentableSelection] = [:]
     private var unscopedSelection: CommentableSelection?
+    /// Who presented each selection, for the surfaces that say (`present(_:in:owner:)`). Parallel to the slots above.
+    private var windowOwners: [WindowFocus.ID: String] = [:]
+    private var unscopedOwner: String?
 
     /// The focused window's selection, else the one that named no window.
     public var active: CommentableSelection? {
@@ -135,12 +138,32 @@ public final class AnnotationRegistry {
 
     /// A surface's selection became live (or a comment dialog opened) in `window` (nil: the shared slot).
     public func present(_ selection: CommentableSelection, in window: WindowFocus.ID?) {
-        if let window { windowSelections[window] = selection } else { unscopedSelection = selection }
+        present(selection, in: window, owner: nil)
     }
 
     /// A surface's selection cleared (deselect / Esc / dialog dismissed) in `window` (nil: the shared slot). Another window's is kept.
     public func clear(in window: WindowFocus.ID?) {
-        if let window { windowSelections[window] = nil } else { unscopedSelection = nil }
+        if let window { windowSelections[window] = nil; windowOwners[window] = nil } else { unscopedSelection = nil; unscopedOwner = nil }
+    }
+
+    /// As `present(_:in:)`, naming the surface that holds the highlight. Two surfaces of one window (an artifact in the gallery and the
+    /// same artifact as a tile) each pass their own `owner`; the window still has one highlight, the latest one.
+    public func present(_ selection: CommentableSelection, in window: WindowFocus.ID?, owner: String?) {
+        if let window {
+            windowSelections[window] = selection
+            windowOwners[window] = owner
+        } else {
+            unscopedSelection = selection
+            unscopedOwner = owner
+        }
+    }
+
+    /// As `clear(in:)`, but only a highlight that `owner` presented goes. A late deselection in one surface therefore never takes away
+    /// the highlight another surface of the same window made since.
+    public func clear(in window: WindowFocus.ID?, owner: String) {
+        let current = window.map { windowOwners[$0] } ?? unscopedOwner
+        guard current == owner else { return }
+        clear(in: window)
     }
 
     /// A surface's selection became live (or a comment dialog opened).

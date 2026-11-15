@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.15.0
+
+- **ABI generation stays `16`.** Item kinds are purely additive: a new optional protocol, new value types in `Work42UI`, and one new
+  optional field on the host-built `WidgetChrome`. Nothing in `SessionServices`, `Work42Widget` or any struct a widget embeds by value
+  changed, so plugins built for ABI 16 load and behave unchanged and **no rebuild is needed**. A widget that adopts `Work42ItemWidget`
+  still loads in an older host, which ignores it.
+- **Item kinds.** A collection widget (a gallery, a list of terminals, a chat strip) can describe its items, and the host lets any one of
+  them stand alone as its own tile. `WidgetItemKind` (id, `collection`, symbol, `viewers` `.many` or `.one`, `detachable`, missing wording),
+  `WidgetItemRef` (`<kind>:<id>`, parsed by `init?(key:)`), `WidgetItemPhase` (`ready`, `working`, `ended`, `missing`), `WidgetItemInfo`,
+  `WidgetItemSurface` (one per tile) and `WidgetItemProvider` (`kinds`, `currentItem`, `items(of:)`, `info(for:)`, `makeViewer(for:surface:)`,
+  `release(_:)`, `tilesChanged(_:)`). `WidgetItemKind.isPluginKind(_:ownedBy:)` says whether a plugin may declare a kind id: its widget's slug,
+  or the slug plus `-` and a suffix.
+- **`Work42ItemWidget`** (`Work42PluginKit`) is the session-scoped form of `WidgetItemProvider`, found with a conditional cast like
+  `Work42WidgetHeaderLabels`. To open or focus an item's tile from the widget's own UI, call `widget_open` with the item key through
+  `services.tools`.
+- **`WidgetChrome.itemAction`** and **`WidgetItemAction`**: the host sets the "Open as its own widget" entry of a widget's `···` menu while
+  the widget shows a detachable item. A widget never sets it.
+- **`AnnotationRegistry.present(_:in:owner:)` and `clear(in:owner:)`.** A window still has one highlight, but a surface can now name itself
+  as its owner, and `clear(in:owner:)` removes only a highlight that owner presented. Two surfaces of one window showing the same page (an
+  artifact in a gallery and as a tile) no longer clear each other's highlight on a late deselect. `present(_:in:)` and `clear(in:)` behave
+  as before.
+- **`ArtifactPreviewCard.inWidgetMark(_:)`** adds an "In a widget" mark after the card's kind and time, for an artifact that also has a
+  widget of its own. A modifier, not an initializer parameter, so the initializer plugins already call is unchanged; off by default.
+
 ## 2.14.0
 
 - **ABI generation `16`.** Collaboration is part of the SDK: `SessionServices` gained `actor` and `collaboration`, `WidgetIntentSpec` its

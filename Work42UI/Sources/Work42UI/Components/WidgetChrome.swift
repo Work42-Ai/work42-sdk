@@ -96,6 +96,9 @@ public struct WidgetChrome<Actions: View> {
     /// Segments of the widget's own that lead the controls pill (the Browser's Record), drawn by the host inside the same pill as the
     /// people, "···" and ✕, each followed by a hairline. Nil leaves the pill's base alone. Set by the widget's chrome builder.
     public var pillLeading: AnyView? = nil
+    /// "Open as its own widget" for the item this widget is showing (SDK 2.15.0). The host sets it while the widget's provider reports a
+    /// detachable current item and the widget is not itself an item tile; nil leaves the `···` menu as it was. A widget never sets it.
+    public var itemAction: WidgetItemAction? = nil
 
     public init(
         title: String,

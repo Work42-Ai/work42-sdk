@@ -703,6 +703,45 @@ public protocol Work42WidgetHeaderLabels: AnyObject {
     var headerLabels: [WidgetHeaderLabel] { get }
 }
 
+// MARK: - Work42ItemWidget
+
+/// Opt-in protocol for a widget that is a collection whose items can stand alone as their own tiles (SDK 2.15.0). It is the
+/// session-scoped form of `WidgetItemProvider`: the same members, each also given the `SessionServices` the widget was activated with.
+///
+/// A SEPARATE protocol, not a `Work42Widget` requirement, found by the host with a conditional cast like `Work42WidgetHeaderLabels`, so
+/// a widget built against an earlier SDK loads unchanged and a widget that adopts it still loads in an older host (which ignores it).
+/// A plugin's kind ids must start with the declaring widget's slug (`WidgetItemKind.isPluginKind(_:ownedBy:)`); the host refuses a
+/// duplicate or a foreign prefix.
+///
+/// To open or focus an item's tile from the widget's own UI, call `widget_open` with the item key (`WidgetItemRef.key`) through
+/// `services.tools`; the host does the rest.
+@MainActor
+public protocol Work42ItemWidget: Work42Widget {
+
+    var itemKinds: [WidgetItemKind] { get }
+
+    /// The item this widget is showing right now, or nil. Default: nil.
+    func currentItem(services: SessionServices) -> WidgetItemRef?
+
+    func items(of kind: String, services: SessionServices) -> [WidgetItemInfo]
+
+    func info(for ref: WidgetItemRef, services: SessionServices) -> WidgetItemInfo
+
+    func makeItemViewer(for ref: WidgetItemRef, surface: WidgetItemSurface, services: SessionServices) -> AnyView
+
+    /// A tile closed. Default: no-op.
+    func releaseItem(_ surface: WidgetItemSurface, services: SessionServices)
+
+    /// Which of this widget's items have a tile now. Default: no-op.
+    func tilesChanged(_ tiled: Set<WidgetItemRef>, services: SessionServices)
+}
+
+extension Work42ItemWidget {
+    public func currentItem(services: SessionServices) -> WidgetItemRef? { nil }
+    public func releaseItem(_ surface: WidgetItemSurface, services: SessionServices) {}
+    public func tilesChanged(_ tiled: Set<WidgetItemRef>, services: SessionServices) {}
+}
+
 // MARK: - Work42WidgetCustomHeader
 
 /// Optional native-header surface for a custom widget.
