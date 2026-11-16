@@ -565,6 +565,45 @@ nonisolated public struct SessionServices: Sendable {
     }
 }
 
+// MARK: - Host streams
+
+/// A stream the host pushes to a widget (SDK 2.16.0, ABI 17), the way it pushes a chat to an iPad: the stream's current
+/// state first, then every change, as the bytes the host sent. The widget decodes them. It ends when the consumer stops
+/// iterating. On the Mac a widget reads its own files and gets no stream (`NoopWidgetStreamService`); an iPad, which
+/// cannot read the Mac's files, subscribes through the paired Mac.
+nonisolated public protocol WidgetStreamService: Sendable {
+
+    /// The state of stream `stream` of `widget` in `session`, then each update.
+    func subscribe(session: String, widget: String, stream: String) -> AsyncStream<Data>
+}
+
+/// The default for hosts with no streams: it finishes at once, so the widget keeps to its own source.
+nonisolated public struct NoopWidgetStreamService: WidgetStreamService {
+    public init() {}
+
+    public func subscribe(session: String, widget: String, stream: String) -> AsyncStream<Data> {
+        AsyncStream { $0.finish() }
+    }
+}
+
+/// Where the host registers its stream service. Set once at startup, like `WidgetAccountRegistry`, and for the same reason:
+/// `SessionServices`' memory layout is part of the binary contract with plugins built against older SDKs, so this is not a
+/// stored property.
+@MainActor
+public enum WidgetStreamRegistry {
+    public static var service: (any WidgetStreamService)?
+}
+
+extension SessionServices {
+    /// Stream `name` of widget `widget` in this session, or an empty stream on a host without streams. Computed, so the
+    /// struct's layout is unchanged.
+    @MainActor
+    public func stream(_ name: String, widget: String) -> AsyncStream<Data> {
+        guard let sessionId, let service = WidgetStreamRegistry.service else { return AsyncStream { $0.finish() } }
+        return service.subscribe(session: sessionId, widget: widget, stream: name)
+    }
+}
+
 // MARK: - Account access
 
 /// Where the host registers its account service. Set once at startup; nil on hosts without

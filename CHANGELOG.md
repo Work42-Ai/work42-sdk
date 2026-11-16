@@ -16,6 +16,11 @@
   never uses `FileManager`, `NSWorkspace` or `NSPasteboard` for these. Defaults: `NoopWidgetFileService` (`read` throws, `list`
   is empty, `watch` finishes) and `SystemWidgetPlatformService` (`NSWorkspace`/`NSPasteboard` on macOS, `UIApplication`/
   `UIPasteboard` on iOS).
+- **Host streams for widgets.** `SessionServices.stream(_:widget:)` returns an `AsyncStream<Data>` of a stream the host pushes
+  (its current state, then each change), served by a `WidgetStreamService` the host registers in `WidgetStreamRegistry.service`.
+  An iPad uses it to read what a widget reads from files on the Mac (a recording's transcript), the way it reads a chat; on the
+  Mac the stream is empty and the widget keeps reading its files. Like `account`, it is a registry plus a computed property,
+  so `SessionServices`' layout is unchanged. Default: `NoopWidgetStreamService` (finishes at once).
 - **Refusals are recognizable.** `WidgetServiceError.notPermitted(_:suggestion:)` builds an error whose message starts with
   `WidgetServiceError.notPermittedPrefix`, and `isNotPermitted` tells it from any other failure. `WidgetServiceError`'s layout
   is unchanged (no stored code was added), so the prefix is what survives a trip over the device link.
