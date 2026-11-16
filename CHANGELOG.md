@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.16.0
+
+- **ABI generation `17`.** `SessionServices` and `WidgetBackgroundServices` gained stored members, which changes their
+  size (`SessionServices` 384 -> 464 bytes, `WidgetBackgroundServices` 232 -> 272, and `BrowserSurface`, which holds an
+  optional `SessionServices`, 536 -> 616). Every plugin built for SDK 2.15.x or earlier (ABI 16 or older) **must be
+  rebuilt**: a host on ABI 16 refuses it with "requires SDK ABI 16, but the installed app ships ABI 17" before calling its
+  entry point. **No source changes are needed:** the new initializer parameters have defaults, so a plugin that rebuilds
+  against 2.16.0 compiles as it is. Bump `sdk_version` to `2.16.0` and `sdk_abi` to `17` in `plugin.yaml`.
+- **Session files and device actions for widgets.** `SessionServices.files` is a `WidgetFileService` (`read`, `list`, `watch`)
+  over the session folder, and `SessionServices.platform` is a `WidgetPlatformService` (`open(_:)`, `copy(_:)`) that acts on
+  the device the widget runs on. `WidgetBackgroundServices.files` is the same file service for a background agent. All paths
+  are relative to the session folder; `WidgetFilePath.validate(_:)` refuses an empty path, an absolute or `~` path, a NUL
+  byte and any `..` component. On the Mac the host reads the folder itself; on an iPad the paired Mac answers, so a widget
+  never uses `FileManager`, `NSWorkspace` or `NSPasteboard` for these. Defaults: `NoopWidgetFileService` (`read` throws, `list`
+  is empty, `watch` finishes) and `SystemWidgetPlatformService` (`NSWorkspace`/`NSPasteboard` on macOS, `UIApplication`/
+  `UIPasteboard` on iOS).
+- **Host streams for widgets.** `SessionServices.stream(_:widget:)` returns an `AsyncStream<Data>` of a stream the host pushes
+  (its current state, then each change), served by a `WidgetStreamService` the host registers in `WidgetStreamRegistry.service`.
+  An iPad uses it to read what a widget reads from files on the Mac (a recording's transcript), the way it reads a chat; on the
+  Mac the stream is empty and the widget keeps reading its files. Like `account`, it is a registry plus a computed property,
+  so `SessionServices`' layout is unchanged. Default: `NoopWidgetStreamService` (finishes at once).
+- **Refusals are recognizable.** `WidgetServiceError.notPermitted(_:suggestion:)` builds an error whose message starts with
+  `WidgetServiceError.notPermittedPrefix`, and `isNotPermitted` tells it from any other failure. `WidgetServiceError`'s layout
+  is unchanged (no stored code was added), so the prefix is what survives a trip over the device link.
+- **New public types:** `WidgetFileEntry` (40 bytes), `WidgetFileService`, `NoopWidgetFileService`, `WidgetFilePath`,
+  `WidgetPlatformService`, `SystemWidgetPlatformService`. `PublicLayoutStabilityTests` pins the new sizes.
+
 ## 2.15.0
 
 - **ABI generation stays `16`.** Item kinds are purely additive: a new optional protocol, new value types in `Work42UI`, and one new

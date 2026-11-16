@@ -9,7 +9,7 @@ version: 0.1.0
 description: Explain what this plugin contributes
 author: Your Name
 sdk_version: 2.14.0
-sdk_abi: 14
+sdk_abi: 17
 global_skills: optional-global-skill
 requires: [other-plugin]
 ```

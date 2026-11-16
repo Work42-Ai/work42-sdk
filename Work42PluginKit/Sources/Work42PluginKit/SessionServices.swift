@@ -20,6 +20,11 @@
 // explicitly off-main), and widget code just `await`s from wherever it is.
 
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - WidgetJSONValue
 
@@ -102,6 +107,20 @@ nonisolated public struct WidgetServiceError: Error, LocalizedError, Codable, Se
         guard let suggestion, !suggestion.isEmpty else { return message }
         return "\(message) — \(suggestion)"
     }
+
+    /// The prefix every "not permitted" error starts with. `WidgetServiceError` has no stored code (its
+    /// layout is pinned by `PublicLayoutStabilityTests`), so this prefix is how a caller tells a refusal
+    /// from any other failure, on either side of the device link.
+    nonisolated public static let notPermittedPrefix = "not permitted: "
+
+    /// A refusal: the request was well formed but is not allowed (a path outside the session folder, a
+    /// widget or command a device may not use). Nothing ran.
+    public static func notPermitted(_ reason: String, suggestion: String? = nil) -> WidgetServiceError {
+        WidgetServiceError(message: notPermittedPrefix + reason, suggestion: suggestion)
+    }
+
+    /// Whether this error is a refusal made by `notPermitted(_:suggestion:)`.
+    public var isNotPermitted: Bool { message.hasPrefix(Self.notPermittedPrefix) }
 }
 
 // MARK: - Composer
@@ -350,6 +369,121 @@ nonisolated public protocol WidgetAccountService: Sendable {
     func currentUser() async -> WidgetAccountUser?
 }
 
+// MARK: - Files
+
+/// One entry of a directory listing in the session folder. Plain data so it crosses the device link unchanged.
+nonisolated public struct WidgetFileEntry: Sendable, Codable, Equatable {
+    public var name: String
+    public var isDirectory: Bool
+    public var size: Int64
+    public var modifiedAt: Date
+
+    public init(name: String, isDirectory: Bool, size: Int64, modifiedAt: Date) {
+        self.name = name
+        self.isDirectory = isDirectory
+        self.size = size
+        self.modifiedAt = modifiedAt
+    }
+}
+
+/// The one rule for a path a widget hands to `WidgetFileService`: relative to the session folder, never
+/// absolute, never leaving it. Every implementation (the Mac's local one, the Mac's answer to a device, the
+/// tests) calls this first, so a widget gets the same refusal wherever it runs.
+nonisolated public enum WidgetFilePath {
+
+    /// Throws `WidgetServiceError.notPermitted` for an empty path, an absolute path (leading `/` or `~`), a path
+    /// with a NUL byte, or any `..` component. Relative paths such as `meeting.json`, `notes/a.md` and `.`
+    /// (the session folder itself) pass.
+    public static func validate(_ relativePath: String) throws {
+        let suggestion = "pass a path relative to the session folder, such as \"meeting.json\" or \"notes/a.md\""
+        if relativePath.isEmpty {
+            throw WidgetServiceError.notPermitted("the path is empty", suggestion: suggestion)
+        }
+        if relativePath.hasPrefix("/") || relativePath.hasPrefix("~") {
+            throw WidgetServiceError.notPermitted("\"\(relativePath)\" is not relative to the session folder", suggestion: suggestion)
+        }
+        if relativePath.contains("\0") {
+            throw WidgetServiceError.notPermitted("the path contains a NUL byte", suggestion: suggestion)
+        }
+        if relativePath.split(separator: "/", omittingEmptySubsequences: true).contains("..") {
+            throw WidgetServiceError.notPermitted("\"\(relativePath)\" leaves the session folder", suggestion: suggestion)
+        }
+    }
+}
+
+/// Reads the session's folder (SDK 2.16.0, ABI 17). On the Mac a widget reads the folder itself; on an iPad the
+/// same calls are answered by the paired Mac, so a widget never touches `FileManager` for session files.
+/// All paths are relative to the session folder (see `WidgetFilePath`); read-only by design. A symbolic link that
+/// points outside the session folder is refused like a `..` path (`WidgetServiceError.notPermitted`).
+nonisolated public protocol WidgetFileService: Sendable {
+
+    /// The bytes of the file at `relativePath`. Throws `WidgetServiceError` when it doesn't exist or can't be read.
+    func read(_ relativePath: String) async throws -> Data
+
+    /// The entries of the directory at `relativeDir`, sorted by name (plain byte order, the same on every device).
+    /// `"."` lists the session folder itself. Entries whose name starts with `.` are omitted.
+    func list(_ relativeDir: String) async throws -> [WidgetFileEntry]
+
+    /// Yields once each time the file at `relativePath` changes, or, for a directory, when an entry is added,
+    /// removed or renamed. Rapid changes coalesce into one pending yield. Finishes when the consumer stops
+    /// iterating, and at once for a path that is refused. A path that doesn't exist yet yields when it appears.
+    func watch(_ relativePath: String) -> AsyncStream<Void>
+}
+
+/// The default for hosts without file access (previews, tests): `read` throws a named error, `list` is empty
+/// and `watch` finishes at once, so a widget shows its empty state rather than crashing.
+nonisolated public struct NoopWidgetFileService: WidgetFileService {
+    public init() {}
+
+    public func read(_ relativePath: String) async throws -> Data {
+        throw WidgetServiceError(
+            message: "this host does not provide session files",
+            suggestion: "run the widget inside Work42 2.16.0 or later, or pass a WidgetFileService when constructing the services")
+    }
+
+    public func list(_ relativeDir: String) async throws -> [WidgetFileEntry] { [] }
+
+    public func watch(_ relativePath: String) -> AsyncStream<Void> {
+        AsyncStream { $0.finish() }
+    }
+}
+
+// MARK: - Platform
+
+/// The few things a widget does to the device it's on (SDK 2.16.0, ABI 17): open a link, copy text. They are
+/// `@MainActor` because both platforms require it, and they act on THIS device (the iPad's pasteboard, not the Mac's).
+nonisolated public protocol WidgetPlatformService: Sendable {
+
+    /// Open `url` in its default app (the browser for a web address, Mail for `mailto:`).
+    @MainActor func open(_ url: URL)
+
+    /// Put `text` on the device's general pasteboard.
+    @MainActor func copy(_ text: String)
+}
+
+/// The real implementation on both platforms: `NSWorkspace` / `NSPasteboard` on macOS, `UIApplication` /
+/// `UIPasteboard` on iOS. It is also the default, so a widget that never customizes it works everywhere.
+nonisolated public struct SystemWidgetPlatformService: WidgetPlatformService {
+    public init() {}
+
+    @MainActor public func open(_ url: URL) {
+        #if canImport(AppKit)
+        NSWorkspace.shared.open(url)
+        #elseif canImport(UIKit)
+        UIApplication.shared.open(url)
+        #endif
+    }
+
+    @MainActor public func copy(_ text: String) {
+        #if canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #elseif canImport(UIKit)
+        UIPasteboard.general.string = text
+        #endif
+    }
+}
+
 // MARK: - SessionServices
 
 /// The bundle of session services handed to a widget's lifecycle and view
@@ -380,6 +514,12 @@ nonisolated public struct SessionServices: Sendable {
     /// Calls every work42 tool in-process, as an agent would (SDK 2.8.0, ABI 13).
     public let tools: any WidgetToolService
 
+    /// Reads the session's folder, relative to it (SDK 2.16.0, ABI 17). On an iPad the paired Mac answers.
+    public let files: any WidgetFileService
+
+    /// Opens links and copies text on the device the widget runs on (SDK 2.16.0, ABI 17).
+    public let platform: any WidgetPlatformService
+
     /// The owning session's id (task42-plugin-conversion, s3) — needed for
     /// e.g. artifact URL derivation (`[[artifact:id]]` embeds) and
     /// self-registration. `nil` on session-less surfaces (Home).
@@ -403,6 +543,8 @@ nonisolated public struct SessionServices: Sendable {
         storage: any WidgetStorageService,
         pill: any WidgetPillService,
         tools: any WidgetToolService = UnavailableWidgetToolService(),
+        files: any WidgetFileService = NoopWidgetFileService(),
+        platform: any WidgetPlatformService = SystemWidgetPlatformService(),
         sessionId: String? = nil,
         worktreePath: String? = nil,
         actor: WidgetCollaborator = .solo,
@@ -416,8 +558,49 @@ nonisolated public struct SessionServices: Sendable {
         self.storage = storage
         self.pill = pill
         self.tools = tools
+        self.files = files
+        self.platform = platform
         self.sessionId = sessionId
         self.worktreePath = worktreePath
+    }
+}
+
+// MARK: - Host streams
+
+/// A stream the host pushes to a widget (SDK 2.16.0, ABI 17), the way it pushes a chat to an iPad: the stream's current
+/// state first, then every change, as the bytes the host sent. The widget decodes them. It ends when the consumer stops
+/// iterating. On the Mac a widget reads its own files and gets no stream (`NoopWidgetStreamService`); an iPad, which
+/// cannot read the Mac's files, subscribes through the paired Mac.
+nonisolated public protocol WidgetStreamService: Sendable {
+
+    /// The state of stream `stream` of `widget` in `session`, then each update.
+    func subscribe(session: String, widget: String, stream: String) -> AsyncStream<Data>
+}
+
+/// The default for hosts with no streams: it finishes at once, so the widget keeps to its own source.
+nonisolated public struct NoopWidgetStreamService: WidgetStreamService {
+    public init() {}
+
+    public func subscribe(session: String, widget: String, stream: String) -> AsyncStream<Data> {
+        AsyncStream { $0.finish() }
+    }
+}
+
+/// Where the host registers its stream service. Set once at startup, like `WidgetAccountRegistry`, and for the same reason:
+/// `SessionServices`' memory layout is part of the binary contract with plugins built against older SDKs, so this is not a
+/// stored property.
+@MainActor
+public enum WidgetStreamRegistry {
+    public static var service: (any WidgetStreamService)?
+}
+
+extension SessionServices {
+    /// Stream `name` of widget `widget` in this session, or an empty stream on a host without streams. Computed, so the
+    /// struct's layout is unchanged.
+    @MainActor
+    public func stream(_ name: String, widget: String) -> AsyncStream<Data> {
+        guard let sessionId, let service = WidgetStreamRegistry.service else { return AsyncStream { $0.finish() } }
+        return service.subscribe(session: sessionId, widget: widget, stream: name)
     }
 }
 
