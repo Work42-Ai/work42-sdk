@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.0.0
+
+- **Compatibility is one number: the SDK version.** The ABI generation counter (`Work42SDKCompatibility.abiGeneration`, last
+  value `17`) is removed, and so is the `sdk_abi` manifest field. A plugin records the SDK it was built with as `sdk_version`,
+  and the host runs it when the plugin's **major version matches its own and its own version is the same or newer**:
+  `Work42SDKCompatibility.accepts(pluginSDK:)`. A plugin built with 3.0.0 runs on 3.2.0; one built with 3.2.0 does not run
+  on 3.0.0; one built with 2.x does not run on 3.x until it is rebuilt. From 3.0 on, minor and patch releases only add to
+  the public API, and a breaking change is a new major version with a migration note here.
+- **The one forced rebuild.** Every plugin built for SDK 2.x (ABI 17 or older) **must be rebuilt once**. No source changes are
+  needed. To migrate a plugin: delete `sdk_abi:` from `plugin.yaml` (it is read and ignored with a warning if left), set
+  `sdk_version: 3.0.0`, and rebuild with `work42 plugin build` or reinstall it. `work42 plugin build` and `work42 widget build`
+  now write `sdk_version` for you: the exact SDK version the binary was built against, as a full `MAJOR.MINOR.PATCH` string.
+  Before this, `widget.yaml` held the ABI integer in `sdk_version`; an integer there, or a missing value, now means "built for
+  an older SDK".
+- **New API:** `Work42SDKCompatibility.accepts(pluginSDK:)`, `accepts(pluginSDK:hostSDK:)` (a pre-release or build suffix such
+  as `-beta.1` is ignored; anything that is not `MAJOR.MINOR.PATCH` is never accepted), `requiredMajor(_:)` and
+  `versionProbeValue`.
+- **Deprecated:** `WidgetSDK.abiVersion` still compiles and returns `3` in every 3.x SDK, with a deprecation warning that names
+  the replacement. It no longer decides anything: a widget or plugin dylib's `work42_widget_sdk_version` /
+  `work42_plugin_sdk_version` function only answers the loader's probe, so return
+  `Work42SDKCompatibility.versionProbeValue` from it. The scaffolds and the plugin template already do.
+- **History of the removed counter.** The ABI generations 2 through 17, and what changed in each, are in the entries below
+  and in the git history of `WidgetSDK.abiVersion`.
+
 ## 2.16.0
 
 - **ABI generation `17`.** `SessionServices` and `WidgetBackgroundServices` gained stored members, which changes their

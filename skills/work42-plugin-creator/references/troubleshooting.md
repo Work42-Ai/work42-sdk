@@ -2,7 +2,7 @@
 
 ## Manifest rejected
 
-Run `work42 plugin inspect <path> --json`. Confirm schema v2, semantic `version` and `sdk_version`, exact `sdk_abi`, a slug-form `name`, and same-bundle references.
+Run `work42 plugin inspect <path> --json`. Confirm schema v2, semantic `version` and `sdk_version` (`MAJOR.MINOR.PATCH`), a slug-form `name`, and same-bundle references.
 
 ## Install fails: requires a plugin that is not installed
 
@@ -22,9 +22,9 @@ work42 plugin build . --app /path/to/Work42.app
 
 The app must contain `Work42UI.framework`, `Work42PluginKit.framework`, their Swift modules, and `Contents/Resources/WidgetSDK-Headers`.
 
-## ABI or SDK mismatch
+## SDK mismatch
 
-Use `work42 sdk` to inspect the host. A newer semantic SDK requires updating Work42 or rebuilding against the installed version. A different ABI always requires rebuilding native contributions.
+Use `work42 sdk` to inspect the host. A plugin's native code runs when it was built with the same major SDK version as the app and the app's SDK is the same or newer. Built with an older major (for example 2.x): rebuild it against the installed SDK. Built with a newer SDK than the app has: update Work42.
 
 ## Build or signing failure
 

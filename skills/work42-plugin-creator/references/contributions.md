@@ -4,11 +4,11 @@ Load only the sections needed for the plugin being changed.
 
 ## Widgets
 
-Place Swift sources in `widgets/<slug>/Sources/` and import `SwiftUI` plus `Work42PluginKit`. Implement `Work42Widget`, return the view from `makeView(services:)`, and export both ABI entry points:
+Place Swift sources in `widgets/<slug>/Sources/` and import `SwiftUI` plus `Work42PluginKit`. Implement `Work42Widget`, return the view from `makeView(services:)`, and export both entry points (the first only answers the loader's version probe; compatibility comes from `sdk_version` in the manifest):
 
 ```swift
 @_cdecl("work42_widget_sdk_version")
-public func work42_widget_sdk_version() -> Int32 { WidgetSDK.abiVersion }
+public func work42_widget_sdk_version() -> Int32 { Work42SDKCompatibility.versionProbeValue }
 
 @_cdecl("work42_widget_main")
 public func work42_widget_main() -> UnsafeMutableRawPointer {

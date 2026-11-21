@@ -85,7 +85,7 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
 
 ## Guardrails
 
-- Keep `manifest_version: 2`, semantic plugin/SDK versions, and the exact integer SDK ABI.
+- Keep `manifest_version: 2` and semantic plugin and SDK versions. There is no `sdk_abi`; do not write one.
 - Do not copy private Work42 app types into a plugin. Import `Work42PluginKit` and supported `Work42UI` APIs only.
 - Treat native plugin code as full local access. Do not claim granular sandbox permissions.
 - Do not change plugin identity accidentally when customizing a fork. Same identity means replacement; a new identity installs separately.

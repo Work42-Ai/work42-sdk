@@ -851,9 +851,9 @@ extension Work42Widget {
 /// before calling `prefersDefaultWidgetHeader`. For an old dylib that does not
 /// declare conformance, the cast safely returns `nil` and the host uses the
 /// default behaviour (browser chrome header). No Protocol Witness Table slot
-/// is added to `Work42Widget`, so `WidgetSDK.abiVersion` stays at 3 — old
-/// dylibs load without a version-mismatch error and gain the browser header
-/// automatically, which is the intended behavior.
+/// is added to `Work42Widget`, so old dylibs load without a version-mismatch
+/// error and gain the browser header automatically, which is the intended
+/// behavior.
 @MainActor
 public protocol Work42BrowserWidgetOptions: Work42Widget {
 
