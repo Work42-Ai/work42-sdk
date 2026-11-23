@@ -844,7 +844,8 @@ public struct BrowserSurface: View {
     /// `.task` executions (re-renders) are guarded by `state.configureInvoked`.
     private func resolveIfNeeded(cacheKey: String) async {
         await Self.resolve(
-            spec: spec, cacheKey: cacheKey, state: state, configure: configure, timeout: Self.openingTimeout)
+            spec: spec, cacheKey: cacheKey, state: state, configure: configure, services: services,
+            timeout: Self.openingTimeout)
     }
 
     /// How long the surface waits for its URL provider (or for a first tab) before it says it could not open.
@@ -862,6 +863,7 @@ public struct BrowserSurface: View {
         cacheKey: String,
         state: BrowserSurfaceState,
         configure: ((BrowserWidgetModel) -> Void)?,
+        services: SessionServices? = nil,
         timeout: Duration
     ) async {
         let existing = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey)
@@ -871,7 +873,7 @@ public struct BrowserSurface: View {
         if let model = existing, !model.tabs.isEmpty {
             if !state.configureInvoked {
                 state.configureInvoked = true
-                BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure)
+                BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure, services: services)
             }
             state.resolution = .ready
             return
@@ -937,7 +939,7 @@ public struct BrowserSurface: View {
         // cache-hit path (e.g. a retry loop) doesn't re-call wireHooks.
         if !state.configureInvoked {
             state.configureInvoked = true
-            BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure)
+            BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure, services: services)
         }
         state.resolution = .ready
     }
@@ -966,7 +968,8 @@ public struct BrowserSurface: View {
     static func wireHooks(
         on model: BrowserWidgetModel,
         cacheKey: String,
-        configure: ((BrowserWidgetModel) -> Void)?
+        configure: ((BrowserWidgetModel) -> Void)?,
+        services: SessionServices? = nil
     ) {
         // 1. Default: + button opens an empty tab.
         //    configure can override this by assigning its own model.onNewTab.
@@ -999,7 +1002,7 @@ public struct BrowserSurface: View {
         }
 
         // 4. Let the host put its own listeners on top (services.browser's events), now that the defaults are in.
-        BrowserTabsRegistry.attach?(model, cacheKey)
+        BrowserTabsRegistry.attach?(model, cacheKey, services)
     }
 
     // MARK: - Fail-loud error card

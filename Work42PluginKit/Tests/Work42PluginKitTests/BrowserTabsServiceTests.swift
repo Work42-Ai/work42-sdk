@@ -124,10 +124,13 @@ struct BrowserTabsServiceTests {
     @Test("tab state and browser events survive a round trip through JSON")
     func codable() throws {
         let tab = BrowserTab(url: URL(string: "https://example.com/a"), title: "A", icon: "star")
-        let state = BrowserTabsState(tabs: [tab, BrowserTab(title: "Empty")], activeTabId: tab.id)
+        let state = BrowserTabsState(tabs: [tab, BrowserTab(title: "Empty")], activeTabId: tab.id, address: "https://example.com/a#x")
         let decoded = try JSONDecoder().decode(BrowserTabsState.self, from: JSONEncoder().encode(state))
         #expect(decoded == state)
-        #expect(BrowserTabsState() == BrowserTabsState(tabs: [], activeTabId: nil))
+        #expect(BrowserTabsState() == BrowserTabsState(tabs: [], activeTabId: nil, address: ""))
+        // A state written before `address` existed still reads, with an empty address.
+        let old = try JSONDecoder().decode(BrowserTabsState.self, from: Data(#"{"tabs":[]}"#.utf8))
+        #expect(old.address.isEmpty && old.activeTabId == nil)
 
         for event in [BrowserEvent.newTabRequested, .tabClosed(tab.id)] {
             #expect(try JSONDecoder().decode(BrowserEvent.self, from: JSONEncoder().encode(event)) == event)
@@ -139,18 +142,19 @@ struct BrowserTabsServiceTests {
     func attachRunsAfterDefaults() {
         let previous = BrowserTabsRegistry.attach
         defer { BrowserTabsRegistry.attach = previous }
-        var seen: [(key: String, hadDefaultNewTab: Bool, hadTabClosed: Bool)] = []
-        BrowserTabsRegistry.attach = { model, key in
-            seen.append((key, model.onNewTab != nil, model.onTabClosed != nil))
+        var seen: [(key: String, hadDefaultNewTab: Bool, hadTabClosed: Bool, session: String?)] = []
+        BrowserTabsRegistry.attach = { model, key, services in
+            seen.append((key, model.onNewTab != nil, model.onTabClosed != nil, services?.sessionId))
         }
 
         let model = BrowserWidgetModel(canEditURL: true, presetSelector: "", initialURL: nil)
         BrowserSurface.wireHooks(on: model, cacheKey: "s1/my-widget", configure: nil)
         // A view mounting on a model that already exists wires again; the host gets another chance to re-install.
-        BrowserSurface.wireHooks(on: model, cacheKey: "s1/my-widget", configure: nil)
+        BrowserSurface.wireHooks(on: model, cacheKey: "s1/my-widget", configure: nil, services: services(session: "s1"))
 
         #expect(seen.count == 2)
         #expect(seen.allSatisfy { $0.key == "s1/my-widget" && $0.hadDefaultNewTab && $0.hadTabClosed })
+        #expect(seen.map(\.session) == [nil, "s1"], "the services the surface was built with reach the host")
     }
 
     @Test("a surface declaration needs no closure; the configure: forms still work")

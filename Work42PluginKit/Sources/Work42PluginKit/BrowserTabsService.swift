@@ -16,10 +16,22 @@ import Work42UI
 public struct BrowserTabsState: Codable, Sendable, Equatable {
     public var tabs: [BrowserTab]
     public var activeTabId: UUID?
+    /// What the address bar shows for the tab in front: the page's live address, which follows links, redirects and in-page
+    /// routes (a tab's own `url` only changes when you call `updateTab`), or what the person is typing there. Empty when nothing
+    /// is showing. Read it to know which page the person is looking at.
+    public var address: String
 
-    public init(tabs: [BrowserTab] = [], activeTabId: UUID? = nil) {
+    public init(tabs: [BrowserTab] = [], activeTabId: UUID? = nil, address: String = "") {
         self.tabs = tabs
         self.activeTabId = activeTabId
+        self.address = address
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tabs = try container.decode([BrowserTab].self, forKey: .tabs)
+        activeTabId = try container.decodeIfPresent(UUID.self, forKey: .activeTabId)
+        address = try container.decodeIfPresent(String.self, forKey: .address) ?? ""
     }
 }
 
@@ -56,7 +68,9 @@ nonisolated public protocol BrowserTabsService: Sendable {
     /// Bring tab `id` to the front. Throws when no such tab is open.
     func selectTab(_ id: UUID) async throws
 
-    /// Change a tab's title, address or icon. A nil argument leaves that field as it is. Throws when no such tab is open.
+    /// Change a tab's title, address or icon. A nil argument leaves that field as it is. A new `url` is the tab's address and
+    /// the page shows it: a tab that is already showing a page navigates there, a tab that has not loaded one yet starts on it.
+    /// Throws when no such tab is open.
     func updateTab(_ id: UUID, title: String?, url: URL?, icon: String?) async throws
 
     /// The widget's tabs now, then again after every change (including the person's own: opening, closing, navigating).
@@ -75,8 +89,10 @@ public enum BrowserTabsRegistry {
     /// Called each time a browser surface has finished wiring a model's own hooks (when the model is built, and again when a view
     /// mounts on a model that already exists), with the model and the key it is cached under (`"<session>/<widget id>"`). It runs
     /// after the surface's default `onNewTab` / `onTabClosed`, so a host that answers a widget's events through `services.browser`
-    /// installs its listeners here and they are never overwritten by the defaults. Plugins never touch this.
-    public static var attach: (@MainActor (_ model: BrowserWidgetModel, _ scopedKey: String) -> Void)?
+    /// installs its listeners here and they are never overwritten by the defaults. `services` is what the surface was built with
+    /// (`BrowserSurface(spec:cacheKey:services:...)`), nil for one built without; a host uses it to bind `services.browser` to a
+    /// surface whose `cacheKey` is not its widget's id. Plugins never touch this.
+    public static var attach: (@MainActor (_ model: BrowserWidgetModel, _ scopedKey: String, _ services: SessionServices?) -> Void)?
 }
 
 /// The service a host with no browser support (or no widget binding) hands out: every call throws a named remedy.

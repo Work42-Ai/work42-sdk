@@ -12,6 +12,9 @@ Additions only: a plugin built with 3.0.0 runs unchanged on 3.1.0.
   `BrowserEvent`, `BrowserTabsService`, `UnavailableBrowserTabsService`, `BrowserTabsRegistry` (`resolve` and `attach`, both set
   by the host: `attach` runs after a surface has wired a model's own hooks, so the host's listeners for `events` sit on top of
   the defaults and are re-installed whenever the surface wires again). Plugins never touch it.
+  `updateTab(_:url:)` shows the new address: the tab's page navigates there (a tab with no page yet starts on it).
+  `BrowserTabsState.address` is what the address bar shows for the tab in front: the page's live address (it follows links,
+  redirects and in-page routes; a tab's `url` changes only through `updateTab`). Read it to know which page is showing.
 - **A browser surface needs no closure.** `BrowserSurfaceDeclaration(spec:cacheKey:)` and `BrowserSurface(spec:cacheKey:...)`
   have forms without `configure:`. Declare the surface, then drive it through `services.browser`.
 - **Deprecated, with the replacement named in the message:** the `configure:` forms of `BrowserSurfaceDeclaration.init` and
