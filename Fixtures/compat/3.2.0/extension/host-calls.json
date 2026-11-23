@@ -7,14 +7,14 @@
       "service" : "extension"
     },
     "reply" : {
-      "payload" : "eyJzZGtWZXJzaW9uIjoiMy4yLjAiLCJ3aWRnZXRzIjpbImNvdW50ZXIiXSwiaGFzU2Vzc2lvbkhvb2tzIjp0cnVlfQ=="
+      "payload" : "eyJ3aWRnZXRzIjpbeyJpY29uIjoibnVtYmVyIiwiY29sbGFib3JhdGlvbiI6eyJzaGFyZWQiOnsiY29uZmxpY3QiOnsibGFzdFdyaXRlV2lucyI6e319LCJjdXJzb3JzIjp7Im5vbmUiOnt9fX19LCJ0aXRsZSI6IkNvdW50ZXIiLCJpbnRlbnRzIjpbeyJwbGFjZW1lbnQiOlsicGFsZXR0ZSJdLCJ0aXRsZSI6IlJ1biIsImtleXdvcmRzIjpbXSwiaWNvbiI6InBsYXkiLCJhY3Rpb25BcmVhU3R5bGUiOiJsYWJlbGVkIiwibmFtZSI6InJ1biJ9XSwic2NvcGVzIjpbeyJ0aXRsZSI6IlVzZSIsImlkIjoidXNlIn1dLCJpc0Jyb3dzZXJCYWNrZWQiOmZhbHNlLCJwcmVmZXJzRGVmYXVsdFdpZGdldEhlYWRlciI6ZmFsc2UsImlkIjoiY291bnRlciIsIm1pblNpemUiOnsiaGVpZ2h0IjowLCJ3aWR0aCI6MH0sImhhc0JhY2tncm91bmRBZ2VudCI6ZmFsc2UsImxpbmtJbnRlbnRzIjpbXX1dLCJzZGtWZXJzaW9uIjoiMy4yLjAiLCJoYXNTZXNzaW9uSG9va3MiOnRydWV9"
     }
   },
   {
     "call" : {
       "method" : "performIntent",
-      "payload" : "eyJuYW1lIjoicnVuIiwid29ya3RyZWVQYXRoIjoiXC90bXBcL2Zyb3plbiIsInBhcmFtcyI6eyJuIjoxfX0=",
-      "requestId" : "1A2FAB2F-3AF4-49A4-A82A-55700BF3CEA4",
+      "payload" : "eyJ3b3JrdHJlZVBhdGgiOiJcL3RtcFwvZnJvemVuIiwibmFtZSI6InJ1biIsInBhcmFtcyI6eyJuIjoxfX0=",
+      "requestId" : "0E7218FF-96BA-452C-9E25-20B6C010FBB5",
       "sdkVersion" : "3.2.0",
       "service" : "extension",
       "sessionId" : "s-frozen",
@@ -22,6 +22,22 @@
     },
     "reply" : {
       "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "openLink",
+      "payload" : "eyJ3b3JrdHJlZVBhdGgiOiJcL3RtcFwvZnJvemVuIiwiaW5kZXgiOjAsInVybCI6Imh0dHBzOlwvXC9leGFtcGxlLmNvbVwvYSJ9",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "error" : {
+        "message" : "widget 'counter' has no link intent 0",
+        "suggestion" : "the host must use an index from the widget's description"
+      }
     }
   },
   {
@@ -68,8 +84,8 @@
   {
     "call" : {
       "method" : "hook",
-      "payload" : "eyJuYW1lIjoiZnJvemVuIiwiZXZlbnQiOiJvbkNyZWF0ZSIsIndvcmt0cmVlUGF0aCI6IlwvdG1wXC9mcm96ZW4iLCJwYXJhbXMiOnt9fQ==",
-      "requestId" : "8407B030-2488-461D-93BD-B3C8B5CDB218",
+      "payload" : "eyJ3b3JrdHJlZVBhdGgiOiJcL3RtcFwvZnJvemVuIiwicGFyYW1zIjp7fSwiZXZlbnQiOiJvbkNyZWF0ZSIsIm5hbWUiOiJmcm96ZW4ifQ==",
+      "requestId" : "2F1DDCBA-05A8-4464-93E3-EFDFEF4EA89C",
       "sdkVersion" : "3.2.0",
       "service" : "extension",
       "sessionId" : "s-frozen"

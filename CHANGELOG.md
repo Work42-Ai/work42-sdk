@@ -8,16 +8,17 @@ Additions only: a plugin built with 3.0.0 or 3.1.0 runs unchanged on 3.2.0.
   extension inside a container app, instead of as a dylib inside Work42. A crash or hang then takes down only the plugin: the
   widget shows an error card with Restart, and nothing it was doing is run twice. Declare it in `plugin.yaml` with
   `runtime: extension` and `extension_bundle_id: <the extension's bundle id>` (the default stays `runtime: inprocess`), and
-  `work42 plugin build` builds the container app. The `@main` type is a final class conforming to `Work42PluginExtension`
-  that lists its widgets (`ExtensionWidgetFactory`) and, optionally, its `sessionHooks`; widgets are written exactly as they
-  are in process (`Work42Widget`, `SessionServices`, `Work42WidgetBackground`, `Work42BrowserBacked`).
+  `work42 plugin build` builds the container app. The `@main` type is a `nonisolated final class` conforming to
+  `Work42PluginExtension` that lists its widgets (`ExtensionWidgetFactory`, `@MainActor`) and, optionally, its
+  `sessionHooks`; widgets are written exactly as they are in process (`Work42Widget`, `SessionServices`,
+  `Work42WidgetBackground`, `Work42BrowserBacked`).
   ```swift
   import Work42Extension
 
   @main
-  final class TodosExtension: Work42PluginExtension {
+  nonisolated final class TodosExtension: Work42PluginExtension {
       required init() {}
-      var widgets: [ExtensionWidgetFactory] { [ExtensionWidgetFactory("todos") { TodosWidget() }] }
+      @MainActor var widgets: [ExtensionWidgetFactory] { [ExtensionWidgetFactory("todos") { TodosWidget() }] }
   }
   ```
   Requires macOS 26.2. The extension binds to the point `com.work42.app.plugin` (`Work42ExtensionPoint.identifier`).
@@ -29,7 +30,14 @@ Additions only: a plugin built with 3.0.0 or 3.1.0 runs unchanged on 3.2.0.
   hooks, intents Work42 asks the extension to perform) carry a `requestId`. When the connection is lost the caller gets
   `WidgetServiceError.extensionInterrupted` ("interrupted: the extension stopped", suggestion "retry the action") or, inside the
   extension, `.hostInterrupted`; nothing is re-sent automatically.
-- New types: `Work42PluginExtension`, `ExtensionWidgetFactory`, `Work42ExtensionPoint`, `Work42ExtensionRuntime`,
+- **What Work42 reads up front.** The handshake describes every widget as data (`ExtensionWidgetDescription`: title, icon,
+  minimum size, storage namespace, collaboration, scopes, intents, link matchers, background agent, browser-backed), so
+  Work42 registers the widgets before any session uses them; a link a widget claims is opened with `extension.openLink`.
+  Out of process, an intent's live state (`isEnabled`, `isConfirmed`, `actionAreaTitle`, `.menu` choices) is not read: its
+  action-area button is always enabled and shows its static title. Custom headers, header labels and item kinds stay
+  in-process features.
+- New types: `Work42PluginExtension`, `ExtensionWidgetDescription`, `ExtensionIntentDescription`,
+  `ExtensionLinkMatcherDescription`, `ExtensionWidgetFactory`, `Work42ExtensionPoint`, `Work42ExtensionRuntime`,
   `ExtensionCall`, `ExtensionReply`, `ExtensionStreamEvent`, `ExtensionPayload`, `ExtensionChannel`, `ExtensionTransport`,
   `ClosureExtensionTransport`, `ExtensionSubscription`, `ExtensionServices`, the `Extension…Proxy` service proxies, and the XPC
   protocols above. Nothing in `Work42UI` or `Work42PluginKit` changed.

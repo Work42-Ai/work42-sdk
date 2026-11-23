@@ -9,7 +9,7 @@
   },
   {
     "method" : "attach",
-    "payload" : "eyJib2R5IjoibGV0IGEgPSAxIiwic291cmNlTGFiZWwiOiJhLnN3aWZ0IiwiZXhjZXJwdCI6ImxldCBhIn0=",
+    "payload" : "eyJzb3VyY2VMYWJlbCI6ImEuc3dpZnQiLCJleGNlcnB0IjoibGV0IGEiLCJib2R5IjoibGV0IGEgPSAxIn0=",
     "sdkVersion" : "3.2.0",
     "service" : "composer",
     "sessionId" : "s-frozen",
@@ -17,7 +17,7 @@
   },
   {
     "method" : "presentCommentableSelection",
-    "payload" : "eyJzb3VyY2VMYWJlbCI6ImEuc3dpZnQiLCJleGNlcnB0IjoibGV0IGEifQ==",
+    "payload" : "eyJleGNlcnB0IjoibGV0IGEiLCJzb3VyY2VMYWJlbCI6ImEuc3dpZnQifQ==",
     "sdkVersion" : "3.2.0",
     "service" : "composer",
     "sessionId" : "s-frozen",
@@ -34,7 +34,7 @@
   {
     "method" : "run",
     "payload" : "eyJjb21tYW5kIjoiZWNobyBmcm96ZW4ifQ==",
-    "requestId" : "1B752BE0-A9C9-455D-A6BD-C2429A966473",
+    "requestId" : "B541D023-6368-435F-A762-C31701F687EE",
     "sdkVersion" : "3.2.0",
     "service" : "shell",
     "sessionId" : "s-frozen",
@@ -42,8 +42,8 @@
   },
   {
     "method" : "execute",
-    "payload" : "eyJwYXJhbXMiOnsibiI6MX0sImlkIjoiY291bnRlci5ydW4ifQ==",
-    "requestId" : "1BD032C5-B145-4685-80B0-1E6AA2F8A190",
+    "payload" : "eyJpZCI6ImNvdW50ZXIucnVuIiwicGFyYW1zIjp7Im4iOjF9fQ==",
+    "requestId" : "A52C5AEF-142F-4062-AB5B-073B68D61A04",
     "sdkVersion" : "3.2.0",
     "service" : "intents",
     "sessionId" : "s-frozen",
@@ -91,7 +91,7 @@
   },
   {
     "method" : "setPerson",
-    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiIsInZhbHVlIjp0cnVlfQ==",
+    "payload" : "eyJ2YWx1ZSI6dHJ1ZSwia2V5IjoidG9kb3NcL3NlZW4ifQ==",
     "sdkVersion" : "3.2.0",
     "service" : "storage",
     "sessionId" : "s-frozen",
@@ -115,7 +115,7 @@
   },
   {
     "method" : "present",
-    "payload" : "eyJ3aWRnZXRJZCI6ImNvdW50ZXIiLCJzZXNzaW9uSWQiOiJzLWZyb3plbiJ9",
+    "payload" : "eyJzZXNzaW9uSWQiOiJzLWZyb3plbiIsIndpZGdldElkIjoiY291bnRlciJ9",
     "sdkVersion" : "3.2.0",
     "service" : "pill",
     "sessionId" : "s-frozen",
@@ -147,8 +147,8 @@
   },
   {
     "method" : "call",
-    "payload" : "eyJzZXJ2ZXIiOiJ3b3JrNDItc2Vzc2lvbiIsInRvb2wiOiJzdG9yYWdlX2dldCIsImFyZ3VtZW50cyI6eyJrZXkiOiJhXC9iIn19",
-    "requestId" : "B030553B-9AC4-4C57-9814-B9A04251C36D",
+    "payload" : "eyJhcmd1bWVudHMiOnsia2V5IjoiYVwvYiJ9LCJzZXJ2ZXIiOiJ3b3JrNDItc2Vzc2lvbiIsInRvb2wiOiJzdG9yYWdlX2dldCJ9",
+    "requestId" : "919E5AB5-6AAC-4B02-B5D5-E6D4CDA9FE33",
     "sdkVersion" : "3.2.0",
     "service" : "tools",
     "sessionId" : "s-frozen",
@@ -212,7 +212,7 @@
   },
   {
     "method" : "updateTab",
-    "payload" : "eyJ1cmwiOiJodHRwczpcL1wvZXhhbXBsZS5jb20iLCJpY29uIjoiZ2xvYmUiLCJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDA0MiIsInRpdGxlIjoiRG9jcyJ9",
+    "payload" : "eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDA0MiIsInRpdGxlIjoiRG9jcyIsImljb24iOiJnbG9iZSIsInVybCI6Imh0dHBzOlwvXC9leGFtcGxlLmNvbSJ9",
     "sdkVersion" : "3.2.0",
     "service" : "browser",
     "sessionId" : "s-frozen",
@@ -228,7 +228,7 @@
   },
   {
     "method" : "watch",
-    "payload" : "eyJzdHJlYW1JZCI6IkJFREYyQTBDLUM1QjUtNEJGNi05NTI3LTAxQ0VCMjdFNjgyOCIsImFyZ3VtZW50cyI6eyJwYXRoIjoiZG9jcyJ9fQ==",
+    "payload" : "eyJzdHJlYW1JZCI6IkUyNzIyOUZCLUNCMTEtNDM4OC1BRTg4LTEzOTRBMEFFOTZDQiIsImFyZ3VtZW50cyI6eyJwYXRoIjoiZG9jcyJ9fQ==",
     "sdkVersion" : "3.2.0",
     "service" : "files",
     "sessionId" : "s-frozen",
@@ -236,7 +236,7 @@
   },
   {
     "method" : "cursors",
-    "payload" : "eyJzdHJlYW1JZCI6IjczQUIxN0U4LUYwRUEtNEJBMi1CQkQ0LTEyMjNBRTVCQkQzQiIsImFyZ3VtZW50cyI6e319",
+    "payload" : "eyJzdHJlYW1JZCI6IkVDRUJFNzA4LUU4MDktNDJEQS1BREVBLUQ1N0MwRjZCNEE0NiIsImFyZ3VtZW50cyI6e319",
     "sdkVersion" : "3.2.0",
     "service" : "collaboration",
     "sessionId" : "s-frozen",
@@ -244,7 +244,7 @@
   },
   {
     "method" : "subscribe",
-    "payload" : "eyJzdHJlYW1JZCI6IjA0QTk5NEUwLUZBRkMtNDI4Ni04NzlDLTY3RTUwQTE2MENFQiIsImFyZ3VtZW50cyI6eyJ3aWRnZXQiOiJjb3VudGVyIiwic3RyZWFtIjoiZXZlbnRzIiwic2Vzc2lvbiI6InMtZnJvemVuIn19",
+    "payload" : "eyJhcmd1bWVudHMiOnsid2lkZ2V0IjoiY291bnRlciIsInNlc3Npb24iOiJzLWZyb3plbiIsInN0cmVhbSI6ImV2ZW50cyJ9LCJzdHJlYW1JZCI6IjY4QkY4M0I2LUQ1MzktNEFDMy05OEQwLTQwRTgxMDk4OERDRCJ9",
     "sdkVersion" : "3.2.0",
     "service" : "streams",
     "sessionId" : "s-frozen",
@@ -252,7 +252,7 @@
   },
   {
     "method" : "tabs",
-    "payload" : "eyJzdHJlYW1JZCI6IkI3ODcwMkQ1LTMwRTgtNDU1MC1COTlBLUUwMDBBMzQ5NzkwQyIsImFyZ3VtZW50cyI6e319",
+    "payload" : "eyJzdHJlYW1JZCI6IjM0RUE3MkFELUNENjMtNEU5QS1BMjUxLTZEQUU2MkI5RDQ1RiIsImFyZ3VtZW50cyI6e319",
     "sdkVersion" : "3.2.0",
     "service" : "browser",
     "sessionId" : "s-frozen",
@@ -260,7 +260,7 @@
   },
   {
     "method" : "events",
-    "payload" : "eyJzdHJlYW1JZCI6IjMzQ0E1QTc0LTk1MDMtNEUyOC1BMDJBLTk4ODI0MjYyRjI3MyIsImFyZ3VtZW50cyI6e319",
+    "payload" : "eyJzdHJlYW1JZCI6IkNBN0FDMUQxLUNCMjEtNDdCQi1CNDM0LUEzM0YwREIyNUNGMCIsImFyZ3VtZW50cyI6e319",
     "sdkVersion" : "3.2.0",
     "service" : "browser",
     "sessionId" : "s-frozen",
@@ -268,7 +268,7 @@
   },
   {
     "method" : "cancel",
-    "payload" : "eyJzdHJlYW1JZCI6IkJFREYyQTBDLUM1QjUtNEJGNi05NTI3LTAxQ0VCMjdFNjgyOCIsImFyZ3VtZW50cyI6e319",
+    "payload" : "eyJzdHJlYW1JZCI6IkVDRUJFNzA4LUU4MDktNDJEQS1BREVBLUQ1N0MwRjZCNEE0NiIsImFyZ3VtZW50cyI6e319",
     "sdkVersion" : "3.2.0",
     "service" : "stream",
     "sessionId" : "s-frozen",
@@ -276,7 +276,7 @@
   },
   {
     "method" : "cancel",
-    "payload" : "eyJzdHJlYW1JZCI6IkI3ODcwMkQ1LTMwRTgtNDU1MC1COTlBLUUwMDBBMzQ5NzkwQyIsImFyZ3VtZW50cyI6e319",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IkUyNzIyOUZCLUNCMTEtNDM4OC1BRTg4LTEzOTRBMEFFOTZDQiJ9",
     "sdkVersion" : "3.2.0",
     "service" : "stream",
     "sessionId" : "s-frozen",
@@ -284,7 +284,7 @@
   },
   {
     "method" : "cancel",
-    "payload" : "eyJzdHJlYW1JZCI6IjczQUIxN0U4LUYwRUEtNEJBMi1CQkQ0LTEyMjNBRTVCQkQzQiIsImFyZ3VtZW50cyI6e319",
+    "payload" : "eyJzdHJlYW1JZCI6IkNBN0FDMUQxLUNCMjEtNDdCQi1CNDM0LUEzM0YwREIyNUNGMCIsImFyZ3VtZW50cyI6e319",
     "sdkVersion" : "3.2.0",
     "service" : "stream",
     "sessionId" : "s-frozen",
@@ -292,7 +292,7 @@
   },
   {
     "method" : "cancel",
-    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjA0QTk5NEUwLUZBRkMtNDI4Ni04NzlDLTY3RTUwQTE2MENFQiJ9",
+    "payload" : "eyJzdHJlYW1JZCI6IjM0RUE3MkFELUNENjMtNEU5QS1BMjUxLTZEQUU2MkI5RDQ1RiIsImFyZ3VtZW50cyI6e319",
     "sdkVersion" : "3.2.0",
     "service" : "stream",
     "sessionId" : "s-frozen",
@@ -300,7 +300,7 @@
   },
   {
     "method" : "cancel",
-    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjMzQ0E1QTc0LTk1MDMtNEUyOC1BMDJBLTk4ODI0MjYyRjI3MyJ9",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjY4QkY4M0I2LUQ1MzktNEFDMy05OEQwLTQwRTgxMDk4OERDRCJ9",
     "sdkVersion" : "3.2.0",
     "service" : "stream",
     "sessionId" : "s-frozen",

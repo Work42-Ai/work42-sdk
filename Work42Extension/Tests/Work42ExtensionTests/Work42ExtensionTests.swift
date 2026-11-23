@@ -56,6 +56,18 @@ final class CountingWidget: Work42Widget {
     func makeView(services: SessionServices) -> AnyView { AnyView(EmptyView()) }
 }
 
+@MainActor
+final class LinkWidget: Work42Widget {
+    let id = "links"
+    let title = "Links"
+    let icon = "link"
+    var opened: [URL] = []
+    var linkIntents: [WidgetLinkIntentSpec] {
+        [WidgetLinkIntentSpec(matchers: [.regex("^https://example\\.com/")]) { [weak self] url in self?.opened.append(url) }]
+    }
+    func makeView(services: SessionServices) -> AnyView { AnyView(EmptyView()) }
+}
+
 nonisolated final class RecordingHooks: Work42SessionHooks, @unchecked Sendable {
     var created: [String] = []
     func onCreate(_ context: SessionCreateContext) async throws {
@@ -205,13 +217,36 @@ struct ExtensionRuntimeTests {
         return runtime
     }
 
-    @Test("handshake reports the SDK version, the widgets and the hooks")
+    @Test("handshake reports the SDK version, each widget's metadata and the hooks, without activating anything")
     func handshake() async throws {
-        let runtime = runtime(FakeHost(), widget: CountingWidget(), hooks: RecordingHooks())
+        let widget = CountingWidget()
+        let runtime = runtime(FakeHost(), widget: widget, hooks: RecordingHooks())
         let reply = await runtime.handle(ExtensionCall(service: "extension", method: "handshake"))
         let handshake = try ExtensionJSON.decode(ExtensionPayload.Handshake.self, from: try #require(reply.payload))
-        #expect(handshake == ExtensionPayload.Handshake(sdkVersion: Work42SDKCompatibility.version, widgets: ["counter"],
-                                                        hasSessionHooks: true))
+        #expect(handshake.sdkVersion == Work42SDKCompatibility.version)
+        #expect(handshake.hasSessionHooks)
+        let counter = try #require(handshake.widgets.first)
+        #expect(handshake.widgets.count == 1)
+        #expect(counter.id == "counter" && counter.title == "Counter" && counter.icon == "number")
+        #expect(counter.intents == [ExtensionIntentDescription(name: "run", title: "Run", icon: "play")])
+        #expect(!counter.hasBackgroundAgent && !counter.isBrowserBacked)
+        #expect(widget.activations == 0 && runtime.activeInstanceCount == 0)
+    }
+
+    @Test("openLink runs the widget's link intent with that index")
+    func openLink() async throws {
+        let widget = LinkWidget()
+        let host = FakeHost()
+        let runtime = Work42ExtensionRuntime(widgets: [ExtensionWidgetFactory("links") { widget }], sessionHooks: nil)
+        runtime.connect(host.channel)
+        let url = try #require(URL(string: "https://example.com/a"))
+        let call = try ExtensionCall.make(service: "extension", method: "openLink", sessionId: "s1", widgetId: "links",
+                                          payload: ExtensionPayload.OpenLink(index: 0, url: url, worktreePath: nil))
+        #expect(await runtime.handle(call).error == nil)
+        #expect(widget.opened == [url])
+        let bad = try ExtensionCall.make(service: "extension", method: "openLink", sessionId: "s1", widgetId: "links",
+                                         payload: ExtensionPayload.OpenLink(index: 3, url: url, worktreePath: nil))
+        #expect(await runtime.handle(bad).error?.message.contains("no link intent 3") == true)
     }
 
     @Test("performIntent activates the widget once per session and runs the intent with proxy services")

@@ -19,10 +19,11 @@ nonisolated public struct ExtensionWidgetFactory: Sendable {
 }
 
 extension ExtensionPayload {
-    /// `extension.handshake` reply: who this extension is.
+    /// `extension.handshake` reply: who this extension is, and every widget's metadata (the host registers the widgets
+    /// from it before any session uses them).
     nonisolated public struct Handshake: Codable, Sendable, Equatable {
-        public var sdkVersion: String, widgets: [String], hasSessionHooks: Bool
-        public init(sdkVersion: String, widgets: [String], hasSessionHooks: Bool) {
+        public var sdkVersion: String, widgets: [ExtensionWidgetDescription], hasSessionHooks: Bool
+        public init(sdkVersion: String, widgets: [ExtensionWidgetDescription], hasSessionHooks: Bool) {
             self.sdkVersion = sdkVersion; self.widgets = widgets; self.hasSessionHooks = hasSessionHooks
         }
     }
@@ -113,12 +114,19 @@ public final class Work42ExtensionRuntime {
         do {
             switch call.name {
             case "extension.handshake":
+                // A template instance per widget, only read for its metadata (never activated), as the in-process
+                // loader reads its template.
                 return try .success(ExtensionPayload.Handshake(
-                    sdkVersion: Work42SDKCompatibility.version, widgets: factories.map(\.id),
+                    sdkVersion: Work42SDKCompatibility.version,
+                    widgets: factories.map { ExtensionWidgetDescription(describing: $0.make()) },
                     hasSessionHooks: sessionHooks != nil))
             case "extension.performIntent":
                 let args = try ExtensionJSON.decode(ExtensionPayload.PerformIntent.self, from: call.payload)
                 try await performIntent(call, args)
+                return try .success(ExtensionEmpty())
+            case "extension.openLink":
+                let args = try ExtensionJSON.decode(ExtensionPayload.OpenLink.self, from: call.payload)
+                try await openLink(call, args)
                 return try .success(ExtensionEmpty())
             case "extension.resolveStartURL":
                 return try .success(ExtensionPayload.OptionalBrowserStart(start: try await resolveStartURL(call)))
@@ -194,6 +202,17 @@ public final class Work42ExtensionRuntime {
         } else {
             try await spec.perform()
         }
+    }
+
+    private func openLink(_ call: ExtensionCall, _ args: ExtensionPayload.OpenLink) async throws {
+        let key = try instanceKey(call)
+        let (widget, _) = try instance(widgetId: key.widgetId, sessionId: key.sessionId, worktreePath: args.worktreePath)
+        guard widget.linkIntents.indices.contains(args.index) else {
+            throw WidgetServiceError(
+                message: "widget '\(key.widgetId)' has no link intent \(args.index)",
+                suggestion: "the host must use an index from the widget's description")
+        }
+        try await widget.linkIntents[args.index].perform(args.url)
     }
 
     private func resolveStartURL(_ call: ExtensionCall) async throws -> ExtensionPayload.BrowserStart? {

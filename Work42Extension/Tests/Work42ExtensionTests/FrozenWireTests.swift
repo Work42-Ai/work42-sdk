@@ -62,6 +62,8 @@ private func hostCalls() throws -> [ExtensionCall] {
         try call("extension", "handshake", sessionId: nil, widgetId: nil, ExtensionEmpty()),
         try call("extension", "performIntent",
                  ExtensionPayload.PerformIntent(name: "run", params: ["n": .number(1)], worktreePath: "/tmp/frozen")),
+        try call("extension", "openLink",
+                 ExtensionPayload.OpenLink(index: 0, url: URL(string: "https://example.com/a")!, worktreePath: "/tmp/frozen")),
         try call("extension", "resolveStartURL", sessionId: nil, ExtensionEmpty()),
         try call("extension", "backgroundStart", ExtensionPayload.BackgroundStart(taskId: "t-frozen")),
         try call("extension", "backgroundStop", ExtensionEmpty()),
