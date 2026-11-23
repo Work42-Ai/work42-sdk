@@ -8,9 +8,9 @@
 // import Work42Extension
 //
 // @main
-// final class TodosExtension: Work42PluginExtension {
+// nonisolated final class TodosExtension: Work42PluginExtension {
 //     required init() {}
-//     var widgets: [ExtensionWidgetFactory] { [ExtensionWidgetFactory("todos") { TodosWidget() }] }
+//     @MainActor var widgets: [ExtensionWidgetFactory] { [ExtensionWidgetFactory("todos") { TodosWidget() }] }
 // }
 // ```
 //
@@ -44,18 +44,21 @@ import Work42PluginKit
 
 // MARK: - The protocol a plugin's @main type conforms to
 
+/// The protocol itself is nonisolated, and the conforming class must be too (`nonisolated final class`): plugin code
+/// compiles with MainActor as its default isolation, which would make the class's `AppExtension` conformance
+/// main-actor-isolated, and a protocol refining `AppExtension` cannot be satisfied by an isolated conformance. The two
+/// requirements are `@MainActor`, so the widgets and hooks they return are ordinary main-actor plugin code.
 @available(macOS 26.2, *)
-@MainActor
-public protocol Work42PluginExtension: AppExtension {
+nonisolated public protocol Work42PluginExtension: AppExtension {
     /// The plugin's widgets, by the ids its `plugin.yaml` declares.
-    var widgets: [ExtensionWidgetFactory] { get }
+    @MainActor var widgets: [ExtensionWidgetFactory] { get }
     /// The plugin's session hooks, or nil.
-    var sessionHooks: (any Work42SessionHooks)? { get }
+    @MainActor var sessionHooks: (any Work42SessionHooks)? { get }
 }
 
 @available(macOS 26.2, *)
-public extension Work42PluginExtension {
-    var sessionHooks: (any Work42SessionHooks)? { nil }
+nonisolated public extension Work42PluginExtension {
+    @MainActor var sessionHooks: (any Work42SessionHooks)? { nil }
 
     /// Binds the extension to Work42's point, `com.work42.app.plugin`.
     @AppExtensionPoint.Bind
@@ -65,7 +68,9 @@ public extension Work42PluginExtension {
 
     /// The widget scene plus the process-level connection.
     var configuration: AppExtensionSceneConfiguration {
-        Work42ExtensionHost.start(widgets: widgets, sessionHooks: sessionHooks)
+        // ExtensionKit makes this object once and nothing else touches it; it is only read on the main actor here.
+        nonisolated(unsafe) let plugin = self
+        onMain { Work42ExtensionHost.start(widgets: plugin.widgets, sessionHooks: plugin.sessionHooks) }
         return AppExtensionSceneConfiguration(Work42WidgetScene(), configuration: Work42ProcessConnection())
     }
 }

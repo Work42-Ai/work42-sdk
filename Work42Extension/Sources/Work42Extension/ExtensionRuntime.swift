@@ -8,7 +8,7 @@ import Foundation
 import Work42PluginKit
 
 /// How an extension makes one of its widgets. The runtime makes a fresh instance per session, as the in-process loader does.
-public struct ExtensionWidgetFactory: Sendable {
+nonisolated public struct ExtensionWidgetFactory: Sendable {
     public let id: String
     public let make: @MainActor @Sendable () -> any Work42Widget
 

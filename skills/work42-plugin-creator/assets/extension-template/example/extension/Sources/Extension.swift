@@ -4,12 +4,13 @@ import SwiftUI
 import Work42Extension
 import Work42PluginKit
 
+/// `nonisolated` is required: ExtensionKit makes this class off the main actor (the rest of your code stays on it).
 @main
-final class ExampleExtension: Work42PluginExtension {
+nonisolated final class ExampleExtension: Work42PluginExtension {
     required init() {}
 
     /// One factory per widget id in plugin.yaml. Work42 makes one instance per session.
-    var widgets: [ExtensionWidgetFactory] {
+    @MainActor var widgets: [ExtensionWidgetFactory] {
         [ExtensionWidgetFactory("example-extension") { ExampleWidget() }]
     }
 }
