@@ -34,9 +34,6 @@ let package = Package(
     ],
     products: [
         .library(name: "Work42PluginKit", type: .dynamic, targets: ["Work42PluginKit"]),
-        // SDK 3.2.0: the runtime for a plugin that runs out of process, as an ExtensionKit extension inside its own
-        // container app. The extension process links it; the Work42 app never does (it talks to it over XPC).
-        .library(name: "Work42Extension", type: .dynamic, targets: ["Work42Extension"]),
     ],
     dependencies: [
         .package(path: "../Work42UI"),
@@ -59,22 +56,6 @@ let package = Package(
                 .product(name: "Work42UI", package: "Work42UI"),
             ],
             path: "Sources/Work42PluginKit",
-            swiftSettings: concurrencySettings
-        ),
-        .target(
-            // The out-of-process plugin runtime (SDK 3.2.0): the JSON wire both sides speak, the XPC protocols, a proxy
-            // for every `SessionServices` member, the dispatcher for host requests, and `Work42PluginExtension`, the
-            // protocol a plugin's `@main` extension type conforms to. The wire and the proxies are plain Swift and run on
-            // every platform (so they are unit-tested over an in-memory channel); the ExtensionKit plumbing is macOS-only.
-            name: "Work42Extension",
-            dependencies: ["Work42PluginKit"],
-            path: "Sources/Work42Extension",
-            swiftSettings: concurrencySettings
-        ),
-        .testTarget(
-            name: "Work42ExtensionTests",
-            dependencies: ["Work42Extension", "Work42PluginKit"],
-            path: "Tests/Work42ExtensionTests",
             swiftSettings: concurrencySettings
         ),
         .testTarget(

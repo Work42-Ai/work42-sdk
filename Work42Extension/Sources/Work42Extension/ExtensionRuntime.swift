@@ -207,6 +207,9 @@ public final class Work42ExtensionRuntime {
         switch surface.spec.source {
         case .url(let value): url = value
         case .provider(let produce): url = try await produce()
+        @unknown default:
+            throw WidgetServiceError(message: "widget '\(widgetId)' declares a browser source this SDK does not know",
+                                     suggestion: "rebuild the plugin with the SDK Work42 reports (`work42 sdk`)")
         }
         return ExtensionPayload.BrowserStart(
             url: url, selector: surface.spec.selector, dataStoreKey: surface.spec.dataStoreKey,
