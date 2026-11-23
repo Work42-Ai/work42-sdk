@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.1.0
+
+Additions only: a plugin built with 3.0.0 runs unchanged on 3.1.0.
+
+- **`services.browser`: a browser widget drives its own tabs.** `SessionServices.browser` returns a `BrowserTabsService` bound
+  to the calling widget: `setTabs(_:)`, `selectTab(_:)`, `updateTab(_:title:url:icon:)`, and the streams `tabs` (the widget's
+  tabs now and after every change) and `events` (`BrowserEvent.newTabRequested` for the "+" button, `.tabClosed(id)` for a
+  "×"). Nothing takes a widget id, so a widget cannot read or change another widget's tabs. On a host that cannot provide it
+  every call throws a `WidgetServiceError` saying to run inside Work42 3.1 or later. New types: `BrowserTabsState`,
+  `BrowserEvent`, `BrowserTabsService`, `UnavailableBrowserTabsService`, `BrowserTabsRegistry` (set by the host).
+- **A browser surface needs no closure.** `BrowserSurfaceDeclaration(spec:cacheKey:)` and `BrowserSurface(spec:cacheKey:...)`
+  have forms without `configure:`. Declare the surface, then drive it through `services.browser`.
+- **Deprecated, with the replacement named in the message:** the `configure:` forms of `BrowserSurfaceDeclaration.init` and
+  `BrowserSurface.init`, and `BrowserSurface.model(forKey:)` / `model(forKey:scope:)`. They still compile and still work; new
+  plugins should not use them, and `BrowserWidgetModel` is no longer the way for a plugin to reach its tabs. A call that
+  passes no `configure:` resolves to the new forms, so it does not warn.
+- **Intent ids** the host registers for the same purpose (they act on the browser of the widget whose `services.intents` made
+  the call, never take a widget id): `browser.tabs.set {tabs}`, `browser.tabs.select {id}`,
+  `browser.tabs.update {id, title?, url?, icon?}`.
 ## 3.0.0
 
 - **Compatibility is one number: the SDK version.** The ABI generation counter (`Work42SDKCompatibility.abiGeneration`, last

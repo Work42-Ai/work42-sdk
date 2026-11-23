@@ -6,7 +6,7 @@ import Work42UI
 struct Work42SDKCompatibilityTests {
     @Test("the release is canonical and the probe answers 3")
     func canonicalCompatibility() {
-        #expect(Work42SDKCompatibility.version == "3.0.0")
+        #expect(Work42SDKCompatibility.version == "3.1.0")
         #expect(WidgetSDK.version == Work42SDKCompatibility.version)
         #expect(Work42SDKCompatibility.versionProbeValue == 3)
         #expect(Work42SDKCompatibility.requiredMajor(Work42SDKCompatibility.version) == 3)

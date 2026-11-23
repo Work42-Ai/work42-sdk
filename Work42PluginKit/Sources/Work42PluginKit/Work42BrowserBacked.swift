@@ -8,11 +8,13 @@
 // ```swift
 // final class MyWidget: Work42BrowserBacked {
 //     var browserSurface: BrowserSurfaceDeclaration? {
-//         BrowserSurfaceDeclaration(spec: spec, cacheKey: id, configure: { model in self.wire(model) })
+//         BrowserSurfaceDeclaration(spec: spec, cacheKey: id)
 //     }
 //     func makeView(services: SessionServices) -> AnyView { AnyView(BrowserSurface(browserSurface!)) }
 // }
 // ```
+//
+// Drive the widget's tabs with `services.browser` (SDK 3.1.0), not with a `configure:` closure.
 //
 // The protocol is discovered by cast, like `Work42WidgetPill` and `Work42WidgetBackground`: a widget that does not conform loads and
 // behaves exactly as before, so the ABI generation does not change.

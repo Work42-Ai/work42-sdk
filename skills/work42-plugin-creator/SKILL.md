@@ -83,6 +83,30 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
 
 9. If the plugin needs a CLI or configuration, give it a `my-plugin-setup` skill with the exact install steps, and end every other skill's `## Prerequisites` with "if that fails, follow the `my-plugin-setup` skill". The agent runs it when something is missing; there is no Set up button.
 
+## Browser-based widgets
+
+A widget that shows web pages in tabs (SDK 3.1.0 and later) uses two things and nothing else: a declaration of its surface, and `services.browser` for its tabs. `assets/plugin-template/widgets/example-browser/` is a complete example; copy it.
+
+```swift
+final class MyBrowserWidget: Work42BrowserBacked {
+    // ... id, title, icon, linkIntents ...
+    var browserSurface: BrowserSurfaceDeclaration? {
+        BrowserSurfaceDeclaration(spec: BrowserSurfaceSpec(url: url, dataStoreKey: "my-plugin", title: "My page"), cacheKey: id)
+    }
+    func makeView(services: SessionServices) -> AnyView {
+        AnyView(BrowserSurface(spec: browserSurface!.spec, cacheKey: id, services: services))
+    }
+}
+
+try await services.browser.setTabs([BrowserTab(url: url, title: "Page")])   // show these tabs
+try await services.browser.selectTab(tab.id)                                // bring one to the front
+for await event in services.browser.events { /* .newTabRequested (+), .tabClosed(id) (x) */ }
+```
+
+`services.browser` is already scoped to this widget in this session; it takes no widget id, and a widget cannot reach another widget's tabs. Switch over `BrowserEvent` with `@unknown default`, because a later 3.x release may add events. The plugin's `sdk_version` must be 3.1.0 or newer if it calls `services.browser` (`work42 plugin build` stamps it).
+
+**Do not use `configure:` or `BrowserWidgetModel`** (and not `BrowserSurface.model(forKey:)`): they are deprecated and compile with a warning that names the replacement call.
+
 ## Guardrails
 
 - Keep `manifest_version: 2` and semantic plugin and SDK versions. There is no `sdk_abi`; do not write one.
