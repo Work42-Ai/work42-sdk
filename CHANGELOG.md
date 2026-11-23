@@ -1,5 +1,39 @@
 # Changelog
 
+## 3.2.0
+
+Additions only: a plugin built with 3.0.0 or 3.1.0 runs unchanged on 3.2.0.
+
+- **Out-of-process plugins: the `Work42Extension` product.** A plugin can now run in its own process, as an ExtensionKit
+  extension inside a container app, instead of as a dylib inside Work42. A crash or hang then takes down only the plugin: the
+  widget shows an error card with Restart, and nothing it was doing is run twice. Declare it in `plugin.yaml` with
+  `runtime: extension` and `extension_bundle_id: <the extension's bundle id>` (the default stays `runtime: inprocess`), and
+  `work42 plugin build` builds the container app. The `@main` type is a final class conforming to `Work42PluginExtension`
+  that lists its widgets (`ExtensionWidgetFactory`) and, optionally, its `sessionHooks`; widgets are written exactly as they
+  are in process (`Work42Widget`, `SessionServices`, `Work42WidgetBackground`, `Work42BrowserBacked`).
+  ```swift
+  import Work42Extension
+
+  @main
+  final class TodosExtension: Work42PluginExtension {
+      required init() {}
+      var widgets: [ExtensionWidgetFactory] { [ExtensionWidgetFactory("todos") { TodosWidget() }] }
+  }
+  ```
+  Requires macOS 26.2. The extension binds to the point `com.work42.app.plugin` (`Work42ExtensionPoint.identifier`).
+- **How it talks to Work42.** Every `SessionServices` member is a proxy that sends the call to Work42 (`platform` stays local:
+  links and the pasteboard are this Mac's either way). Calls travel as JSON in one generic XPC method
+  (`Work42ExtensionXPC`, `Work42HostXPC`; envelope `ExtensionCall` / `ExtensionReply`, stamped with the sender's SDK version),
+  so a method added later never changes the XPC protocol, and a method one side does not know comes back as a named
+  `WidgetServiceError` instead of an XPC failure. Calls that must not run twice (`shell.run`, `intents.execute`, `tools.call`,
+  hooks, intents Work42 asks the extension to perform) carry a `requestId`. When the connection is lost the caller gets
+  `WidgetServiceError.extensionInterrupted` ("interrupted: the extension stopped", suggestion "retry the action") or, inside the
+  extension, `.hostInterrupted`; nothing is re-sent automatically.
+- New types: `Work42PluginExtension`, `ExtensionWidgetFactory`, `Work42ExtensionPoint`, `Work42ExtensionRuntime`,
+  `ExtensionCall`, `ExtensionReply`, `ExtensionStreamEvent`, `ExtensionPayload`, `ExtensionChannel`, `ExtensionTransport`,
+  `ClosureExtensionTransport`, `ExtensionSubscription`, `ExtensionServices`, the `Extension…Proxy` service proxies, and the XPC
+  protocols above. Nothing in `Work42UI` or `Work42PluginKit` changed.
+
 ## 3.1.0
 
 Additions only: a plugin built with 3.0.0 runs unchanged on 3.1.0.

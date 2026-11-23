@@ -12,7 +12,7 @@ import Foundation
 /// The host, CLI, loaders, templates, and release packages all read these values rather than keeping their
 /// own mirrors.
 public enum Work42SDKCompatibility {
-    nonisolated public static let version = "3.1.0"
+    nonisolated public static let version = "3.2.0"
 
     /// What the version-probe symbols (`work42_widget_sdk_version`, `work42_plugin_sdk_version`) return in
     /// every 3.x SDK. It only tells the host the dylib answers the probe; compatibility is decided from the
