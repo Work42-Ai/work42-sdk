@@ -135,6 +135,24 @@ struct BrowserTabsServiceTests {
         #expect(BrowserEvent.tabClosed(tab.id) != .newTabRequested)
     }
 
+    @Test("the host's attach hook runs after the surface's default hooks are in place, with the scoped key, and every time they are wired")
+    func attachRunsAfterDefaults() {
+        let previous = BrowserTabsRegistry.attach
+        defer { BrowserTabsRegistry.attach = previous }
+        var seen: [(key: String, hadDefaultNewTab: Bool, hadTabClosed: Bool)] = []
+        BrowserTabsRegistry.attach = { model, key in
+            seen.append((key, model.onNewTab != nil, model.onTabClosed != nil))
+        }
+
+        let model = BrowserWidgetModel(canEditURL: true, presetSelector: "", initialURL: nil)
+        BrowserSurface.wireHooks(on: model, cacheKey: "s1/my-widget", configure: nil)
+        // A view mounting on a model that already exists wires again; the host gets another chance to re-install.
+        BrowserSurface.wireHooks(on: model, cacheKey: "s1/my-widget", configure: nil)
+
+        #expect(seen.count == 2)
+        #expect(seen.allSatisfy { $0.key == "s1/my-widget" && $0.hadDefaultNewTab && $0.hadTabClosed })
+    }
+
     @Test("a surface declaration needs no closure; the configure: forms still work")
     func declarationForms() {
         let spec = BrowserSurfaceSpec(url: URL(string: "https://example.com")!, dataStoreKey: "x")

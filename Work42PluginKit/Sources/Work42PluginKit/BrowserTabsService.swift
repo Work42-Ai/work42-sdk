@@ -71,6 +71,12 @@ nonisolated public protocol BrowserTabsService: Sendable {
 @MainActor
 public enum BrowserTabsRegistry {
     public static var resolve: (@MainActor (SessionServices) -> (any BrowserTabsService)?)?
+
+    /// Called each time a browser surface has finished wiring a model's own hooks (when the model is built, and again when a view
+    /// mounts on a model that already exists), with the model and the key it is cached under (`"<session>/<widget id>"`). It runs
+    /// after the surface's default `onNewTab` / `onTabClosed`, so a host that answers a widget's events through `services.browser`
+    /// installs its listeners here and they are never overwritten by the defaults. Plugins never touch this.
+    public static var attach: (@MainActor (_ model: BrowserWidgetModel, _ scopedKey: String) -> Void)?
 }
 
 /// The service a host with no browser support (or no widget binding) hands out: every call throws a named remedy.

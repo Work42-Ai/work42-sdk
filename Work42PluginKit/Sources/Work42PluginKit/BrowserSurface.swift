@@ -997,6 +997,9 @@ public struct BrowserSurface: View {
             // Then call the widget's handler (may be nil → no-op).
             widgetTabClosed?(tabID)
         }
+
+        // 4. Let the host put its own listeners on top (services.browser's events), now that the defaults are in.
+        BrowserTabsRegistry.attach?(model, cacheKey)
     }
 
     // MARK: - Fail-loud error card
