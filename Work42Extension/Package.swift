@@ -42,7 +42,12 @@ let package = Package(
             // conforms to. The wire and the proxies are plain Swift (unit-tested over an in-memory channel); the
             // ExtensionKit plumbing is macOS-only.
             name: "Work42Extension",
-            dependencies: [.product(name: "Work42PluginKit", package: "Work42PluginKit")],
+            // Work42UI is listed although Work42PluginKit re-exports it: the re-export is for the compiler, and the
+            // framework still has to link Work42UI.framework itself for the symbols it uses (BrowserTab, the SDK version).
+            dependencies: [
+                .product(name: "Work42PluginKit", package: "Work42PluginKit"),
+                .product(name: "Work42UI", package: "Work42UI"),
+            ],
             path: "Sources/Work42Extension",
             swiftSettings: concurrencySettings
         ),
