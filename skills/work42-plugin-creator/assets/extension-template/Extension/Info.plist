@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>__DISPLAY_NAME__</string>
+	<key>CFBundleExecutable</key>
+	<string>__EXECUTABLE__</string>
+	<key>CFBundleIdentifier</key>
+	<string>__EXTENSION_BUNDLE_ID__</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>__EXECUTABLE__</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>MacOSX</string>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>__VERSION__</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.2</string>
+	<!-- The Work42 extension point. Must be host-qualified (WOR-861). -->
+	<key>EXAppExtensionAttributes</key>
+	<dict>
+		<key>EXExtensionPointIdentifier</key>
+		<string>__POINT_ID__</string>
+	</dict>
+	<!-- Read by Work42 before it connects: the SDK this extension was built with. -->
+	<key>Work42SDKVersion</key>
+	<string>__SDK_VERSION__</string>
+	<!-- Remote SwiftUI scenes need ViewBridge to find an AppKit run loop (WOR-861). -->
+	<key>XPCService</key>
+	<dict>
+		<key>RunLoopType</key>
+		<string>_NSApplicationMain</string>
+		<key>ServiceType</key>
+		<string>Application</string>
+	</dict>
+</dict>
+</plist>
