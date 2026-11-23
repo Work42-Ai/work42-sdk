@@ -1,0 +1,309 @@
+[
+  {
+    "method" : "insert",
+    "payload" : "eyJ0ZXh0IjoiaGkifQ==",
+    "sdkVersion" : "3.2.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "attach",
+    "payload" : "eyJib2R5IjoibGV0IGEgPSAxIiwic291cmNlTGFiZWwiOiJhLnN3aWZ0IiwiZXhjZXJwdCI6ImxldCBhIn0=",
+    "sdkVersion" : "3.2.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "presentCommentableSelection",
+    "payload" : "eyJzb3VyY2VMYWJlbCI6ImEuc3dpZnQiLCJleGNlcnB0IjoibGV0IGEifQ==",
+    "sdkVersion" : "3.2.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "clearCommentableSelection",
+    "payload" : "e30=",
+    "sdkVersion" : "3.2.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "run",
+    "payload" : "eyJjb21tYW5kIjoiZWNobyBmcm96ZW4ifQ==",
+    "requestId" : "1B752BE0-A9C9-455D-A6BD-C2429A966473",
+    "sdkVersion" : "3.2.0",
+    "service" : "shell",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "execute",
+    "payload" : "eyJwYXJhbXMiOnsibiI6MX0sImlkIjoiY291bnRlci5ydW4ifQ==",
+    "requestId" : "1BD032C5-B145-4685-80B0-1E6AA2F8A190",
+    "sdkVersion" : "3.2.0",
+    "service" : "intents",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "get",
+    "payload" : "eyJrZXkiOiJpdGVtcyIsIm5hbWVzcGFjZSI6InRvZG9zIn0=",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "list",
+    "payload" : "eyJuYW1lc3BhY2UiOiJ0b2RvcyJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "set",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvaXRlbXMiLCJ2YWx1ZSI6WyJhIl19",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "delete",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvaXRlbXMifQ==",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "person",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "setPerson",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiIsInZhbHVlIjp0cnVlfQ==",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "deletePerson",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "people",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "present",
+    "payload" : "eyJ3aWRnZXRJZCI6ImNvdW50ZXIiLCJzZXNzaW9uSWQiOiJzLWZyb3plbiJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "pill",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "dismiss",
+    "payload" : "eyJ3aWRnZXRJZCI6ImNvdW50ZXIifQ==",
+    "sdkVersion" : "3.2.0",
+    "service" : "pill",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "isPresented",
+    "payload" : "eyJ3aWRnZXRJZCI6ImNvdW50ZXIifQ==",
+    "sdkVersion" : "3.2.0",
+    "service" : "pill",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "listTools",
+    "payload" : "e30=",
+    "sdkVersion" : "3.2.0",
+    "service" : "tools",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "call",
+    "payload" : "eyJzZXJ2ZXIiOiJ3b3JrNDItc2Vzc2lvbiIsInRvb2wiOiJzdG9yYWdlX2dldCIsImFyZ3VtZW50cyI6eyJrZXkiOiJhXC9iIn19",
+    "requestId" : "B030553B-9AC4-4C57-9814-B9A04251C36D",
+    "sdkVersion" : "3.2.0",
+    "service" : "tools",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "read",
+    "payload" : "eyJwYXRoIjoiUkVBRE1FLm1kIn0=",
+    "sdkVersion" : "3.2.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "list",
+    "payload" : "eyJwYXRoIjoiZG9jcyJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "currentUser",
+    "payload" : "e30=",
+    "sdkVersion" : "3.2.0",
+    "service" : "account",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "members",
+    "payload" : "e30=",
+    "sdkVersion" : "3.2.0",
+    "service" : "collaboration",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "report",
+    "payload" : "e30=",
+    "sdkVersion" : "3.2.0",
+    "service" : "collaboration",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "ping",
+    "payload" : "e30=",
+    "sdkVersion" : "3.2.0",
+    "service" : "activity",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "selectTab",
+    "payload" : "eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDA0MiJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "updateTab",
+    "payload" : "eyJ1cmwiOiJodHRwczpcL1wvZXhhbXBsZS5jb20iLCJpY29uIjoiZ2xvYmUiLCJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDA0MiIsInRpdGxlIjoiRG9jcyJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "setTabs",
+    "payload" : "eyJ0YWJzIjpbXX0=",
+    "sdkVersion" : "3.2.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "watch",
+    "payload" : "eyJzdHJlYW1JZCI6IkJFREYyQTBDLUM1QjUtNEJGNi05NTI3LTAxQ0VCMjdFNjgyOCIsImFyZ3VtZW50cyI6eyJwYXRoIjoiZG9jcyJ9fQ==",
+    "sdkVersion" : "3.2.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cursors",
+    "payload" : "eyJzdHJlYW1JZCI6IjczQUIxN0U4LUYwRUEtNEJBMi1CQkQ0LTEyMjNBRTVCQkQzQiIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.2.0",
+    "service" : "collaboration",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "subscribe",
+    "payload" : "eyJzdHJlYW1JZCI6IjA0QTk5NEUwLUZBRkMtNDI4Ni04NzlDLTY3RTUwQTE2MENFQiIsImFyZ3VtZW50cyI6eyJ3aWRnZXQiOiJjb3VudGVyIiwic3RyZWFtIjoiZXZlbnRzIiwic2Vzc2lvbiI6InMtZnJvemVuIn19",
+    "sdkVersion" : "3.2.0",
+    "service" : "streams",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "tabs",
+    "payload" : "eyJzdHJlYW1JZCI6IkI3ODcwMkQ1LTMwRTgtNDU1MC1COTlBLUUwMDBBMzQ5NzkwQyIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.2.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "events",
+    "payload" : "eyJzdHJlYW1JZCI6IjMzQ0E1QTc0LTk1MDMtNEUyOC1BMDJBLTk4ODI0MjYyRjI3MyIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.2.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJzdHJlYW1JZCI6IkJFREYyQTBDLUM1QjUtNEJGNi05NTI3LTAxQ0VCMjdFNjgyOCIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.2.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJzdHJlYW1JZCI6IkI3ODcwMkQ1LTMwRTgtNDU1MC1COTlBLUUwMDBBMzQ5NzkwQyIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.2.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJzdHJlYW1JZCI6IjczQUIxN0U4LUYwRUEtNEJBMi1CQkQ0LTEyMjNBRTVCQkQzQiIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.2.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjA0QTk5NEUwLUZBRkMtNDI4Ni04NzlDLTY3RTUwQTE2MENFQiJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjMzQ0E1QTc0LTk1MDMtNEUyOC1BMDJBLTk4ODI0MjYyRjI3MyJ9",
+    "sdkVersion" : "3.2.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  }
+]

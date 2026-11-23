@@ -1,0 +1,93 @@
+[
+  {
+    "call" : {
+      "method" : "handshake",
+      "payload" : "e30=",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension"
+    },
+    "reply" : {
+      "payload" : "eyJzZGtWZXJzaW9uIjoiMy4yLjAiLCJ3aWRnZXRzIjpbImNvdW50ZXIiXSwiaGFzU2Vzc2lvbkhvb2tzIjp0cnVlfQ=="
+    }
+  },
+  {
+    "call" : {
+      "method" : "performIntent",
+      "payload" : "eyJuYW1lIjoicnVuIiwid29ya3RyZWVQYXRoIjoiXC90bXBcL2Zyb3plbiIsInBhcmFtcyI6eyJuIjoxfX0=",
+      "requestId" : "1A2FAB2F-3AF4-49A4-A82A-55700BF3CEA4",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "resolveStartURL",
+      "payload" : "e30=",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "backgroundStart",
+      "payload" : "eyJ0YXNrSWQiOiJ0LWZyb3plbiJ9",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "error" : {
+        "message" : "widget 'counter' has no background agent",
+        "suggestion" : "conform the widget to Work42WidgetBackground, or stop asking for one"
+      }
+    }
+  },
+  {
+    "call" : {
+      "method" : "backgroundStop",
+      "payload" : "e30=",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "hook",
+      "payload" : "eyJuYW1lIjoiZnJvemVuIiwiZXZlbnQiOiJvbkNyZWF0ZSIsIndvcmt0cmVlUGF0aCI6IlwvdG1wXC9mcm96ZW4iLCJwYXJhbXMiOnt9fQ==",
+      "requestId" : "8407B030-2488-461D-93BD-B3C8B5CDB218",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "releaseSession",
+      "payload" : "e30=",
+      "sdkVersion" : "3.2.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  }
+]
