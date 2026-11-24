@@ -36,3 +36,20 @@ an earlier 3.x SDK never ships.
 
 Freeze a release of a new major version the same way; the older major's directories stay, and the host skips them because it
 does not accept them.
+
+## Installer rejection fixtures
+
+Run `scripts/make-bad-artifacts.sh <good-artifact.zip> <out-dir>` on macOS to
+create bad-hash, unsigned, wrong-team, and SDK 4 fixtures. The output directory
+must not already contain these filenames. Standard output is four JSON lines
+with emulator catalog fields; diagnostics go to stderr. Use these only in the
+Firestore emulator, never the published catalog.
+
+Set `WORK42_ALT_SIGN_IDENTITY` to choose another team's local identity; otherwise
+the script discovers one or creates and deletes a temporary self-signed identity.
+The latter may require macOS authorization for temporary code-signing trust;
+that certificate's trust entry and keychain are removed at exit.
+The SDK 4 fixture uses the original signing identity when available, otherwise
+ad-hoc signing. Re-signing invalidates notarization, so Gatekeeper (or signature
+validation after the ad-hoc fallback) can reject it before the SDK check.
+The catalog SDK values are fixed at 3.2.0 and 4.0.0 for this QA scenario.
