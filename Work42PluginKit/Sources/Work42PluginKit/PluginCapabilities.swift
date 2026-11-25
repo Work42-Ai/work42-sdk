@@ -202,12 +202,26 @@ nonisolated public struct TranscriptSegment: Codable, Sendable, Equatable {
     public var text: String
     /// Which side said it, for a live transcript of a recording with both.
     public var source: AudioSource?
+    /// `true` for text the recognizer may still change (SDK 3.4.0): a live transcript delivers a growing partial line, then
+    /// the final one that replaces it. Absent (nil) means final, which is what every earlier host sends, so a transcript
+    /// that only keeps final lines keeps working unchanged: filter on `isFinal`.
+    public var isPartial: Bool?
+
+    /// Whether this is the final text of the line.
+    public var isFinal: Bool { isPartial != true }
 
     public init(start: Double, end: Double, text: String, source: AudioSource? = nil) {
         self.start = start
         self.end = end
         self.text = text
         self.source = source
+        self.isPartial = nil
+    }
+
+    /// A line that may be partial (3.4.0). `isPartial` has no default so this overload stays distinct from the one above.
+    public init(start: Double, end: Double, text: String, source: AudioSource?, isPartial: Bool?) {
+        self.init(start: start, end: end, text: text, source: source)
+        self.isPartial = isPartial
     }
 }
 

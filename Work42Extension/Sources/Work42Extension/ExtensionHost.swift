@@ -37,6 +37,10 @@ public final class ExtensionHostServer {
     /// plugin the link belongs to (and so what it declared) is known to Work42, not to the call. Without it those calls
     /// fail with a named error.
     public var capabilityProvider: (@MainActor (ExtensionCall) -> WidgetCapabilities)?
+    /// Told when an extension says something about one of its widgets that is not a service call (3.4.0): its live state
+    /// (intents, header labels) changed, or a popover asked to close. Work42 sets it per link; unset, those calls are
+    /// accepted and dropped.
+    public var widgetEvents: (@MainActor (ExtensionWidgetEvent) -> Void)?
 
     public init(ledger: ExtensionRequestLedger) {
         self.ledger = ledger
@@ -228,6 +232,20 @@ public final class ExtensionHostServer {
             return empty
         case "storage.people":
             return try .success(try await storage(call).people(key: try args(ExtensionPayload.Key.self).key))
+
+        // a widget's live state and popovers (3.4.0)
+        case "widget.state":
+            let state = try args(ExtensionPayload.WidgetState.self)
+            if let sessionId = call.sessionId, let widgetId = call.widgetId {
+                widgetEvents?(.state(widgetId: widgetId, sessionId: sessionId, agent: call.agent == true, state))
+            }
+            return empty
+        case "widget.dismissPopover":
+            let closed = try args(ExtensionPayload.PopoverClosed.self)
+            if let sessionId = call.sessionId, let widgetId = call.widgetId {
+                widgetEvents?(.dismissPopover(widgetId: widgetId, sessionId: sessionId, intent: closed.intent))
+            }
+            return empty
 
         // pill
         case "pill.present":

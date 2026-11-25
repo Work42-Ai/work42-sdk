@@ -197,9 +197,9 @@ final class Work42SceneModel: ObservableObject {
                                          suggestion: "the host must set both on the scene's first call")
             }
             let context = try ExtensionJSON.decode(ExtensionPayload.SessionContext.self, from: call.payload)
-            let (widget, services) = try runtime.instance(widgetId: widgetId, sessionId: sessionId,
-                                                          worktreePath: context.worktreePath)
-            content = widget.makeView(services: services)
+            // The tile by default; since 3.4.0 the host may ask for the pill, the custom header or an action-area popover.
+            content = try runtime.view(widgetId: widgetId, sessionId: sessionId, worktreePath: context.worktreePath,
+                                       surface: context.surface)
             failure = nil
             return try .success(ExtensionEmpty())
         } catch {

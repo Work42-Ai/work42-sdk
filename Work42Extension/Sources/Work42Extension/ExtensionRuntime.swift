@@ -5,6 +5,7 @@
 // it is tested without ExtensionKit; `Work42PluginExtension` connects it to the real XPC connection.
 
 import Foundation
+import SwiftUI
 import Work42PluginKit
 
 /// How an extension makes one of its widgets. The runtime makes a fresh instance per session, as the in-process loader does.
@@ -30,7 +31,10 @@ extension ExtensionPayload {
     /// The session context the host sends with any call that may activate a widget.
     nonisolated public struct SessionContext: Codable, Sendable {
         public var worktreePath: String?
+        /// Which of the widget's views the scene draws (`ExtensionSurface`, 3.4.0). Absent: the tile.
+        public var surface: String?
         public init(worktreePath: String?) { self.worktreePath = worktreePath }
+        public init(worktreePath: String?, surface: String?) { self.worktreePath = worktreePath; self.surface = surface }
     }
     /// `extension.performIntent` arguments: the intent's last name component and its parameters.
     nonisolated public struct PerformIntent: Codable, Sendable {
@@ -76,6 +80,9 @@ public final class Work42ExtensionRuntime {
 
     private var instances: [InstanceKey: (widget: any Work42Widget, services: SessionServices)] = [:]
     private var agents: [InstanceKey: any WidgetBackgroundAgent] = [:]
+    /// What sends each widget's and agent's live state to Work42 (see `ExtensionStatePusher`).
+    private var widgetPushers: [InstanceKey: ExtensionStatePusher] = [:]
+    private var agentPushers: [InstanceKey: ExtensionStatePusher] = [:]
 
     public init(widgets: [ExtensionWidgetFactory], sessionHooks: (any Work42SessionHooks)?) {
         self.factories = widgets
@@ -92,6 +99,10 @@ public final class Work42ExtensionRuntime {
     /// starts over; nothing here is resent.
     public func disconnect() {
         channel?.close()
+        for pusher in widgetPushers.values { pusher.cancel() }
+        for pusher in agentPushers.values { pusher.cancel() }
+        widgetPushers.removeAll()
+        agentPushers.removeAll()
         for agent in agents.values { agent.stop() }
         agents.removeAll()
         for instance in instances.values { instance.widget.deactivate() }
@@ -124,6 +135,10 @@ public final class Work42ExtensionRuntime {
                 let args = try ExtensionJSON.decode(ExtensionPayload.PerformIntent.self, from: call.payload)
                 try await performIntent(call, args)
                 return try .success(ExtensionEmpty())
+            case "extension.selectMenuOption":
+                let args = try ExtensionJSON.decode(ExtensionPayload.MenuSelect.self, from: call.payload)
+                try await selectMenuOption(call, args)
+                return try .success(ExtensionEmpty())
             case "extension.openLink":
                 let args = try ExtensionJSON.decode(ExtensionPayload.OpenLink.self, from: call.payload)
                 try await openLink(call, args)
@@ -136,6 +151,7 @@ public final class Work42ExtensionRuntime {
                 return try .success(ExtensionEmpty())
             case "extension.backgroundStop":
                 let key = try instanceKey(call)
+                agentPushers.removeValue(forKey: key)?.cancel()
                 agents.removeValue(forKey: key)?.stop()
                 return try .success(ExtensionEmpty())
             case "extension.hook":
@@ -171,11 +187,56 @@ public final class Work42ExtensionRuntime {
                                                  worktreePath: worktreePath)
         widget.activate(services: services)
         instances[key] = (widget, services)
+        widgetPushers[key] = ExtensionStatePusher.widget(widget, channel: channel, sessionId: sessionId, widgetId: widgetId)
         return (widget, services)
+    }
+
+    /// The view `surface` asks for (`ExtensionSurface`, tile by default) of `widgetId` in `sessionId`: the tile, the pill, the
+    /// custom header, or the popover of one action-area intent. Throws when the widget has no such surface.
+    public func view(widgetId: String, sessionId: String, worktreePath: String?, surface: String?) throws -> AnyView {
+        let (widget, services) = try instance(widgetId: widgetId, sessionId: sessionId, worktreePath: worktreePath)
+        let name = surface ?? ExtensionSurface.tile
+        func missing(_ what: String) -> WidgetServiceError {
+            WidgetServiceError(message: "widget '\(widgetId)' has no \(what)",
+                               suggestion: "the host asks only for the surfaces the widget's description lists")
+        }
+        switch name {
+        case ExtensionSurface.tile:
+            return widget.makeView(services: services)
+        case ExtensionSurface.pill:
+            guard let view = (widget as? any Work42WidgetPill)?.makePillView(services: services) else { throw missing("pill") }
+            return view
+        case ExtensionSurface.header:
+            guard let header = widget as? any Work42WidgetCustomHeader else { throw missing("custom header") }
+            return header.makeHeaderView()
+        case let popover where popover.hasPrefix(ExtensionSurface.popoverPrefix):
+            let intent = String(popover.dropFirst(ExtensionSurface.popoverPrefix.count))
+            let channel = self.channel
+            // The popover closes itself by telling Work42, which owns the popover.
+            let dismiss: @MainActor () -> Void = {
+                guard let channel else { return }
+                Task {
+                    try? await channel.call("widget", "dismissPopover", sessionId: sessionId, widgetId: widgetId,
+                                            payload: ExtensionPayload.PopoverClosed(intent: intent))
+                }
+            }
+            guard let view = (widget as? any Work42WidgetActionPopovers)?.actionAreaPopover(for: intent, dismiss: dismiss) else {
+                throw missing("popover for '\(intent)'")
+            }
+            return view
+        default:
+            throw missing("surface '\(name)'")
+        }
     }
 
     /// Deactivates every widget of `sessionId` and stops its background agents.
     public func releaseSession(_ sessionId: String) {
+        for key in widgetPushers.keys where key.sessionId == sessionId {
+            widgetPushers.removeValue(forKey: key)?.cancel()
+        }
+        for key in agentPushers.keys where key.sessionId == sessionId {
+            agentPushers.removeValue(forKey: key)?.cancel()
+        }
         for key in instances.keys where key.sessionId == sessionId {
             instances.removeValue(forKey: key)?.widget.deactivate()
         }
@@ -202,6 +263,17 @@ public final class Work42ExtensionRuntime {
         } else {
             try await spec.perform()
         }
+    }
+
+    private func selectMenuOption(_ call: ExtensionCall, _ args: ExtensionPayload.MenuSelect) async throws {
+        let key = try instanceKey(call)
+        let (widget, _) = try instance(widgetId: key.widgetId, sessionId: key.sessionId, worktreePath: nil)
+        guard let spec = widget.intents.first(where: { $0.name == args.name }),
+              case .menu(_, let onSelect) = spec.actionAreaStyle else {
+            throw WidgetServiceError(message: "widget '\(key.widgetId)' has no menu intent '\(args.name)'",
+                                     suggestion: "use the name of an intent declared with the .menu style")
+        }
+        try await onSelect(args.optionId)
     }
 
     private func openLink(_ call: ExtensionCall, _ args: ExtensionPayload.OpenLink) async throws {
@@ -249,6 +321,7 @@ public final class Work42ExtensionRuntime {
         }
         let agent = backgrounded.makeBackgroundAgent()
         agents[key] = agent
+        agentPushers[key] = ExtensionStatePusher.agent(agent, channel: channel, sessionId: key.sessionId, widgetId: key.widgetId)
         agent.start(services: ExtensionServices.background(channel: channel, sessionId: key.sessionId,
                                                            widgetId: key.widgetId, taskId: taskId))
     }

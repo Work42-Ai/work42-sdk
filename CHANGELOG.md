@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.4.0 (unreleased)
+
+Additions only, and none of them needs a new `WidgetIntentSpec` or protocol requirement: an extension built with 3.3.0 runs unchanged
+on a 3.4.0 host (its buttons stay static, as before), and a 3.4.0 extension runs on a 3.3.0 host (the host answers its new calls
+with "not supported", which the extension ignores). Plugin code already written for in-process widgets works as it is: the
+extension reads what the host used to read off the widget.
+
+- **Live button state across the process boundary.** An extension widget's `isEnabled`, `isConfirmed`, `actionAreaTitle` and a
+  `.menu` intent's choices now reach the host: the extension reads them (observed, and again every `livePeriodicTick` seconds or
+  every second) and sends a `widget.state` call when they change. A Record button that hides while recording and a Stop button with a
+  running timer work as in process. `extension.selectMenuOption` runs a menu choice. New plain-data types: `ExtensionIntentState`,
+  `ExtensionMenuOption`, `ExtensionPayload.WidgetState`, `ExtensionPayload.MenuSelect`.
+- **Header labels.** A widget's `Work42WidgetHeaderLabels.headerLabels` and its background agent's `headerLabels` travel in the same
+  `widget.state` call (`ExtensionHeaderLabel`, with `tint` as `neutral`/`success`/`warning`/`failure`/`accent`).
+- **Pill, custom header and action-area popovers.** `ExtensionWidgetDescription` gains `pillMetadata`, `customHeaderContentPadding` and
+  `popoverIntents`, all optional (absent on the wire when unused). The extension draws each in a surface of its one scene:
+  `scene.attach` carries `ExtensionPayload.SessionContext.surface` (`pill`, `header`, `popover:<intent>`; absent is the tile).
+  `Work42ExtensionRuntime.view(widgetId:sessionId:worktreePath:surface:)` resolves it. A popover closes itself with
+  `widget.dismissPopover`. `ExtensionIntentDescription` gains `livePeriodicTick`, and a `.menu` intent is described as `menu`.
+- **Host hook.** `ExtensionHostServer.widgetEvents` delivers `ExtensionWidgetEvent` (`state`, `dismissPopover`) to the app.
+- **Partial transcript lines.** `TranscriptSegment.isPartial` (nil means final, so every earlier host and consumer is unchanged) and
+  `isFinal`. A host that asks its recognizer for volatile results delivers a growing partial line, then the final one.
+
 ## 3.3.0
 
 Additions only: a plugin built with 3.0.0, 3.1.0 or 3.2.0 runs unchanged on 3.3.0. Every new protocol requirement has a default

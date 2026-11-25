@@ -262,7 +262,7 @@ struct ExtensionRuntimeTests {
         #expect(await runtime.handle(call).error == nil)
         #expect(widget.activations == 1)
         #expect(widget.lastServices?.worktreePath == "/w")
-        #expect(host.calls.map(\.name) == ["shell.run", "shell.run"])
+        #expect(host.calls.map(\.name).filter { $0 != "widget.state" } == ["shell.run", "shell.run"])
         #expect(host.calls.allSatisfy { $0.sessionId == "S1" && $0.widgetId == "counter" })
     }
 
@@ -297,7 +297,7 @@ struct ExtensionRuntimeTests {
                                           payload: ExtensionPayload.Hook(event: "onCreate", name: "New", worktreePath: "/w", params: [:]))
         #expect(await runtime.handle(call).error == nil)
         #expect(hooks.created == ["S9"])
-        #expect(host.calls.map(\.name) == ["storage.set"])
+        #expect(host.calls.map(\.name).filter { $0 != "widget.state" } == ["storage.set"])
         #expect(host.calls.first?.sessionId == "S9")
     }
 

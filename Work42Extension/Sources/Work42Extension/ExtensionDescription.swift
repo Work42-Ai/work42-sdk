@@ -3,9 +3,11 @@
 //
 // In process the host reads a widget's title, icon, size and intents straight off the object. Out of process it reads
 // them once, from the handshake: every value here is plain data. What a widget computes live (`isEnabled`,
-// `isConfirmed`, `actionAreaTitle`, `.menu` choices) cannot be read synchronously across a process boundary, so an
-// extension's action-area buttons are always enabled and show their static title. A custom header
-// (`Work42WidgetCustomHeader`), header labels and item kinds stay in-process features in 3.2.0.
+// `isConfirmed`, `actionAreaTitle`, `.menu` choices, header labels) cannot be read synchronously across a process boundary:
+// since 3.4.0 the extension reads it and sends it when it changes (`ExtensionSurfaces.swift`); an extension built with 3.2.0
+// or 3.3.0 never does, so its action-area buttons stay enabled and show their static title. A pill, a custom header and
+// action-area popovers are described here (3.4.0) and drawn by the extension in a surface of its scene. Item kinds stay
+// in-process features.
 
 import Foundation
 import Work42PluginKit
@@ -20,9 +22,12 @@ nonisolated public struct ExtensionIntentDescription: Codable, Sendable, Equatab
     public var keywords: [String]
     /// `palette`, `actionArea`, `header`.
     public var placement: [String]
-    /// `labeled`, `icon` or `pill`. A `.menu` style is described as `labeled`: its choices are live.
+    /// `labeled`, `icon`, `pill` or (3.4.0) `menu`. A `menu`'s choices are live: they arrive in `widget.state`. A host that
+    /// does not know `menu` draws it as `labeled`.
     public var actionAreaStyle: String
     public var requires: String?
+    /// `WidgetIntentSpec.livePeriodicTick` (3.4.0): the host re-reads this intent's state every this many seconds.
+    public var livePeriodicTick: Double?
 
     public init(name: String, title: String, icon: String, iconImageData: Data? = nil, brandColorHex: String? = nil,
                 keywords: [String] = [], placement: [String] = ["palette"], actionAreaStyle: String = "labeled",
@@ -61,6 +66,15 @@ nonisolated public struct ExtensionWidgetDescription: Codable, Sendable, Equatab
     public var isBrowserBacked: Bool
     /// `Work42BrowserWidgetOptions.prefersDefaultWidgetHeader` (false when the widget does not conform).
     public var prefersDefaultWidgetHeader: Bool
+    /// The widget conforms to `Work42WidgetPill` (3.4.0): its metadata. The host draws the pill from the `pill` surface of
+    /// the widget's scene. Nil: no pill.
+    public var pillMetadata: WidgetPillMetadata?
+    /// The widget conforms to `Work42WidgetCustomHeader` (3.4.0): `contentPadding`. The host draws the header from the
+    /// `header` surface. Nil: the default header.
+    public var customHeaderContentPadding: Double?
+    /// The action-area intents (by name) that open a popover instead of running (`Work42WidgetActionPopovers`, 3.4.0); the
+    /// host draws it from the `popover:<name>` surface. Nil or empty: none.
+    public var popoverIntents: [String]?
 
     public init(id: String, title: String, icon: String, iconImageData: Data? = nil, minSize: WidgetMinSize = .zero,
                 storageNamespace: String? = nil, collaboration: WidgetCollaboration = .default,
@@ -97,6 +111,14 @@ extension ExtensionWidgetDescription {
             hasBackgroundAgent: widget is any Work42WidgetBackground,
             isBrowserBacked: (widget as? any Work42BrowserBacked)?.browserSurface != nil,
             prefersDefaultWidgetHeader: (widget as? any Work42BrowserWidgetOptions)?.prefersDefaultWidgetHeader ?? false)
+        self.pillMetadata = (widget as? any Work42WidgetPill)?.pillMetadata
+        self.customHeaderContentPadding = (widget as? any Work42WidgetCustomHeader)?.contentPadding
+        if let popovers = widget as? any Work42WidgetActionPopovers {
+            // Which intents open a popover is a property of the widget's code, not of a flag: ask it, with a dismiss that does
+            // nothing (the view it returns is built and thrown away; nothing is drawn).
+            let names = widget.intents.map(\.name).filter { popovers.actionAreaPopover(for: $0, dismiss: {}) != nil }
+            self.popoverIntents = names.isEmpty ? nil : names
+        }
     }
 }
 
@@ -106,6 +128,7 @@ extension ExtensionIntentDescription {
         switch spec.actionAreaStyle {
         case .icon: style = "icon"
         case .pill: style = "pill"
+        case .menu: style = "menu"
         default: style = "labeled"
         }
         self.init(
@@ -120,6 +143,7 @@ extension ExtensionIntentDescription {
                 }
             }.sorted(),
             actionAreaStyle: style, requires: spec.requires)
+        self.livePeriodicTick = spec.livePeriodicTick
     }
 }
 
