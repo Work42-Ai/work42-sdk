@@ -531,6 +531,14 @@ nonisolated public protocol WidgetPlatformService: Sendable {
 
     /// Put `text` on the device's general pasteboard.
     @MainActor func copy(_ text: String)
+
+    /// Show `url` (a file or folder) in Finder, selected (SDK 3.3.0). On an iPad, which has no Finder to show it in, it does
+    /// nothing. Default: nothing, so an existing conformer still conforms.
+    @MainActor func reveal(_ url: URL)
+}
+
+nonisolated public extension WidgetPlatformService {
+    @MainActor func reveal(_ url: URL) {}
 }
 
 /// The real implementation on both platforms: `NSWorkspace` / `NSPasteboard` on macOS, `UIApplication` /
@@ -552,6 +560,12 @@ nonisolated public struct SystemWidgetPlatformService: WidgetPlatformService {
         NSPasteboard.general.setString(text, forType: .string)
         #elseif canImport(UIKit)
         UIPasteboard.general.string = text
+        #endif
+    }
+
+    @MainActor public func reveal(_ url: URL) {
+        #if canImport(AppKit)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
         #endif
     }
 }

@@ -12,6 +12,9 @@ named `WidgetServiceError` ("this host does not support …", "run inside Work42
   deactivated or removed, or when an extension's connection is lost. `run(command:timeout:)` takes your own timeout. Both work
   with no worktree (a Home widget): the command runs in the home folder with no session environment. In an extension,
   `shell.start` carries a request id like `shell.run`, so a crash never starts the command twice.
+- **Reveal in Finder.** `WidgetPlatformService.reveal(_:)` shows a file or folder in Finder, selected. It acts on this device, like
+  `open` and `copy`, so it needs no host call from an extension; on an iPad it does nothing. A conformer that predates it gets a
+  default that does nothing.
 - **Writable session files.** `WidgetFileService.write(_:data:)` creates the parent folders and writes atomically;
   `remove(_:)` deletes a file or folder (a missing path is not an error). Paths follow the read rule: relative to the session
   folder, never absolute, never leaving it, never through a symbolic link that leaves it.
