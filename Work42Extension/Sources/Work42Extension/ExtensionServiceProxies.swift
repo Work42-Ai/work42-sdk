@@ -168,7 +168,13 @@ public enum ExtensionPayload {
     /// The recording a live transcript follows, named by the id the extension has for it (`AudioRecording.id`).
     nonisolated public struct LiveTranscript: Codable, Sendable {
         public var recording: UUID
+        /// Ask for partial lines too (3.4.0). Absent on the wire when false, so a 3.3.0 host sees what it always saw.
+        public var partialResults: Bool?
         public init(recording: UUID) { self.recording = recording }
+        public init(recording: UUID, partialResults: Bool) {
+            self.recording = recording
+            self.partialResults = partialResults ? true : nil
+        }
     }
     nonisolated public struct DateRange: Codable, Sendable {
         public var from: Date, to: Date
@@ -276,12 +282,18 @@ nonisolated public struct ExtensionSpeechProxy: WidgetSpeechService {
     }
 
     public func liveTranscript(of recording: UUID) -> AsyncThrowingStream<TranscriptSegment, any Error> {
+        liveTranscript(of: recording, partialResults: false)
+    }
+
+    public func liveTranscript(of recording: UUID, partialResults: Bool) -> AsyncThrowingStream<TranscriptSegment, any Error> {
         let scope = self.scope
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
+                    let request = partialResults ? ExtensionPayload.LiveTranscript(recording: recording, partialResults: true)
+                                                 : ExtensionPayload.LiveTranscript(recording: recording)
                     let (_, raw) = try await typedFailure {
-                        try await scope.openStream("speech", "liveTranscript", ExtensionPayload.LiveTranscript(recording: recording))
+                        try await scope.openStream("speech", "liveTranscript", request)
                     }
                     for await data in raw {
                         guard let segment = try? ExtensionJSON.decode(TranscriptSegment.self, from: data) else { break }

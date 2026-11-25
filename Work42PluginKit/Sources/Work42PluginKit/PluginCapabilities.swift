@@ -231,6 +231,12 @@ nonisolated public protocol WidgetSpeechService: Sendable {
 
     /// The words of the recording `recording` (an `AudioRecording.id`) as they are said. Ends when it stops.
     func liveTranscript(of recording: UUID) -> AsyncThrowingStream<TranscriptSegment, any Error>
+
+    /// The same, and with `partialResults` also the text the recognizer may still change (SDK 3.4.0): a line arrives as it
+    /// is said (`TranscriptSegment.isPartial`), and the final text replaces it. Without it only final lines arrive, which is
+    /// what a caller that does not know about partial lines needs; a service that cannot tell the two apart delivers final
+    /// lines only.
+    func liveTranscript(of recording: UUID, partialResults: Bool) -> AsyncThrowingStream<TranscriptSegment, any Error>
 }
 
 nonisolated public extension WidgetSpeechService {
@@ -240,6 +246,10 @@ nonisolated public extension WidgetSpeechService {
 
     func liveTranscript(of recording: UUID) -> AsyncThrowingStream<TranscriptSegment, any Error> {
         AsyncThrowingStream { $0.finish(throwing: WidgetServiceError.hostLacks("speech.liveTranscript(of:)")) }
+    }
+
+    func liveTranscript(of recording: UUID, partialResults: Bool) -> AsyncThrowingStream<TranscriptSegment, any Error> {
+        liveTranscript(of: recording)
     }
 }
 

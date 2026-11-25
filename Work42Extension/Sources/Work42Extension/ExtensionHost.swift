@@ -386,7 +386,10 @@ public final class ExtensionHostServer {
             guard let recording = recordings[sub.arguments.recording] else {
                 throw WidgetServiceError(message: "no recording \(sub.arguments.recording.uuidString) is running", suggestion: nil)
             }
-            let source = try capabilities(call).speech.liveTranscript(of: recording.id)
+            let speech = try capabilities(call).speech
+            let source = sub.arguments.partialResults == true
+                ? speech.liveTranscript(of: recording.id, partialResults: true)
+                : speech.liveTranscript(of: recording.id)
             open(sub.streamId) { yield in
                 do { for try await segment in source { yield(try? ExtensionJSON.encode(segment)) } } catch {}
             }

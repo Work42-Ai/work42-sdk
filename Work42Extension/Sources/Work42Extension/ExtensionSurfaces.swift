@@ -163,6 +163,9 @@ nonisolated public enum ExtensionSurface {
 /// as a timer in `actionAreaTitle`. Only a changed state is sent.
 @MainActor
 final class ExtensionStatePusher {
+    /// How long an unchanged state goes unsent.
+    static let heartbeat: TimeInterval = 5
+
     private var task: Task<Void, Never>?
 
     /// A pusher for a widget instance (its intents and header labels).
@@ -199,12 +202,17 @@ final class ExtensionStatePusher {
                      read: @escaping @MainActor () -> ExtensionPayload.WidgetState?) {
         task = Task { @MainActor in
             var last: ExtensionPayload.WidgetState?
+            var lastSent = Date.distantPast
             while !Task.isCancelled {
                 let (wakes, wake) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
                 // The closures are read inside the observation, so a change of anything they read wakes the loop.
                 guard let state = withObservationTracking({ read() }, onChange: { wake.yield() }) else { return }
-                if state != last {
+                // A state is also resent every few seconds when it has not changed: the host's stand-in for the widget may have
+                // been made after the first push (the extension makes its instance before the tile attaches), and a push that
+                // nobody received must not leave the buttons wrong until the next change.
+                if state != last || Date().timeIntervalSince(lastSent) >= Self.heartbeat {
                     last = state
+                    lastSent = Date()
                     // A host that predates `widget.state` answers "not supported": the buttons stay static there.
                     do {
                         try await channel.call("widget", "state", sessionId: sessionId, widgetId: widgetId,

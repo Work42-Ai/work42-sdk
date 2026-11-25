@@ -561,6 +561,42 @@ public struct WidgetIntentSpec: Sendable {
         self.onConfirmedTap = onConfirmedTap
         self.perform = {}
     }
+
+    /// The service-aware initializer with a live title that ticks (SDK 3.4.0): what a host that draws a widget it cannot read
+    /// closures from (an out-of-process one) builds from the state it was sent. `livePeriodicTick` has no default so this
+    /// overload stays distinct from the one above.
+    public init(
+        name: String,
+        title: String,
+        icon: String,
+        iconImageData: Data? = nil,
+        brandColorHex: String? = nil,
+        keywords: [String] = [],
+        placement: Set<WidgetIntentPlacement> = [.palette],
+        actionAreaStyle: WidgetIntentActionAreaStyle = .labeled,
+        isEnabled: (@MainActor () -> Bool)? = nil,
+        isConfirmed: (@MainActor () -> Bool)?,
+        actionAreaTitle: (@MainActor () -> String)? = nil,
+        livePeriodicTick: TimeInterval?,
+        onConfirmedTap: (@MainActor (SessionServices) async throws -> Void)? = nil,
+        performWithServices: @escaping @MainActor (SessionServices) async throws -> Void
+    ) {
+        self.name = name
+        self.title = title
+        self.icon = icon
+        self.iconImageData = iconImageData
+        self.brandColorHex = brandColorHex
+        self.keywords = keywords
+        self.placement = placement
+        self.actionAreaStyle = actionAreaStyle
+        self.isEnabled = isEnabled
+        self.isConfirmed = isConfirmed
+        self.actionAreaTitle = actionAreaTitle
+        self.livePeriodicTick = livePeriodicTick
+        self.performWithServices = performWithServices
+        self.onConfirmedTap = onConfirmedTap
+        self.perform = {}
+    }
 }
 
 // MARK: - WidgetLinkIntentSpec
