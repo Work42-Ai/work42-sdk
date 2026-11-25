@@ -242,6 +242,20 @@ struct ExtensionCapabilityTests {
         }
     }
 
+    @Test("the host finds a call's session folder from the services its widget was attached with")
+    func sessionFolder() throws {
+        let pair = Pair(widgets: [])
+        let services = SessionServices(composer: NullComposer(), shell: ScriptedShell(), intents: NullIntents(), storage: MemoryStore(),
+                                       pill: NullPill(), sessionId: "s1", worktreePath: "/work/s1")
+        pair.link.server.attach(services, widgetId: "rec", sessionId: "s1")
+        func call(_ session: String?) -> ExtensionCall { ExtensionCall(service: "audio", method: "startRecording", sessionId: session, widgetId: "rec") }
+        #expect(pair.link.server.sessionFolder(for: call("s1")) == "/work/s1")
+        #expect(pair.link.server.sessionFolder(for: call("other")) == nil)
+        #expect(pair.link.server.sessionFolder(for: call(nil)) == nil)
+        pair.link.server.detach(widgetId: "rec", sessionId: "s1")
+        #expect(pair.link.server.sessionFolder(for: call("s1")) == nil)
+    }
+
     // MARK: Calendar
 
     @Test("events come back with their dates, and the change stream yields")

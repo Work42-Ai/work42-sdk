@@ -47,6 +47,13 @@ public final class ExtensionHostServer {
         sessionServices[Scope(sessionId: sessionId, widgetId: widgetId)] = services
     }
 
+    /// The folder of the session `call` is for (the `worktreePath` its widget was activated with), or nil when the call names
+    /// no session or none of its widgets is attached. A capability host resolves a recording's relative folder against it.
+    public func sessionFolder(for call: ExtensionCall) -> String? {
+        guard let sessionId = call.sessionId else { return nil }
+        return sessionServices.first { $0.key.sessionId == sessionId }?.value.worktreePath
+    }
+
     public func detach(widgetId: String, sessionId: String) {
         let scope = Scope(sessionId: sessionId, widgetId: widgetId)
         sessionServices.removeValue(forKey: scope)
