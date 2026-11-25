@@ -28,6 +28,13 @@ public final class ExtensionHostServer {
     private var streamScopes: [UUID: Scope] = [:]
     /// The commands the extension started with `shell.start`, by the id of the stream carrying their output.
     private var shellProcesses: [UUID: WidgetShellProcess] = [:]
+    /// The recordings the extension started with `audio.startRecording`, by the id of the stream carrying their levels (the
+    /// id the extension knows the recording by).
+    private var recordings: [UUID: AudioRecording] = [:]
+    /// The services that answer `permissions`, `audio`, `speech` and `calendar` calls: Work42 sets it per link, because the
+    /// plugin the link belongs to (and so what it declared) is known to Work42, not to the call. Without it those calls
+    /// fail with a named error.
+    public var capabilityProvider: (@MainActor (ExtensionCall) -> WidgetCapabilities)?
 
     public init(ledger: ExtensionRequestLedger) {
         self.ledger = ledger
@@ -73,12 +80,16 @@ public final class ExtensionHostServer {
         streams.removeAll()
         streamScopes.removeAll()
         shellProcesses.removeAll()
+        recordings.removeAll()
     }
 
     public var openStreamCount: Int { streams.count }
 
     /// The number of commands started by `shell.start` that are still running, for tests.
     public var runningProcessCount: Int { shellProcesses.count }
+
+    /// The number of recordings started by `audio.startRecording` that are still running, for tests.
+    public var runningRecordingCount: Int { recordings.count }
 
     /// A widget's scope ended: every command it started is stopped, and the extension is told their streams are over.
     private func endProcesses(in scope: Scope) {
@@ -90,6 +101,7 @@ public final class ExtensionHostServer {
         streams.removeValue(forKey: streamId)?.cancel()
         streamScopes.removeValue(forKey: streamId)
         shellProcesses.removeValue(forKey: streamId)
+        recordings.removeValue(forKey: streamId)
         if notify { push?(ExtensionStreamEvent(streamId: streamId, finished: true)) }
     }
 
@@ -122,6 +134,9 @@ public final class ExtensionHostServer {
         defer { if tracked, let id = call.requestId { ledger.finish(id) } }
         do {
             return try await dispatch(call)
+        } catch let error as PluginPermissionError {
+            // Crosses the wire as a prefixed `WidgetServiceError`, and the proxy makes it a `PluginPermissionError` again.
+            return .failure(error.serviceError)
         } catch {
             return .failure(error)
         }
@@ -307,6 +322,57 @@ public final class ExtensionHostServer {
             open(sub.streamId) { yield in for await event in source { yield(try? ExtensionJSON.encode(event)) } }
             return empty
 
+        // permissions, audio, speech, calendar (3.3.0)
+        case "permissions.status":
+            let permission = try args(ExtensionPayload.PermissionArg.self).permission
+            return try .success(ExtensionPayload.PermissionState(status: try await capabilities(call).permissions.status(permission)))
+        case "permissions.request":
+            let permission = try args(ExtensionPayload.PermissionArg.self).permission
+            return try .success(ExtensionPayload.PermissionState(status: try await capabilities(call).permissions.request(permission)))
+        case "audio.startRecording":
+            // A refusal (not declared, not granted) throws here, to the caller; the stream then carries the levels.
+            let sub = try args(ExtensionSubscription<ExtensionPayload.AudioStart>.self)
+            let recording = try await capabilities(call).audio.startRecording(sub.arguments.request)
+            recordings[sub.streamId] = recording
+            open(sub.streamId, scope: scope(call)) { yield in
+                await withTaskCancellationHandler {
+                    for await levels in recording.levels { yield(try? ExtensionJSON.encode(levels)) }
+                } onCancel: {
+                    // The widget's scope ended, the consumer stopped reading or the connection closed: the files so far stay.
+                    Task { _ = try? await recording.stop() }
+                }
+            }
+            return empty
+        case "audio.stop":
+            let id = try args(ExtensionPayload.StreamRef.self).streamId
+            guard let recording = recordings.removeValue(forKey: id) else {
+                throw WidgetServiceError(message: "no recording \(id.uuidString) is running", suggestion: nil)
+            }
+            return try .success(ExtensionPayload.AudioStopped(files: try await recording.stop()))
+        case "speech.transcribe":
+            let a = try args(ExtensionPayload.Transcribe.self)
+            let locale = a.locale.map { Locale(identifier: $0) }
+            return try .success(ExtensionPayload.Segments(segments: try await capabilities(call).speech.transcribe(file: a.file, locale: locale)))
+        case "speech.liveTranscript":
+            // The extension names the recording by the id it has (the levels stream's id); the host's own id is the recording's.
+            let sub = try args(ExtensionSubscription<ExtensionPayload.LiveTranscript>.self)
+            guard let recording = recordings[sub.arguments.recording] else {
+                throw WidgetServiceError(message: "no recording \(sub.arguments.recording.uuidString) is running", suggestion: nil)
+            }
+            let source = try capabilities(call).speech.liveTranscript(of: recording.id)
+            open(sub.streamId) { yield in
+                do { for try await segment in source { yield(try? ExtensionJSON.encode(segment)) } } catch {}
+            }
+            return empty
+        case "calendar.events":
+            let a = try args(ExtensionPayload.DateRange.self)
+            return try .success(ExtensionPayload.Events(events: try await capabilities(call).calendar.events(from: a.from, to: a.to)))
+        case "calendar.changes":
+            let sub = try args(ExtensionSubscription<ExtensionEmpty>.self)
+            let source = try capabilities(call).calendar.changes()
+            open(sub.streamId) { yield in for await _ in source { yield(try? ExtensionJSON.encode(ExtensionEmpty())) } }
+            return empty
+
         case "stream.cancel":
             // The consumer stopped reading: a command the stream carried is stopped too (nobody is left to read it).
             closeStream(try args(ExtensionSubscription<ExtensionEmpty>.self).streamId, notify: false)
@@ -333,6 +399,7 @@ public final class ExtensionHostServer {
             self.streams.removeValue(forKey: streamId)
             self.streamScopes.removeValue(forKey: streamId)
             self.shellProcesses.removeValue(forKey: streamId)
+            self.recordings.removeValue(forKey: streamId)
             self.push?(ExtensionStreamEvent(streamId: streamId, finished: true))
         }
     }
@@ -353,6 +420,14 @@ public final class ExtensionHostServer {
             throw unavailable(call, "a widget shown in a session")
         }
         return services
+    }
+
+    /// The services for the plugin on this link, which answer `permissions`, `audio`, `speech` and `calendar`.
+    private func capabilities(_ call: ExtensionCall) throws -> WidgetCapabilities {
+        guard let provider = capabilityProvider else {
+            throw unavailable(call, "the permission, audio, speech and calendar services")
+        }
+        return provider(call)
     }
 
     private func shell(_ call: ExtensionCall) throws -> any WidgetShellService {

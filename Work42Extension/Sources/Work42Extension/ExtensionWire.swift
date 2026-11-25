@@ -60,7 +60,7 @@ nonisolated public struct ExtensionCall: Codable, Sendable, Equatable {
 
     /// The calls that change something outside the process and so must never run twice: each carries a `requestId`.
     nonisolated public static let nonIdempotentMethods: Set<String> = [
-        "shell.run", "shell.start", "files.write", "files.remove",
+        "shell.run", "shell.start", "files.write", "files.remove", "audio.startRecording",
         "intents.execute", "tools.call", "extension.hook", "extension.performIntent",
     ]
 

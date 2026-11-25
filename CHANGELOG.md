@@ -16,6 +16,20 @@ named `WidgetServiceError` ("this host does not support …", "run inside Work42
   `remove(_:)` deletes a file or folder (a missing path is not an error). Paths follow the read rule: relative to the session
   folder, never absolute, never leaving it, never through a symbolic link that leaves it.
 - On an iPad both are answered by the paired Mac, like every other service.
+- **Permissions, audio, speech and calendar.** macOS refuses a privacy permission to an extension on a third-party point,
+  however it is signed, so Work42 holds them and does the work for a plugin. A plugin declares what it needs under
+  `permissions` in `plugin.yaml` (`microphone`, `system-audio`, `calendars`, `speech-recognition`, each with a `reason`) and
+  calls the services; the first use shows Work42's permission pill, then macOS's own prompt (which names Work42). A call that
+  cannot go ahead throws `PluginPermissionError` (`notDeclared` or `denied(_, message:)`), which a widget handles like any
+  other error. New computed members of `SessionServices` (its layout is unchanged):
+  - `services.permissions`: `status(_:)` and `request(_:)` for a permission list such as meet42's; optional to use.
+  - `services.audio`: `startRecording(_:)` records `microphone` and/or `systemAudio` to a folder the plugin may write, streams
+    `levels`, and `stop()` returns the files. A recording ends with its widget, its extension's connection or Work42; files
+    written so far are kept.
+  - `services.speech`: `transcribe(file:locale:)` and `liveTranscript(of:)` for a running recording.
+  - `services.calendar`: `events(from:to:)` and `changes()`.
+  The `file_access` and `app_groups` keys of `plugin.yaml` become entitlements of the extension at `work42 plugin build`;
+  `permissions` add none.
 
 ## 3.2.0
 

@@ -132,6 +132,45 @@ public enum ExtensionPayload {
         public var session: String, widget: String, stream: String
         public init(session: String, widget: String, stream: String) { self.session = session; self.widget = widget; self.stream = stream }
     }
+
+    // Capability services (3.3.0): permissions, audio, speech, calendar.
+    nonisolated public struct PermissionArg: Codable, Sendable {
+        public var permission: PluginPermission
+        public init(permission: PluginPermission) { self.permission = permission }
+    }
+    nonisolated public struct PermissionState: Codable, Sendable {
+        public var status: PluginPermissionStatus
+        public init(status: PluginPermissionStatus) { self.status = status }
+    }
+    nonisolated public struct AudioStart: Codable, Sendable {
+        public var request: AudioRecordingRequest
+        public init(request: AudioRecordingRequest) { self.request = request }
+    }
+    nonisolated public struct AudioStopped: Codable, Sendable {
+        public var files: [URL]
+        public init(files: [URL]) { self.files = files }
+    }
+    nonisolated public struct Transcribe: Codable, Sendable {
+        public var file: URL, locale: String?
+        public init(file: URL, locale: String?) { self.file = file; self.locale = locale }
+    }
+    nonisolated public struct Segments: Codable, Sendable {
+        public var segments: [TranscriptSegment]
+        public init(segments: [TranscriptSegment]) { self.segments = segments }
+    }
+    /// The recording a live transcript follows, named by the id the extension has for it (`AudioRecording.id`).
+    nonisolated public struct LiveTranscript: Codable, Sendable {
+        public var recording: UUID
+        public init(recording: UUID) { self.recording = recording }
+    }
+    nonisolated public struct DateRange: Codable, Sendable {
+        public var from: Date, to: Date
+        public init(from: Date, to: Date) { self.from = from; self.to = to }
+    }
+    nonisolated public struct Events: Codable, Sendable {
+        public var events: [CalendarEvent]
+        public init(events: [CalendarEvent]) { self.events = events }
+    }
 }
 
 // MARK: - Proxies
@@ -169,6 +208,123 @@ nonisolated public struct ExtensionShellProxy: WidgetShellService {
         return WidgetShellProcess(
             id: id, output: decodedStream(raw, as: WidgetShellOutput.self),
             stop: { try? await scope.call("shell", "stop", ExtensionPayload.StreamRef(streamId: id)) })
+    }
+}
+
+// MARK: - Capability proxies (3.3.0)
+
+/// A permission refusal comes back as a `WidgetServiceError` with a prefix; the widget gets it as `PluginPermissionError`.
+nonisolated private func typedFailure<T>(_ body: () async throws -> T) async throws -> T {
+    do { return try await body() } catch { throw PluginPermissionError.typed(error) }
+}
+
+nonisolated public struct ExtensionPermissionProxy: WidgetPermissionService {
+    let scope: ExtensionServiceScope
+    public init(scope: ExtensionServiceScope) { self.scope = scope }
+
+    public func status(_ permission: PluginPermission) async throws -> PluginPermissionStatus {
+        try await typedFailure {
+            try await scope.call("permissions", "status", ExtensionPayload.PermissionArg(permission: permission),
+                                 as: ExtensionPayload.PermissionState.self).status
+        }
+    }
+
+    public func request(_ permission: PluginPermission) async throws -> PluginPermissionStatus {
+        try await typedFailure {
+            try await scope.call("permissions", "request", ExtensionPayload.PermissionArg(permission: permission),
+                                 as: ExtensionPayload.PermissionState.self).status
+        }
+    }
+}
+
+nonisolated public struct ExtensionAudioProxy: WidgetAudioService {
+    let scope: ExtensionServiceScope
+    public init(scope: ExtensionServiceScope) { self.scope = scope }
+
+    /// Opens the recording as a host stream (so a permission refusal is thrown here); its levels are the stream. The stream's
+    /// id is the recording's id on this side. `stop` asks the host to end it and returns the files; a consumer that stops
+    /// reading the levels also ends the recording (the channel's `stream.cancel`).
+    public func startRecording(_ request: AudioRecordingRequest) async throws -> AudioRecording {
+        let scope = self.scope
+        let (id, raw) = try await typedFailure {
+            try await scope.openStream("audio", "startRecording", ExtensionPayload.AudioStart(request: request))
+        }
+        return AudioRecording(id: id, levels: decodedStream(raw, as: AudioLevels.self), stop: {
+            try await typedFailure {
+                try await scope.call("audio", "stop", ExtensionPayload.StreamRef(streamId: id), as: ExtensionPayload.AudioStopped.self).files
+            }
+        })
+    }
+}
+
+nonisolated public struct ExtensionSpeechProxy: WidgetSpeechService {
+    let scope: ExtensionServiceScope
+    public init(scope: ExtensionServiceScope) { self.scope = scope }
+
+    public func transcribe(file: URL, locale: Locale?) async throws -> [TranscriptSegment] {
+        try await typedFailure {
+            try await scope.call("speech", "transcribe", ExtensionPayload.Transcribe(file: file, locale: locale?.identifier),
+                                 as: ExtensionPayload.Segments.self).segments
+        }
+    }
+
+    public func liveTranscript(of recording: UUID) -> AsyncThrowingStream<TranscriptSegment, any Error> {
+        let scope = self.scope
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let (_, raw) = try await typedFailure {
+                        try await scope.openStream("speech", "liveTranscript", ExtensionPayload.LiveTranscript(recording: recording))
+                    }
+                    for await data in raw {
+                        guard let segment = try? ExtensionJSON.decode(TranscriptSegment.self, from: data) else { break }
+                        continuation.yield(segment)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}
+
+nonisolated public struct ExtensionCalendarProxy: WidgetCalendarService {
+    let scope: ExtensionServiceScope
+    public init(scope: ExtensionServiceScope) { self.scope = scope }
+
+    public func events(from: Date, to: Date) async throws -> [CalendarEvent] {
+        try await typedFailure {
+            try await scope.call("calendar", "events", ExtensionPayload.DateRange(from: from, to: to),
+                                 as: ExtensionPayload.Events.self).events
+        }
+    }
+
+    public func changes() -> AsyncStream<Void> {
+        let changes = decodedStream(scope.subscribe("calendar", "changes", ExtensionEmpty()), as: ExtensionEmpty.self)
+        return AsyncStream { continuation in
+            let task = Task {
+                for await _ in changes { continuation.yield() }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}
+
+/// Hands a widget's services proxies for the widget and session they were built for.
+nonisolated public struct ExtensionCapabilityProvider: WidgetCapabilityProvider {
+    let channel: ExtensionChannel
+    public init(channel: ExtensionChannel) { self.channel = channel }
+
+    public func capabilities(for services: SessionServices) -> WidgetCapabilities {
+        // Every `SessionServices` an extension builds carries its widget and session in its proxies' scope.
+        let scope = (services.shell as? ExtensionShellProxy)?.scope
+            ?? ExtensionServiceScope(channel: channel, sessionId: services.sessionId, widgetId: nil)
+        return WidgetCapabilities(
+            permissions: ExtensionPermissionProxy(scope: scope), audio: ExtensionAudioProxy(scope: scope),
+            speech: ExtensionSpeechProxy(scope: scope), calendar: ExtensionCalendarProxy(scope: scope))
     }
 }
 
@@ -430,6 +586,7 @@ public enum ExtensionServices {
     public static func installRegistries(channel: ExtensionChannel) {
         WidgetAccountRegistry.service = ExtensionAccountProxy(scope: ExtensionServiceScope(channel: channel, sessionId: nil, widgetId: nil))
         WidgetStreamRegistry.service = ExtensionStreamProxy(scope: ExtensionServiceScope(channel: channel, sessionId: nil, widgetId: nil))
+        WidgetCapabilityRegistry.provider = ExtensionCapabilityProvider(channel: channel)
         // Every `SessionServices` an extension builds is for one widget in one session, and its proxies carry both, so the
         // browser service is scoped by reading them back. Services the extension did not build get no browser.
         BrowserTabsRegistry.resolve = { services in
