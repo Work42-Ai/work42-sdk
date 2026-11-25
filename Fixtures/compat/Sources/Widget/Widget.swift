@@ -18,6 +18,9 @@ final class CompatWidget: Work42Widget, Work42WidgetBackground {
     /// Storage key the intent writes and the test reads back.
     static let intentMarkerKey = "intent-ran"
 
+    /// Storage key the `mark-files` intent (frozen from SDK 3.3.0 on) writes once its file and command calls have run.
+    static let filesMarkerKey = "files-ran"
+
     var intents: [WidgetIntentSpec] {
         [
             WidgetIntentSpec(
@@ -27,7 +30,21 @@ final class CompatWidget: Work42Widget, Work42WidgetBackground {
                 isConfirmed: nil,
                 performWithServices: { services in
                     try await services.storage.set(key: CompatWidget.intentMarkerKey, value: .string("yes"))
-                })
+                }),
+            // SDK 3.3.0: a written and removed session file, and a started command that is stopped again. A fixture
+            // frozen before 3.3.0 has no such intent, so the load test only runs it for versions that declare it.
+            WidgetIntentSpec(
+                name: "mark-files",
+                title: "Mark compat fixture files",
+                icon: "doc",
+                isConfirmed: nil,
+                performWithServices: { services in
+                    try await services.files.write("compat-fixture.txt", data: Data("yes".utf8))
+                    let process = try await services.shell.start(command: "true")
+                    await process.stop()
+                    try await services.files.remove("compat-fixture.txt")
+                    try await services.storage.set(key: CompatWidget.filesMarkerKey, value: .string("yes"))
+                }),
         ]
     }
 

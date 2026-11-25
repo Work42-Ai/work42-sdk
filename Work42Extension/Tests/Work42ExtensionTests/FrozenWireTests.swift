@@ -87,6 +87,11 @@ private func driveEveryProxy(_ host: FakeHost) async {
     try? await services.composer.presentCommentableSelection(sourceLabel: "a.swift", excerpt: "let a")
     try? await services.composer.clearCommentableSelection()
     _ = try? await services.shell.run(command: "echo frozen")
+    // 3.3.0: a timed run, a started command (opened as a host stream, then stopped) and writable session files.
+    _ = try? await services.shell.run(command: "echo frozen", timeout: .seconds(30))
+    if let process = try? await services.shell.start(command: "echo frozen") { await process.stop() }
+    try? await services.files.write("notes/a.md", data: Data("hi".utf8))
+    try? await services.files.remove("notes/a.md")
     try? await services.intents.execute(id: "counter.run", params: ["n": .number(1)])
     _ = try? await services.storage.get(namespace: "todos", key: "items")
     _ = try? await services.storage.list(namespace: "todos")

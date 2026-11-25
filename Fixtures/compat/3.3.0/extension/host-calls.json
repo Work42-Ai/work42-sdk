@@ -1,0 +1,109 @@
+[
+  {
+    "call" : {
+      "method" : "handshake",
+      "payload" : "e30=",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension"
+    },
+    "reply" : {
+      "payload" : "eyJ3aWRnZXRzIjpbeyJpZCI6ImNvdW50ZXIiLCJpY29uIjoibnVtYmVyIiwiaW50ZW50cyI6W3siYWN0aW9uQXJlYVN0eWxlIjoibGFiZWxlZCIsIm5hbWUiOiJydW4iLCJ0aXRsZSI6IlJ1biIsImljb24iOiJwbGF5Iiwia2V5d29yZHMiOltdLCJwbGFjZW1lbnQiOlsicGFsZXR0ZSJdfV0sInRpdGxlIjoiQ291bnRlciIsImNvbGxhYm9yYXRpb24iOnsic2hhcmVkIjp7ImNvbmZsaWN0Ijp7Imxhc3RXcml0ZVdpbnMiOnt9fSwiY3Vyc29ycyI6eyJub25lIjp7fX19fSwibWluU2l6ZSI6eyJoZWlnaHQiOjAsIndpZHRoIjowfSwic2NvcGVzIjpbeyJpZCI6InVzZSIsInRpdGxlIjoiVXNlIn1dLCJoYXNCYWNrZ3JvdW5kQWdlbnQiOmZhbHNlLCJsaW5rSW50ZW50cyI6W10sInByZWZlcnNEZWZhdWx0V2lkZ2V0SGVhZGVyIjpmYWxzZSwiaXNCcm93c2VyQmFja2VkIjpmYWxzZX1dLCJzZGtWZXJzaW9uIjoiMy4zLjAiLCJoYXNTZXNzaW9uSG9va3MiOnRydWV9"
+    }
+  },
+  {
+    "call" : {
+      "method" : "performIntent",
+      "payload" : "eyJ3b3JrdHJlZVBhdGgiOiJcL3RtcFwvZnJvemVuIiwibmFtZSI6InJ1biIsInBhcmFtcyI6eyJuIjoxfX0=",
+      "requestId" : "03CDB279-58DE-405E-A5FE-3E6CC1E25F3A",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "openLink",
+      "payload" : "eyJ3b3JrdHJlZVBhdGgiOiJcL3RtcFwvZnJvemVuIiwiaW5kZXgiOjAsInVybCI6Imh0dHBzOlwvXC9leGFtcGxlLmNvbVwvYSJ9",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "error" : {
+        "message" : "widget 'counter' has no link intent 0",
+        "suggestion" : "the host must use an index from the widget's description"
+      }
+    }
+  },
+  {
+    "call" : {
+      "method" : "resolveStartURL",
+      "payload" : "e30=",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "backgroundStart",
+      "payload" : "eyJ0YXNrSWQiOiJ0LWZyb3plbiJ9",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "error" : {
+        "message" : "widget 'counter' has no background agent",
+        "suggestion" : "conform the widget to Work42WidgetBackground, or stop asking for one"
+      }
+    }
+  },
+  {
+    "call" : {
+      "method" : "backgroundStop",
+      "payload" : "e30=",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen",
+      "widgetId" : "counter"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "hook",
+      "payload" : "eyJ3b3JrdHJlZVBhdGgiOiJcL3RtcFwvZnJvemVuIiwibmFtZSI6ImZyb3plbiIsInBhcmFtcyI6e30sImV2ZW50Ijoib25DcmVhdGUifQ==",
+      "requestId" : "55E99F43-AA75-4467-9717-729926373120",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  },
+  {
+    "call" : {
+      "method" : "releaseSession",
+      "payload" : "e30=",
+      "sdkVersion" : "3.3.0",
+      "service" : "extension",
+      "sessionId" : "s-frozen"
+    },
+    "reply" : {
+      "payload" : "e30="
+    }
+  }
+]
