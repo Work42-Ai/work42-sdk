@@ -209,6 +209,77 @@ struct ExtensionCapabilityTests {
         _ = second
     }
 
+    @Test("the microphone the widget chose reaches the host's request")
+    func microphoneDeviceTravels() async throws {
+        defer { cleanUp() }
+        let fake = FakeCapabilities()
+        let (_, services) = try connect(fake)
+        _ = try await services.audio.startRecording(
+            AudioRecordingRequest(sources: [.microphone], directory: "a", microphoneDevice: "BuiltInMicrophoneDevice"))
+        #expect(fake.lastRequest?.microphoneDevice == "BuiltInMicrophoneDevice")
+    }
+
+    @Test("a background agent records through the same services, and its recording ends with the agent")
+    func backgroundRecording() async throws {
+        defer { cleanUp() }
+        let fake = FakeCapabilities()
+        let pair = Pair(widgets: [])
+        pair.link.server.capabilityProvider = { _ in fake.capabilities }
+        let channel = try #require(pair.runtime.channel)
+        WidgetCapabilityRegistry.provider = ExtensionCapabilityProvider(channel: channel)
+        let agent = ExtensionServices.background(channel: channel, sessionId: "s1", widgetId: "recording", taskId: nil)
+
+        let recording = try await agent.audio.startRecording(
+            AudioRecordingRequest(sources: [.microphone, .systemAudio], directory: "~/.work42/meet42/recordings/r1"))
+        #expect(pair.link.server.runningRecordingCount == 1)
+        #expect(fake.lastRequest?.directory == "~/.work42/meet42/recordings/r1")
+
+        // The agent's scope ends (the session went away): the recording stops, with the files so far kept.
+        pair.link.server.detachBackground(widgetId: "recording", sessionId: "s1")
+        #expect(await eventually { fake.stops == 1 })
+        #expect(pair.link.server.runningRecordingCount == 0)
+
+        #expect(try await agent.permissions.status(.microphone) == .notAsked)
+        let events = try await agent.calendar.events(from: Date(), to: Date())
+        #expect(events.count == 1)
+        withExtendedLifetime(recording) {}
+    }
+
+    @Test("a tile closing does not end a recording an agent started")
+    func tileClosingKeepsTheAgentsRecording() async throws {
+        defer { cleanUp() }
+        let fake = FakeCapabilities()
+        let pair = Pair(widgets: [])
+        pair.link.server.capabilityProvider = { _ in fake.capabilities }
+        let channel = try #require(pair.runtime.channel)
+        WidgetCapabilityRegistry.provider = ExtensionCapabilityProvider(channel: channel)
+        let agent = ExtensionServices.background(channel: channel, sessionId: "s1", widgetId: "recording", taskId: nil)
+
+        // Held, as a recorder does: letting go of the recording (its levels) ends it, which is not what is under test.
+        let recording = try await agent.audio.startRecording(
+            AudioRecordingRequest(sources: [.microphone], directory: "~/.work42/meet42/recordings/r1"))
+        pair.link.server.detach(widgetId: "recording", sessionId: "s1")   // the tile unmounts
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(fake.stops == 0)
+        #expect(pair.link.server.runningRecordingCount == 1)
+        _ = try await recording.stop()
+        #expect(fake.stops == 1)
+    }
+
+    @Test("and the same widget's tile recording does end with the tile, not with its agent")
+    func agentClosingKeepsTheTilesRecording() async throws {
+        defer { cleanUp() }
+        let fake = FakeCapabilities()
+        let (pair, services) = try connect(fake)
+        let recording = try await services.audio.startRecording(AudioRecordingRequest(sources: [.microphone], directory: "a"))
+        pair.link.server.detachBackground(widgetId: "rec", sessionId: "s1")   // an agent of the same widget stops
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(fake.stops == 0)
+        pair.link.server.detach(widgetId: "rec", sessionId: "s1")
+        #expect(await eventually { fake.stops == 1 })
+        _ = recording
+    }
+
     // MARK: Speech
 
     @Test("a file is transcribed on the host, with the locale the widget chose")
@@ -296,6 +367,41 @@ struct PluginCapabilityTypeTests {
         #expect(PluginPermissionError.typed(PluginPermissionError.notDeclared(.microphone).serviceError) as? PluginPermissionError
                 == .notDeclared(.microphone))
         #expect(PluginPermissionError.typed(WidgetServiceError(message: "other")) as? WidgetServiceError == WidgetServiceError(message: "other"))
+    }
+
+    @Test("a calendar event keeps everything a plugin's own copy needs, and an older host's payload still decodes")
+    func calendarEventFields() throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let event = CalendarEvent(
+            id: "e1", title: "Standup", start: start, end: start.addingTimeInterval(1800), calendar: "Work", calendarId: "cal-1",
+            calendarColor: "#1BADF8", source: "google", organizer: "Ada",
+            attendeeDetails: [CalendarAttendee(name: "Ada", email: "ada@example.com", status: "accepted", isOrganizer: true)],
+            status: "confirmed", url: "https://example.com/e1", lastModified: start)
+        let wire = try ExtensionJSON.encode(event)
+        #expect(try ExtensionJSON.decode(CalendarEvent.self, from: wire) == event)
+
+        // What a host that predates the extra fields sent: they are all optional, so it still decodes.
+        let old = try ExtensionJSON.encode(CalendarEvent(id: "e2", title: "Old", start: start, end: start))
+        let decoded = try ExtensionJSON.decode(CalendarEvent.self, from: old)
+        #expect(decoded.calendarId == nil && decoded.attendeeDetails == nil && decoded.status == nil)
+    }
+
+    @Test("a recording request without a microphone device encodes as it did before the field existed")
+    func requestWireIsUnchangedWithoutDevice() throws {
+        let wire = try ExtensionJSON.encode(AudioRecordingRequest(sources: [.microphone], directory: "a"))
+        let text = String(decoding: wire, as: UTF8.self)
+        #expect(!text.contains("microphoneDevice"))
+        #expect(try ExtensionJSON.decode(AudioRecordingRequest.self, from: wire).microphoneDevice == nil)
+    }
+
+    @Test("a provider that predates background capabilities answers none, with the named error")
+    func providerWithoutBackgroundCapabilities() async {
+        struct OldProvider: WidgetCapabilityProvider {
+            func capabilities(for services: SessionServices) -> WidgetCapabilities { WidgetCapabilities() }
+        }
+        let agent = WidgetBackgroundServices(shell: ScriptedShell(), storage: MemoryStore(), pill: NullPill(), sessionId: "s1", taskId: nil)
+        let capabilities = OldProvider().capabilities(forBackground: agent)
+        await #expect(throws: WidgetServiceError.self) { _ = try await capabilities.permissions.status(.microphone) }
     }
 
     @Test("the permission names are the ones plugin.yaml uses")

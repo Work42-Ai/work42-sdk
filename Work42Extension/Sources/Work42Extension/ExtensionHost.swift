@@ -14,7 +14,9 @@ import Work42PluginKit
 @MainActor
 public final class ExtensionHostServer {
 
-    private struct Scope: Hashable { let sessionId: String; let widgetId: String }
+    /// A widget in a session, as its tile (`agent` false) or as its background agent (`agent` true). They are separate scopes:
+    /// what the agent starts (a recording, a command) must outlive the tile leaving the screen.
+    private struct Scope: Hashable { let sessionId: String; let widgetId: String; var agent = false }
 
     public let ledger: ExtensionRequestLedger
     /// Sends a stream item (or a stream's end) to the extension.
@@ -62,11 +64,11 @@ public final class ExtensionHostServer {
 
     /// The services widget `widgetId`'s background agent was started with in `sessionId`.
     public func attachBackground(_ services: WidgetBackgroundServices, widgetId: String, sessionId: String) {
-        backgroundServices[Scope(sessionId: sessionId, widgetId: widgetId)] = services
+        backgroundServices[Scope(sessionId: sessionId, widgetId: widgetId, agent: true)] = services
     }
 
     public func detachBackground(widgetId: String, sessionId: String) {
-        let scope = Scope(sessionId: sessionId, widgetId: widgetId)
+        let scope = Scope(sessionId: sessionId, widgetId: widgetId, agent: true)
         backgroundServices.removeValue(forKey: scope)
         endProcesses(in: scope)
     }
@@ -413,20 +415,30 @@ public final class ExtensionHostServer {
 
     // MARK: Service lookup
 
+    /// The scope a call belongs to, and so the one that owns what it starts: the agent's when it says so, the tile's otherwise.
     private func scope(_ call: ExtensionCall) -> Scope? {
         guard let sessionId = call.sessionId, let widgetId = call.widgetId else { return nil }
-        return Scope(sessionId: sessionId, widgetId: widgetId)
+        return Scope(sessionId: sessionId, widgetId: widgetId, agent: call.agent == true)
     }
 
     private func background(_ call: ExtensionCall) -> WidgetBackgroundServices? {
-        scope(call).flatMap { backgroundServices[$0] }
+        guard let sessionId = call.sessionId, let widgetId = call.widgetId else { return nil }
+        return backgroundServices[Scope(sessionId: sessionId, widgetId: widgetId, agent: true)]
     }
 
     private func session(_ call: ExtensionCall) throws -> SessionServices {
-        guard let scope = scope(call), let services = sessionServices[scope] else {
+        guard call.agent != true, let scope = scope(call), let services = sessionServices[scope] else {
             throw unavailable(call, "a widget shown in a session")
         }
         return services
+    }
+
+    /// The service for `call`: an agent's call is answered by its agent's services only; any other call by its tile's services,
+    /// or, from an extension that predates `agent`, by the widget's agent's.
+    private func lookup<Service>(_ call: ExtensionCall, session: (SessionServices) -> Service,
+                                 background: (WidgetBackgroundServices) -> Service) -> Service? {
+        if call.agent != true, let scope = scope(call), let services = sessionServices[scope] { return session(services) }
+        return self.background(call).map(background)
     }
 
     /// The services for the plugin on this link, which answer `permissions`, `audio`, `speech` and `calendar`.
@@ -438,45 +450,30 @@ public final class ExtensionHostServer {
     }
 
     private func shell(_ call: ExtensionCall) throws -> any WidgetShellService {
-        if let scope = scope(call) {
-            if let services = sessionServices[scope] { return services.shell }
-            if let services = backgroundServices[scope] { return services.shell }
-        }
+        if let service = lookup(call, session: { $0.shell }, background: { $0.shell }) { return service }
         if let sessionId = call.sessionId, let context = createContexts[sessionId] { return context.shell }
         throw unavailable(call, "a widget, a background agent or a session hook")
     }
 
     private func storage(_ call: ExtensionCall) throws -> any WidgetStorageService {
-        if let scope = scope(call) {
-            if let services = sessionServices[scope] { return services.storage }
-            if let services = backgroundServices[scope] { return services.storage }
-        }
+        if let service = lookup(call, session: { $0.storage }, background: { $0.storage }) { return service }
         if let sessionId = call.sessionId, let context = createContexts[sessionId] { return context.storage }
         throw unavailable(call, "a widget, a background agent or a session hook")
     }
 
     private func tools(_ call: ExtensionCall) throws -> any WidgetToolService {
-        if let scope = scope(call) {
-            if let services = sessionServices[scope] { return services.tools }
-            if let services = backgroundServices[scope] { return services.tools }
-        }
+        if let service = lookup(call, session: { $0.tools }, background: { $0.tools }) { return service }
         if let sessionId = call.sessionId, let context = createContexts[sessionId] { return context.tools }
         throw unavailable(call, "a widget, a background agent or a session hook")
     }
 
     private func pill(_ call: ExtensionCall) throws -> any WidgetPillService {
-        if let scope = scope(call) {
-            if let services = sessionServices[scope] { return services.pill }
-            if let services = backgroundServices[scope] { return services.pill }
-        }
+        if let service = lookup(call, session: { $0.pill }, background: { $0.pill }) { return service }
         throw unavailable(call, "a widget or a background agent")
     }
 
     private func files(_ call: ExtensionCall) throws -> any WidgetFileService {
-        if let scope = scope(call) {
-            if let services = sessionServices[scope] { return services.files }
-            if let services = backgroundServices[scope] { return services.files }
-        }
+        if let service = lookup(call, session: { $0.files }, background: { $0.files }) { return service }
         throw unavailable(call, "a widget or a background agent")
     }
 

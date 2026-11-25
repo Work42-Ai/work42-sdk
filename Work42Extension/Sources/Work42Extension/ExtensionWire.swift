@@ -38,6 +38,10 @@ nonisolated public struct ExtensionCall: Codable, Sendable, Equatable {
     public var sessionId: String?
     /// The widget the call comes from or goes to.
     public var widgetId: String?
+    /// `true` when the call comes from the widget's background agent rather than its tile. The two are different scopes of
+    /// the same widget and session: what one starts (a recording, a command) ends with it, never with the other. Absent on
+    /// the wire for a tile's calls, and for an extension that predates it (which the host then treats as a tile).
+    public var agent: Bool?
     /// Set for every call that is not safe to run twice (`ExtensionCall.nonIdempotentMethods`). The host records it, and
     /// after a crash an interrupted request is reported, never sent again.
     public var requestId: UUID?
@@ -45,12 +49,14 @@ nonisolated public struct ExtensionCall: Codable, Sendable, Equatable {
     public var payload: Data
 
     public init(sdkVersion: String = Work42SDKCompatibility.version, service: String, method: String,
-                sessionId: String? = nil, widgetId: String? = nil, requestId: UUID? = nil, payload: Data = Data("{}".utf8)) {
+                sessionId: String? = nil, widgetId: String? = nil, agent: Bool? = nil, requestId: UUID? = nil,
+                payload: Data = Data("{}".utf8)) {
         self.sdkVersion = sdkVersion
         self.service = service
         self.method = method
         self.sessionId = sessionId
         self.widgetId = widgetId
+        self.agent = agent
         self.requestId = requestId
         self.payload = payload
     }
@@ -66,9 +72,9 @@ nonisolated public struct ExtensionCall: Codable, Sendable, Equatable {
 
     /// A call with a fresh `requestId` when `service.method` is non-idempotent, and none otherwise.
     public static func make<Payload: Encodable>(service: String, method: String, sessionId: String?, widgetId: String?,
-                                                payload: Payload) throws -> ExtensionCall {
+                                                agent: Bool? = nil, payload: Payload) throws -> ExtensionCall {
         let name = "\(service).\(method)"
-        return ExtensionCall(service: service, method: method, sessionId: sessionId, widgetId: widgetId,
+        return ExtensionCall(service: service, method: method, sessionId: sessionId, widgetId: widgetId, agent: agent,
                              requestId: nonIdempotentMethods.contains(name) ? UUID() : nil,
                              payload: try ExtensionJSON.encode(payload))
     }

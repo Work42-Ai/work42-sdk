@@ -31,6 +31,12 @@ named `WidgetServiceError` ("this host does not support …", "run inside Work42
     written so far are kept.
   - `services.speech`: `transcribe(file:locale:)` and `liveTranscript(of:)` for a running recording.
   - `services.calendar`: `events(from:to:)` and `changes()`.
+  - The same four members on `WidgetBackgroundServices`, because a recording that has to outlive a tile (a meeting) belongs to a
+    background agent: a recording ends with the scope that started it, and a tile's scope ends when it leaves the screen, an agent's
+    when the session goes away. A `WidgetCapabilityProvider` that predates `capabilities(forBackground:)` answers none.
+  - `AudioRecordingRequest.microphoneDevice`: the input device to record (a Core Audio UID); `nil` is the system default.
+  - `CalendarEvent` also carries `calendarId`, `calendarColor`, `source`, `organizer`, `attendeeDetails` (`CalendarAttendee`),
+    `status`, `url` and `lastModified`, all optional, for a plugin that keeps its own copy of the calendar.
   The `file_access` and `app_groups` keys of `plugin.yaml` become entitlements of the extension at `work42 plugin build`;
   `permissions` add none.
 

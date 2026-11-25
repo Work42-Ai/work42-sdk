@@ -14,30 +14,37 @@ nonisolated public struct ExtensionServiceScope: Sendable {
     public let channel: ExtensionChannel
     public let sessionId: String?
     public let widgetId: String?
+    /// True for a background agent's services: its calls are a different scope from the same widget's tile (see
+    /// `ExtensionCall.agent`).
+    public let agent: Bool
 
-    public init(channel: ExtensionChannel, sessionId: String?, widgetId: String?) {
+    public init(channel: ExtensionChannel, sessionId: String?, widgetId: String?, agent: Bool = false) {
         self.channel = channel
         self.sessionId = sessionId
         self.widgetId = widgetId
+        self.agent = agent
     }
+
+    /// What goes on the wire: absent for a tile, so its calls are byte for byte what they were.
+    private var wireAgent: Bool? { agent ? true : nil }
 
     func call<Payload: Encodable, Result: Decodable>(_ service: String, _ method: String, _ payload: Payload,
                                                      as type: Result.Type) async throws -> Result {
-        try await channel.call(service, method, sessionId: sessionId, widgetId: widgetId, payload: payload, as: type)
+        try await channel.call(service, method, sessionId: sessionId, widgetId: widgetId, agent: wireAgent, payload: payload, as: type)
     }
 
     func call<Payload: Encodable>(_ service: String, _ method: String, _ payload: Payload) async throws {
-        try await channel.call(service, method, sessionId: sessionId, widgetId: widgetId, payload: payload)
+        try await channel.call(service, method, sessionId: sessionId, widgetId: widgetId, agent: wireAgent, payload: payload)
     }
 
     func subscribe<Arguments: Codable & Sendable>(_ service: String, _ method: String,
                                                   _ arguments: Arguments) -> AsyncStream<Data> {
-        channel.subscribe(service, method, sessionId: sessionId, widgetId: widgetId, arguments: arguments)
+        channel.subscribe(service, method, sessionId: sessionId, widgetId: widgetId, agent: wireAgent, arguments: arguments)
     }
 
     func openStream<Arguments: Codable & Sendable>(_ service: String, _ method: String,
                                                    _ arguments: Arguments) async throws -> (id: UUID, stream: AsyncStream<Data>) {
-        try await channel.openStream(service, method, sessionId: sessionId, widgetId: widgetId, arguments: arguments)
+        try await channel.openStream(service, method, sessionId: sessionId, widgetId: widgetId, agent: wireAgent, arguments: arguments)
     }
 }
 
@@ -322,7 +329,17 @@ nonisolated public struct ExtensionCapabilityProvider: WidgetCapabilityProvider 
         // Every `SessionServices` an extension builds carries its widget and session in its proxies' scope.
         let scope = (services.shell as? ExtensionShellProxy)?.scope
             ?? ExtensionServiceScope(channel: channel, sessionId: services.sessionId, widgetId: nil)
-        return WidgetCapabilities(
+        return Self.capabilities(in: scope)
+    }
+
+    public func capabilities(forBackground services: WidgetBackgroundServices) -> WidgetCapabilities {
+        let scope = (services.shell as? ExtensionShellProxy)?.scope
+            ?? ExtensionServiceScope(channel: channel, sessionId: services.sessionId, widgetId: nil, agent: true)
+        return Self.capabilities(in: scope)
+    }
+
+    private static func capabilities(in scope: ExtensionServiceScope) -> WidgetCapabilities {
+        WidgetCapabilities(
             permissions: ExtensionPermissionProxy(scope: scope), audio: ExtensionAudioProxy(scope: scope),
             speech: ExtensionSpeechProxy(scope: scope), calendar: ExtensionCalendarProxy(scope: scope))
     }
@@ -557,7 +574,7 @@ public enum ExtensionServices {
     /// What a background agent gets.
     nonisolated public static func background(channel: ExtensionChannel, sessionId: String, widgetId: String,
                                   taskId: String?) -> WidgetBackgroundServices {
-        let scope = ExtensionServiceScope(channel: channel, sessionId: sessionId, widgetId: widgetId)
+        let scope = ExtensionServiceScope(channel: channel, sessionId: sessionId, widgetId: widgetId, agent: true)
         return WidgetBackgroundServices(
             shell: ExtensionShellProxy(scope: scope),
             storage: ExtensionStorageProxy(scope: scope),

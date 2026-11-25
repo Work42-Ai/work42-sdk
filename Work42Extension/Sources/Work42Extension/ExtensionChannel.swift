@@ -74,31 +74,31 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
 
     /// Builds the call (adding a `requestId` when the method is non-idempotent), sends it and decodes the reply.
     public func call<Payload: Encodable, Result: Decodable>(
-        _ service: String, _ method: String, sessionId: String?, widgetId: String?,
+        _ service: String, _ method: String, sessionId: String?, widgetId: String?, agent: Bool? = nil,
         payload: Payload, as type: Result.Type
     ) async throws -> Result {
         try await send(ExtensionCall.make(service: service, method: method, sessionId: sessionId,
-                                          widgetId: widgetId, payload: payload), as: type)
+                                          widgetId: widgetId, agent: agent, payload: payload), as: type)
     }
 
     /// The same, for a call with no result.
     public func call<Payload: Encodable>(_ service: String, _ method: String, sessionId: String?, widgetId: String?,
-                                         payload: Payload) async throws {
+                                         agent: Bool? = nil, payload: Payload) async throws {
         _ = try await sendRaw(ExtensionCall.make(service: service, method: method, sessionId: sessionId,
-                                                 widgetId: widgetId, payload: payload))
+                                                 widgetId: widgetId, agent: agent, payload: payload))
     }
 
     /// Opens a stream: registers it, then asks the other side to start pushing into it. The stream finishes when the other
     /// side ends it, when the call fails, when the connection is lost, or when the consumer stops iterating (which tells the
     /// other side to stop with `stream.cancel`).
     public func subscribe<Arguments: Codable & Sendable>(
-        _ service: String, _ method: String, sessionId: String?, widgetId: String?, arguments: Arguments
+        _ service: String, _ method: String, sessionId: String?, widgetId: String?, agent: Bool? = nil, arguments: Arguments
     ) -> AsyncStream<Data> {
         let streamId = UUID()
-        let stream = register(streamId, sessionId: sessionId, widgetId: widgetId)
+        let stream = register(streamId, sessionId: sessionId, widgetId: widgetId, agent: agent)
         Task {
             do {
-                try await self.call(service, method, sessionId: sessionId, widgetId: widgetId,
+                try await self.call(service, method, sessionId: sessionId, widgetId: widgetId, agent: agent,
                                     payload: ExtensionSubscription(streamId: streamId, arguments: arguments))
             } catch {
                 self.finishStream(streamId)
@@ -112,12 +112,12 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
     /// stream's id, which later calls about it (`shell.stop`) name, and the stream. The call carries a `requestId` when
     /// `service.method` is non-idempotent, so a crash never opens it twice.
     public func openStream<Arguments: Codable & Sendable>(
-        _ service: String, _ method: String, sessionId: String?, widgetId: String?, arguments: Arguments
+        _ service: String, _ method: String, sessionId: String?, widgetId: String?, agent: Bool? = nil, arguments: Arguments
     ) async throws -> (id: UUID, stream: AsyncStream<Data>) {
         let streamId = UUID()
-        let stream = register(streamId, sessionId: sessionId, widgetId: widgetId)
+        let stream = register(streamId, sessionId: sessionId, widgetId: widgetId, agent: agent)
         do {
-            try await call(service, method, sessionId: sessionId, widgetId: widgetId,
+            try await call(service, method, sessionId: sessionId, widgetId: widgetId, agent: agent,
                            payload: ExtensionSubscription(streamId: streamId, arguments: arguments))
         } catch {
             finishStream(streamId)
@@ -127,7 +127,7 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
     }
 
     /// Registers stream `streamId` so pushed items reach the returned stream. A closed channel gives a finished stream.
-    private func register(_ streamId: UUID, sessionId: String?, widgetId: String?) -> AsyncStream<Data> {
+    private func register(_ streamId: UUID, sessionId: String?, widgetId: String?, agent: Bool?) -> AsyncStream<Data> {
         let (stream, continuation) = AsyncStream<Data>.makeStream()
         lock.lock()
         let wasClosed = closed
@@ -142,7 +142,7 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
             let stillOpen = self.removeStream(streamId)
             // Only a consumer that stopped iterating needs to tell the other side; a finish from the other side does not.
             if stillOpen, case .cancelled = reason {
-                Task { try? await self.call("stream", "cancel", sessionId: sessionId, widgetId: widgetId,
+                Task { try? await self.call("stream", "cancel", sessionId: sessionId, widgetId: widgetId, agent: agent,
                                             payload: ExtensionSubscription(streamId: streamId, arguments: ExtensionEmpty())) }
             }
         }

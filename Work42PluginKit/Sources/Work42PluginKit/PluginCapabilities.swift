@@ -136,10 +136,21 @@ nonisolated public struct AudioRecordingRequest: Codable, Sendable, Equatable {
     /// Where the files go: a path relative to the session folder, or a folder the plugin declared read-write under
     /// `file_access` (`~/...`).
     public var directory: String
+    /// The input device to record the microphone from, by its Core Audio UID. `nil` records the system default input. Ignored
+    /// unless `sources` has `.microphone`; a UID that is not connected any more records the default input instead.
+    public var microphoneDevice: String?
 
     public init(sources: [AudioSource], directory: String) {
         self.sources = sources
         self.directory = directory
+        self.microphoneDevice = nil
+    }
+
+    /// A request that names the microphone to record (a separate initializer, so the one above keeps its exact signature).
+    public init(sources: [AudioSource], directory: String, microphoneDevice: String?) {
+        self.sources = sources
+        self.directory = directory
+        self.microphoneDevice = microphoneDevice
     }
 }
 
@@ -220,6 +231,25 @@ nonisolated public extension WidgetSpeechService {
 
 // MARK: - Calendar
 
+/// One invitee of a calendar event.
+nonisolated public struct CalendarAttendee: Codable, Sendable, Equatable {
+    public var name: String?
+    public var email: String?
+    /// `accepted`, `declined`, `tentative`, `pending` or `unknown`.
+    public var status: String
+    public var isOrganizer: Bool
+    public var isCurrentUser: Bool
+
+    public init(name: String? = nil, email: String? = nil, status: String = "unknown", isOrganizer: Bool = false,
+                isCurrentUser: Bool = false) {
+        self.name = name
+        self.email = email
+        self.status = status
+        self.isOrganizer = isOrganizer
+        self.isCurrentUser = isCurrentUser
+    }
+}
+
 nonisolated public struct CalendarEvent: Codable, Sendable, Equatable {
     public var id: String
     public var title: String
@@ -232,6 +262,22 @@ nonisolated public struct CalendarEvent: Codable, Sendable, Equatable {
     /// The calendar it is on.
     public var calendar: String?
 
+    // What a plugin that keeps its own copy of the calendar needs (all optional: a host that cannot tell leaves them nil).
+
+    /// The calendar's own identifier, stable across renames (`calendar` is its title).
+    public var calendarId: String?
+    /// The calendar's colour as `#RRGGBB`.
+    public var calendarColor: String?
+    /// Where the calendar comes from: `local`, `icloud`, `google`, `exchange`, `caldav` or `other`.
+    public var source: String?
+    public var organizer: String?
+    /// The invitees with their answers; `attendees` is the same people as plain names.
+    public var attendeeDetails: [CalendarAttendee]?
+    /// `confirmed`, `tentative`, `canceled` or `none`.
+    public var status: String?
+    public var url: String?
+    public var lastModified: Date?
+
     public init(id: String, title: String, start: Date, end: Date, isAllDay: Bool = false, location: String? = nil,
                 notes: String? = nil, attendees: [String] = [], calendar: String? = nil) {
         self.id = id
@@ -243,6 +289,40 @@ nonisolated public struct CalendarEvent: Codable, Sendable, Equatable {
         self.notes = notes
         self.attendees = attendees
         self.calendar = calendar
+        self.calendarId = nil
+        self.calendarColor = nil
+        self.source = nil
+        self.organizer = nil
+        self.attendeeDetails = nil
+        self.status = nil
+        self.url = nil
+        self.lastModified = nil
+    }
+
+    /// An event with everything a plugin keeping its own copy of the calendar needs. A separate initializer, so the one above keeps
+    /// its exact signature; `calendarId` has no default so a call with only the older arguments still means that one.
+    public init(id: String, title: String, start: Date, end: Date, isAllDay: Bool = false, location: String? = nil,
+                notes: String? = nil, attendees: [String] = [], calendar: String? = nil, calendarId: String?,
+                calendarColor: String? = nil, source: String? = nil, organizer: String? = nil,
+                attendeeDetails: [CalendarAttendee]? = nil, status: String? = nil, url: String? = nil,
+                lastModified: Date? = nil) {
+        self.id = id
+        self.title = title
+        self.start = start
+        self.end = end
+        self.isAllDay = isAllDay
+        self.location = location
+        self.notes = notes
+        self.attendees = attendees
+        self.calendar = calendar
+        self.calendarId = calendarId
+        self.calendarColor = calendarColor
+        self.source = source
+        self.organizer = organizer
+        self.attendeeDetails = attendeeDetails
+        self.status = status
+        self.url = url
+        self.lastModified = lastModified
     }
 }
 
@@ -294,6 +374,14 @@ nonisolated public protocol WidgetCapabilityProvider: Sendable {
     /// The services for the widget and session `services` was built for (an extension reads its widget off the services'
     /// proxies, so a recording ends with the widget that started it).
     func capabilities(for services: SessionServices) -> WidgetCapabilities
+
+    /// The services for the widget and session a background agent's `services` was built for. A recording started from an agent
+    /// lives as long as the agent does, not as long as a tile is on screen. A provider that predates this answers none.
+    func capabilities(forBackground services: WidgetBackgroundServices) -> WidgetCapabilities
+}
+
+nonisolated public extension WidgetCapabilityProvider {
+    func capabilities(forBackground services: WidgetBackgroundServices) -> WidgetCapabilities { WidgetCapabilities() }
 }
 
 /// Where the host process registers its provider. Set once at startup, like `WidgetAccountRegistry`.
@@ -318,5 +406,18 @@ extension SessionServices {
     @MainActor public var speech: any WidgetSpeechService { capabilities.speech }
 
     /// Reads the person's calendars through Work42 (SDK 3.3.0).
+    @MainActor public var calendar: any WidgetCalendarService { capabilities.calendar }
+}
+
+/// The same four services for a background agent (SDK 3.3.0). A recording started here ends when the agent stops, so work that
+/// has to outlive a tile (a meeting being recorded) belongs to an agent.
+extension WidgetBackgroundServices {
+    @MainActor private var capabilities: WidgetCapabilities {
+        WidgetCapabilityRegistry.provider?.capabilities(forBackground: self) ?? WidgetCapabilities()
+    }
+
+    @MainActor public var permissions: any WidgetPermissionService { capabilities.permissions }
+    @MainActor public var audio: any WidgetAudioService { capabilities.audio }
+    @MainActor public var speech: any WidgetSpeechService { capabilities.speech }
     @MainActor public var calendar: any WidgetCalendarService { capabilities.calendar }
 }
