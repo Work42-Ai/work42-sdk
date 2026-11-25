@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.3.0
+
+Additions only: a plugin built with 3.0.0, 3.1.0 or 3.2.0 runs unchanged on 3.3.0. Every new protocol requirement has a default
+implementation, so an existing host, mock or service still conforms; a widget that calls one on a host that predates it gets a
+named `WidgetServiceError` ("this host does not support …", "run inside Work42 3.3 or later").
+
+- **Long-running and timed commands.** `WidgetShellService.start(command:)` starts a command and returns a `WidgetShellProcess`
+  at once: `output` streams one `WidgetShellOutput` per line (`stdout`, `stderr`, then `exited(status)` last) and `stop()` ends
+  it (SIGTERM, then SIGKILL after 3 s). Work42 stops a started command when its widget's scope ends, when its plugin is
+  deactivated or removed, or when an extension's connection is lost. `run(command:timeout:)` takes your own timeout. Both work
+  with no worktree (a Home widget): the command runs in the home folder with no session environment. In an extension,
+  `shell.start` carries a request id like `shell.run`, so a crash never starts the command twice.
+- **Writable session files.** `WidgetFileService.write(_:data:)` creates the parent folders and writes atomically;
+  `remove(_:)` deletes a file or folder (a missing path is not an error). Paths follow the read rule: relative to the session
+  folder, never absolute, never leaving it, never through a symbolic link that leaves it.
+- On an iPad both are answered by the paired Mac, like every other service.
+
 ## 3.2.0
 
 Additions only: a plugin built with 3.0.0 or 3.1.0 runs unchanged on 3.2.0.

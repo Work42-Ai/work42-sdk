@@ -24,6 +24,10 @@ public final class ExtensionHostServer {
     private var backgroundServices: [Scope: WidgetBackgroundServices] = [:]
     private var createContexts: [String: SessionCreateContext] = [:]
     private var streams: [UUID: Task<Void, Never>] = [:]
+    /// Which widget scope opened a stream, for the streams that must end with it (a started command, 3.3.0).
+    private var streamScopes: [UUID: Scope] = [:]
+    /// The commands the extension started with `shell.start`, by the id of the stream carrying their output.
+    private var shellProcesses: [UUID: WidgetShellProcess] = [:]
 
     public init(ledger: ExtensionRequestLedger) {
         self.ledger = ledger
@@ -37,7 +41,9 @@ public final class ExtensionHostServer {
     }
 
     public func detach(widgetId: String, sessionId: String) {
-        sessionServices.removeValue(forKey: Scope(sessionId: sessionId, widgetId: widgetId))
+        let scope = Scope(sessionId: sessionId, widgetId: widgetId)
+        sessionServices.removeValue(forKey: scope)
+        endProcesses(in: scope)
     }
 
     /// The services widget `widgetId`'s background agent was started with in `sessionId`.
@@ -46,7 +52,9 @@ public final class ExtensionHostServer {
     }
 
     public func detachBackground(widgetId: String, sessionId: String) {
-        backgroundServices.removeValue(forKey: Scope(sessionId: sessionId, widgetId: widgetId))
+        let scope = Scope(sessionId: sessionId, widgetId: widgetId)
+        backgroundServices.removeValue(forKey: scope)
+        endProcesses(in: scope)
     }
 
     /// The context a session hook runs with, for the length of the hook.
@@ -60,11 +68,30 @@ public final class ExtensionHostServer {
 
     /// The connection is gone: every stream the extension had open stops.
     public func stopStreams() {
+        // Cancelling a started command's stream stops the command (its cancellation handler calls `stop`).
         for task in streams.values { task.cancel() }
         streams.removeAll()
+        streamScopes.removeAll()
+        shellProcesses.removeAll()
     }
 
     public var openStreamCount: Int { streams.count }
+
+    /// The number of commands started by `shell.start` that are still running, for tests.
+    public var runningProcessCount: Int { shellProcesses.count }
+
+    /// A widget's scope ended: every command it started is stopped, and the extension is told their streams are over.
+    private func endProcesses(in scope: Scope) {
+        for (streamId, owner) in streamScopes where owner == scope { closeStream(streamId, notify: true) }
+    }
+
+    /// Cancels stream `streamId` (which stops a command it carries) and forgets it; `notify` also tells the extension.
+    private func closeStream(_ streamId: UUID, notify: Bool) {
+        streams.removeValue(forKey: streamId)?.cancel()
+        streamScopes.removeValue(forKey: streamId)
+        shellProcesses.removeValue(forKey: streamId)
+        if notify { push?(ExtensionStreamEvent(streamId: streamId, finished: true)) }
+    }
 
     // MARK: Answering
 
@@ -124,7 +151,29 @@ public final class ExtensionHostServer {
 
         // shell, intents
         case "shell.run":
-            return try .success(try await shell(call).run(command: try args(ExtensionPayload.Command.self).command))
+            let a = try args(ExtensionPayload.Command.self)
+            let service = try shell(call)
+            if let seconds = a.timeoutSeconds {
+                return try .success(try await service.run(command: a.command, timeout: .seconds(seconds)))
+            }
+            return try .success(try await service.run(command: a.command))
+        case "shell.start":
+            // The stream carries the command's lines and ends after `.exited`; a refusal throws here, to the caller.
+            let sub = try args(ExtensionSubscription<ExtensionPayload.Command>.self)
+            let process = try await shell(call).start(command: sub.arguments.command)
+            shellProcesses[sub.streamId] = process
+            open(sub.streamId, scope: scope(call)) { yield in
+                await withTaskCancellationHandler {
+                    for await line in process.output { yield(try? ExtensionJSON.encode(line)) }
+                } onCancel: {
+                    Task { await process.stop() }
+                }
+            }
+            return empty
+        case "shell.stop":
+            // Ends the command; its stream still delivers `.exited` and finishes by itself.
+            await shellProcesses[try args(ExtensionPayload.StreamRef.self).streamId]?.stop()
+            return empty
         case "intents.execute":
             let a = try args(ExtensionPayload.Intent.self)
             try await session(call).intents.execute(id: a.id, params: a.params)
@@ -185,6 +234,16 @@ public final class ExtensionHostServer {
             let path = try args(ExtensionPayload.Path.self).path
             try WidgetFilePath.validate(path)
             return try .success(try await files(call).list(path))
+        case "files.write":
+            let a = try args(ExtensionPayload.FileWrite.self)
+            try WidgetFilePath.validate(a.path)
+            try await files(call).write(a.path, data: a.data)
+            return empty
+        case "files.remove":
+            let path = try args(ExtensionPayload.Path.self).path
+            try WidgetFilePath.validate(path)
+            try await files(call).remove(path)
+            return empty
         case "files.watch":
             let sub = try args(ExtensionSubscription<ExtensionPayload.Path>.self)
             try WidgetFilePath.validate(sub.arguments.path)
@@ -249,8 +308,8 @@ public final class ExtensionHostServer {
             return empty
 
         case "stream.cancel":
-            let sub = try args(ExtensionSubscription<ExtensionEmpty>.self)
-            streams.removeValue(forKey: sub.streamId)?.cancel()
+            // The consumer stopped reading: a command the stream carried is stopped too (nobody is left to read it).
+            closeStream(try args(ExtensionSubscription<ExtensionEmpty>.self).streamId, notify: false)
             return empty
 
         default:
@@ -261,9 +320,10 @@ public final class ExtensionHostServer {
     // MARK: Streams
 
     /// Runs `body` as stream `streamId`, pushing what it yields, then the stream's end.
-    private func open(_ streamId: UUID,
+    private func open(_ streamId: UUID, scope: Scope? = nil,
                       _ body: @escaping @MainActor (_ yield: @MainActor (Data?) -> Void) async -> Void) {
         streams[streamId]?.cancel()
+        if let scope { streamScopes[streamId] = scope }
         streams[streamId] = Task { [weak self] in
             await body { item in
                 guard let item, !Task.isCancelled else { return }
@@ -271,6 +331,8 @@ public final class ExtensionHostServer {
             }
             guard let self, !Task.isCancelled else { return }
             self.streams.removeValue(forKey: streamId)
+            self.streamScopes.removeValue(forKey: streamId)
+            self.shellProcesses.removeValue(forKey: streamId)
             self.push?(ExtensionStreamEvent(streamId: streamId, finished: true))
         }
     }

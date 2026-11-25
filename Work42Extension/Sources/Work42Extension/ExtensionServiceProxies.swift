@@ -34,6 +34,11 @@ nonisolated public struct ExtensionServiceScope: Sendable {
                                                   _ arguments: Arguments) -> AsyncStream<Data> {
         channel.subscribe(service, method, sessionId: sessionId, widgetId: widgetId, arguments: arguments)
     }
+
+    func openStream<Arguments: Codable & Sendable>(_ service: String, _ method: String,
+                                                   _ arguments: Arguments) async throws -> (id: UUID, stream: AsyncStream<Data>) {
+        try await channel.openStream(service, method, sessionId: sessionId, widgetId: widgetId, arguments: arguments)
+    }
 }
 
 /// Decodes each item of `raw` as `Item`, dropping (and ending on) an item that does not decode.
@@ -65,7 +70,22 @@ public enum ExtensionPayload {
         public var sourceLabel: String, excerpt: String
         public init(sourceLabel: String, excerpt: String) { self.sourceLabel = sourceLabel; self.excerpt = excerpt }
     }
-    nonisolated public struct Command: Codable, Sendable { public var command: String; public init(command: String) { self.command = command } }
+    /// A shell command; `timeoutSeconds` is set by `run(command:timeout:)` (3.3.0) and absent for the 10 s default.
+    nonisolated public struct Command: Codable, Sendable {
+        public var command: String
+        public var timeoutSeconds: Double?
+        public init(command: String, timeoutSeconds: Double? = nil) {
+            self.command = command
+            self.timeoutSeconds = timeoutSeconds
+        }
+    }
+    /// A stream the host opened for the extension, named by the id the extension chose when it opened it (3.3.0).
+    nonisolated public struct StreamRef: Codable, Sendable { public var streamId: UUID; public init(streamId: UUID) { self.streamId = streamId } }
+    /// `files.write` (3.3.0): the bytes travel as base64 in JSON like `Bytes`.
+    nonisolated public struct FileWrite: Codable, Sendable {
+        public var path: String, data: Data
+        public init(path: String, data: Data) { self.path = path; self.data = data }
+    }
     nonisolated public struct Intent: Codable, Sendable {
         public var id: String, params: [String: WidgetJSONValue]
         public init(id: String, params: [String: WidgetJSONValue]) { self.id = id; self.params = params }
@@ -134,6 +154,28 @@ nonisolated public struct ExtensionShellProxy: WidgetShellService {
     public init(scope: ExtensionServiceScope) { self.scope = scope }
     public func run(command: String) async throws -> WidgetShellResult {
         try await scope.call("shell", "run", ExtensionPayload.Command(command: command), as: WidgetShellResult.self)
+    }
+
+    public func run(command: String, timeout: Duration) async throws -> WidgetShellResult {
+        try await scope.call("shell", "run", ExtensionPayload.Command(command: command, timeoutSeconds: timeout.wireSeconds),
+                             as: WidgetShellResult.self)
+    }
+
+    /// Opens the command as a host stream (so a refusal is thrown here), decodes its lines, and stops it with `shell.stop`.
+    /// A consumer that stops reading also ends the command: the channel's `stream.cancel` makes the host stop it.
+    public func start(command: String) async throws -> WidgetShellProcess {
+        let (id, raw) = try await scope.openStream("shell", "start", ExtensionPayload.Command(command: command))
+        let scope = self.scope
+        return WidgetShellProcess(
+            id: id, output: decodedStream(raw, as: WidgetShellOutput.self),
+            stop: { try? await scope.call("shell", "stop", ExtensionPayload.StreamRef(streamId: id)) })
+    }
+}
+
+extension Duration {
+    /// Whole and fractional seconds, for the wire.
+    nonisolated var wireSeconds: Double {
+        Double(components.seconds) + Double(components.attoseconds) / 1e18
     }
 }
 
@@ -210,6 +252,16 @@ nonisolated public struct ExtensionFileProxy: WidgetFileService {
         try WidgetFilePath.validate(relativeDir)
         return try await scope.call("files", "list", ExtensionPayload.Path(path: relativeDir), as: [WidgetFileEntry].self)
     }
+    public func write(_ relativePath: String, data: Data) async throws {
+        try WidgetFilePath.validate(relativePath)
+        try await scope.call("files", "write", ExtensionPayload.FileWrite(path: relativePath, data: data))
+    }
+
+    public func remove(_ relativePath: String) async throws {
+        try WidgetFilePath.validate(relativePath)
+        try await scope.call("files", "remove", ExtensionPayload.Path(path: relativePath))
+    }
+
     public func watch(_ relativePath: String) -> AsyncStream<Void> {
         // A refused path finishes at once, as it does in process.
         guard (try? WidgetFilePath.validate(relativePath)) != nil else { return AsyncStream { $0.finish() } }

@@ -95,6 +95,39 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
         _ service: String, _ method: String, sessionId: String?, widgetId: String?, arguments: Arguments
     ) -> AsyncStream<Data> {
         let streamId = UUID()
+        let stream = register(streamId, sessionId: sessionId, widgetId: widgetId)
+        Task {
+            do {
+                try await self.call(service, method, sessionId: sessionId, widgetId: widgetId,
+                                    payload: ExtensionSubscription(streamId: streamId, arguments: arguments))
+            } catch {
+                self.finishStream(streamId)
+            }
+        }
+        return stream
+    }
+
+    /// Opens a stream like `subscribe`, but waits for the other side to accept it, so a refusal (a command that cannot
+    /// start, a path that is not allowed) is thrown to the caller instead of ending the stream silently. Returns the
+    /// stream's id, which later calls about it (`shell.stop`) name, and the stream. The call carries a `requestId` when
+    /// `service.method` is non-idempotent, so a crash never opens it twice.
+    public func openStream<Arguments: Codable & Sendable>(
+        _ service: String, _ method: String, sessionId: String?, widgetId: String?, arguments: Arguments
+    ) async throws -> (id: UUID, stream: AsyncStream<Data>) {
+        let streamId = UUID()
+        let stream = register(streamId, sessionId: sessionId, widgetId: widgetId)
+        do {
+            try await call(service, method, sessionId: sessionId, widgetId: widgetId,
+                           payload: ExtensionSubscription(streamId: streamId, arguments: arguments))
+        } catch {
+            finishStream(streamId)
+            throw error
+        }
+        return (streamId, stream)
+    }
+
+    /// Registers stream `streamId` so pushed items reach the returned stream. A closed channel gives a finished stream.
+    private func register(_ streamId: UUID, sessionId: String?, widgetId: String?) -> AsyncStream<Data> {
         let (stream, continuation) = AsyncStream<Data>.makeStream()
         lock.lock()
         let wasClosed = closed
@@ -111,14 +144,6 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
             if stillOpen, case .cancelled = reason {
                 Task { try? await self.call("stream", "cancel", sessionId: sessionId, widgetId: widgetId,
                                             payload: ExtensionSubscription(streamId: streamId, arguments: ExtensionEmpty())) }
-            }
-        }
-        Task {
-            do {
-                try await self.call(service, method, sessionId: sessionId, widgetId: widgetId,
-                                    payload: ExtensionSubscription(streamId: streamId, arguments: arguments))
-            } catch {
-                self.finishStream(streamId)
             }
         }
         return stream
