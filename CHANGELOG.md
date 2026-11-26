@@ -22,6 +22,10 @@ asks for tools). WOR-894.
   answer a tool's service calls when the owner has no tile shown (an agent calling a widget's or session type's tool): the
   services are attached for the length of the call, counted so overlapping calls for one session share the lease, and
   `sessionFolder(for:)` falls back to them. A widget's tile services still win when one is attached.
+- **Long-running tools.** `PluginTool(longRunning: true)` (and `PluginToolDescription.longRunning`, read as false when absent)
+  marks a tool that takes minutes. Work42 starts it and answers the agent at once with an operation id; the agent asks for its
+  status (latest `reportProgress`, the result when done) or cancels it, and Work42 cancels it when the owning widget leaves the
+  session. The handler is unchanged: report progress, honour cancellation, return the result.
 - **Permissions.** `PluginPermissionID` names the 20 permission ids; `ExtensionHostServer.authorizeShell` lets the app gate
   `services.shell` (WOR-893).
 - **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen by the next release `dump`.

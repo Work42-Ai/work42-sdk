@@ -259,19 +259,27 @@ public struct PluginToolContext {
 
 /// One tool. `changesData` marks a call that changes something outside the plugin (sends, moves, deletes, records): Work42
 /// never repeats such a call after a crash or an uncertain disconnect.
+///
+/// `longRunning` marks a tool that takes minutes (an export, a transcription). Work42 starts it and answers the agent at once with
+/// an operation id; the agent then asks for its status (the latest `reportProgress`, and the result once it finishes) or cancels
+/// it. Work42 also cancels it when the widget that owns it leaves the session. The handler is the same either way: it reports
+/// progress, honours cancellation (`Task.isCancelled`, `try Task.checkCancellation()`) and returns its result.
 nonisolated public struct PluginTool: Sendable {
     public let id: String
     public let description: String
     public let input: PluginToolSchema
     public let changesData: Bool
+    public let longRunning: Bool
     let handler: @MainActor @Sendable (PluginToolArguments, PluginToolContext) async throws -> PluginToolResult
 
     public init(id: String, description: String, input: PluginToolSchema = .object([:]), changesData: Bool = false,
+                longRunning: Bool = false,
                 handler: @escaping @MainActor @Sendable (PluginToolArguments, PluginToolContext) async throws -> PluginToolResult) {
         self.id = id
         self.description = description
         self.input = input
         self.changesData = changesData
+        self.longRunning = longRunning
         self.handler = handler
     }
 
@@ -326,16 +334,32 @@ nonisolated public struct PluginToolDescription: Codable, Sendable, Equatable {
     public var description: String
     public var inputSchema: PluginToolSchema
     public var changesData: Bool
+    /// Whether Work42 runs it as a long operation (an id the agent polls) instead of one call that waits.
+    public var longRunning: Bool
 
-    public init(id: String, description: String, inputSchema: PluginToolSchema, changesData: Bool) {
+    public init(id: String, description: String, inputSchema: PluginToolSchema, changesData: Bool, longRunning: Bool = false) {
         self.id = id
         self.description = description
         self.inputSchema = inputSchema
         self.changesData = changesData
+        self.longRunning = longRunning
     }
 
     public init(describing tool: PluginTool) {
-        self.init(id: tool.id, description: tool.description, inputSchema: tool.input, changesData: tool.changesData)
+        self.init(id: tool.id, description: tool.description, inputSchema: tool.input, changesData: tool.changesData,
+                  longRunning: tool.longRunning)
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, description, inputSchema, changesData, longRunning }
+
+    /// A description written before `longRunning` existed reads as a tool that waits.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        description = try container.decode(String.self, forKey: .description)
+        inputSchema = try container.decode(PluginToolSchema.self, forKey: .inputSchema)
+        changesData = try container.decode(Bool.self, forKey: .changesData)
+        longRunning = try container.decodeIfPresent(Bool.self, forKey: .longRunning) ?? false
     }
 }
 

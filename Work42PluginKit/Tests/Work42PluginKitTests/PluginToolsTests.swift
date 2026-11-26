@@ -127,6 +127,23 @@ struct PluginToolsTests {
         #expect(description.tools[0].inputSchema.required == ["query"] && description.tools[1].inputSchema.properties.isEmpty)
     }
 
+    @Test("a long-running tool is described as one, and an older description reads as a tool that waits")
+    func longRunning() throws {
+        let mcp = PluginMCPTools(id: "m") {
+            PluginTool(id: "quick", description: "Quick.") { _, _ in .text("ok") }
+            PluginTool(id: "export", description: "Export.", longRunning: true) { _, _ in .text("ok") }
+        }
+        let description = PluginMCPDescription(describing: mcp)
+        #expect(description.tools.map(\.longRunning) == [false, true])
+
+        let decoded = try JSONDecoder().decode(PluginMCPDescription.self, from: JSONEncoder().encode(description))
+        #expect(decoded == description)
+
+        let old = #"{"id":"export","description":"Export.","inputSchema":{"type":"object","properties":{},"required":[]},"changesData":true}"#
+        let tool = try JSONDecoder().decode(PluginToolDescription.self, from: Data(old.utf8))
+        #expect(tool.longRunning == false && tool.changesData)
+    }
+
     @Test("a builder takes conditionals and loops")
     func builderControlFlow() {
         let include = true
