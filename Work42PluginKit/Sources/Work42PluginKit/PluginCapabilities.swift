@@ -401,21 +401,33 @@ nonisolated public extension WidgetCalendarService {
 
 // MARK: - The bundle, and how a plugin reaches it
 
-/// The four services for one (plugin, session).
+/// The services for one (plugin, session): the four of SDK 3.3.0, and `diskRead` and `automation` from 3.5.0.
 nonisolated public struct WidgetCapabilities: Sendable {
     public let permissions: any WidgetPermissionService
     public let audio: any WidgetAudioService
     public let speech: any WidgetSpeechService
     public let calendar: any WidgetCalendarService
+    public let diskRead: any WidgetDiskReadService
+    public let automation: any WidgetAutomationService
 
     public init(permissions: any WidgetPermissionService = UnsupportedWidgetCapability(),
                 audio: any WidgetAudioService = UnsupportedWidgetCapability(),
                 speech: any WidgetSpeechService = UnsupportedWidgetCapability(),
                 calendar: any WidgetCalendarService = UnsupportedWidgetCapability()) {
+        self.init(permissions: permissions, audio: audio, speech: speech, calendar: calendar,
+                  diskRead: UnsupportedWidgetCapability(), automation: UnsupportedWidgetCapability())
+    }
+
+    /// The same, with the 3.5.0 services (a separate initializer, so the one above keeps its exact signature).
+    public init(permissions: any WidgetPermissionService, audio: any WidgetAudioService, speech: any WidgetSpeechService,
+                calendar: any WidgetCalendarService, diskRead: any WidgetDiskReadService = UnsupportedWidgetCapability(),
+                automation: any WidgetAutomationService = UnsupportedWidgetCapability()) {
         self.permissions = permissions
         self.audio = audio
         self.speech = speech
         self.calendar = calendar
+        self.diskRead = diskRead
+        self.automation = automation
     }
 }
 
@@ -464,6 +476,12 @@ extension SessionServices {
 
     /// Reads the person's calendars through Work42 (SDK 3.3.0).
     @MainActor public var calendar: any WidgetCalendarService { capabilities.calendar }
+
+    /// Reads files anywhere on disk through Work42, behind the `full-disk-access` permission (SDK 3.5.0).
+    @MainActor public var diskRead: any WidgetDiskReadService { capabilities.diskRead }
+
+    /// Sends typed Apple Events to another app through Work42, behind the `automation` permission (SDK 3.5.0).
+    @MainActor public var automation: any WidgetAutomationService { capabilities.automation }
 }
 
 /// The same four services for a background agent (SDK 3.3.0). A recording started here ends when the agent stops, so work that
@@ -477,4 +495,6 @@ extension WidgetBackgroundServices {
     @MainActor public var audio: any WidgetAudioService { capabilities.audio }
     @MainActor public var speech: any WidgetSpeechService { capabilities.speech }
     @MainActor public var calendar: any WidgetCalendarService { capabilities.calendar }
+    @MainActor public var diskRead: any WidgetDiskReadService { capabilities.diskRead }
+    @MainActor public var automation: any WidgetAutomationService { capabilities.automation }
 }

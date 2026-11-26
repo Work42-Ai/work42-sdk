@@ -22,6 +22,15 @@ asks for tools). WOR-894.
   answer a tool's service calls when the owner has no tile shown (an agent calling a widget's or session type's tool): the
   services are attached for the length of the call, counted so overlapping calls for one session share the lease, and
   `sessionFolder(for:)` falls back to them. A widget's tile services still win when one is attached.
+- **`services.diskRead`** (behind `full-disk-access`): `stat(path:)`, `list(path:cursor:limit:)` and `read(path:offset:length:)` read
+  files anywhere on disk through Work42, which holds Full Disk Access. Paths are absolute or `~/`; reads are capped at 4 MiB a call,
+  listings at 1,000 entries a page (cursor paged, byte order); `stat` describes a link as itself, `list` and `read` follow it;
+  sockets, devices and pipes are refused; no file descriptor leaves Work42; macOS errors come back with their errno.
+- **`services.automation`** (behind `automation`, one consent per target app): `send(_:)` takes a typed `AppleEventRequest` (target
+  bundle id, event class and id, parameters of `AppleEventValue`) and Work42 sends it with the Apple Event APIs. Never `osascript`, a
+  shell or a script. `automation.send` is a non-repeatable call: after a crash it is reported interrupted, not sent again.
+- `WidgetCapabilities` gains `diskRead` and `automation` (a new initializer; the old one keeps its signature), and
+  `ExtensionHostServer.authorizeToolCall` lets Work42 gate a plugin's `tools.call` per MCP server.
 - **Long-running tools.** `PluginTool(longRunning: true)` (and `PluginToolDescription.longRunning`, read as false when absent)
   marks a tool that takes minutes. Work42 starts it and answers the agent at once with an operation id; the agent asks for its
   status (latest `reportProgress`, the result when done) or cancels it, and Work42 cancels it when the owning widget leaves the

@@ -68,6 +68,8 @@ nonisolated public struct ExtensionCall: Codable, Sendable, Equatable {
     nonisolated public static let nonIdempotentMethods: Set<String> = [
         "shell.run", "shell.start", "files.write", "files.remove", "audio.startRecording",
         "intents.execute", "tools.call", "extension.hook", "extension.performIntent",
+        // An Apple Event can send, move or delete in another app (3.5.0).
+        "automation.send",
     ]
 
     /// A call with a fresh `requestId` when `service.method` is non-idempotent, and none otherwise.

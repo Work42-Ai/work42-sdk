@@ -184,6 +184,20 @@ public enum ExtensionPayload {
         public var events: [CalendarEvent]
         public init(events: [CalendarEvent]) { self.events = events }
     }
+    /// `diskRead.list` (3.5.0).
+    nonisolated public struct DiskList: Codable, Sendable {
+        public var path: String
+        public var cursor: String?
+        public var limit: Int?
+        public init(path: String, cursor: String?, limit: Int?) { self.path = path; self.cursor = cursor; self.limit = limit }
+    }
+    /// `diskRead.read` (3.5.0).
+    nonisolated public struct DiskRead: Codable, Sendable {
+        public var path: String
+        public var offset: Int64
+        public var length: Int
+        public init(path: String, offset: Int64, length: Int) { self.path = path; self.offset = offset; self.length = length }
+    }
 }
 
 // MARK: - Proxies
@@ -332,6 +346,42 @@ nonisolated public struct ExtensionCalendarProxy: WidgetCalendarService {
     }
 }
 
+nonisolated public struct ExtensionDiskReadProxy: WidgetDiskReadService {
+    let scope: ExtensionServiceScope
+    public init(scope: ExtensionServiceScope) { self.scope = scope }
+
+    public func stat(path: String) async throws -> DiskEntry {
+        try await typedFailure {
+            try await scope.call("diskRead", "stat", ExtensionPayload.Path(path: path), as: DiskEntry.self)
+        }
+    }
+
+    public func list(path: String, cursor: String?, limit: Int?) async throws -> DiskListing {
+        try await typedFailure {
+            try await scope.call("diskRead", "list", ExtensionPayload.DiskList(path: path, cursor: cursor, limit: limit),
+                                 as: DiskListing.self)
+        }
+    }
+
+    public func read(path: String, offset: Int64, length: Int) async throws -> DiskChunk {
+        try await typedFailure {
+            try await scope.call("diskRead", "read", ExtensionPayload.DiskRead(path: path, offset: offset, length: length),
+                                 as: DiskChunk.self)
+        }
+    }
+}
+
+nonisolated public struct ExtensionAutomationProxy: WidgetAutomationService {
+    let scope: ExtensionServiceScope
+    public init(scope: ExtensionServiceScope) { self.scope = scope }
+
+    public func send(_ request: AppleEventRequest) async throws -> AppleEventReply {
+        try await typedFailure {
+            try await scope.call("automation", "send", request, as: AppleEventReply.self)
+        }
+    }
+}
+
 /// Hands a widget's services proxies for the widget and session they were built for.
 nonisolated public struct ExtensionCapabilityProvider: WidgetCapabilityProvider {
     let channel: ExtensionChannel
@@ -353,7 +403,8 @@ nonisolated public struct ExtensionCapabilityProvider: WidgetCapabilityProvider 
     private static func capabilities(in scope: ExtensionServiceScope) -> WidgetCapabilities {
         WidgetCapabilities(
             permissions: ExtensionPermissionProxy(scope: scope), audio: ExtensionAudioProxy(scope: scope),
-            speech: ExtensionSpeechProxy(scope: scope), calendar: ExtensionCalendarProxy(scope: scope))
+            speech: ExtensionSpeechProxy(scope: scope), calendar: ExtensionCalendarProxy(scope: scope),
+            diskRead: ExtensionDiskReadProxy(scope: scope), automation: ExtensionAutomationProxy(scope: scope))
     }
 }
 

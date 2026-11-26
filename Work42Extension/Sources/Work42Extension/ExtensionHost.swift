@@ -46,6 +46,10 @@ public final class ExtensionHostServer {
     /// `run-commands` and that the person allowed it, and throws (a `PluginPermissionError`) when not. Unset, a command
     /// runs as it did before.
     public var authorizeShell: (@MainActor (ExtensionCall) async throws -> Void)?
+    /// Asked before a plugin's `tools.call` runs a tool of another MCP server (3.5.0): a tool that runs commands or reaches
+    /// protected places is the same power as `services.shell`, so Work42 gates it with the same permissions. Throwing refuses the
+    /// call; unset, every call is allowed.
+    public var authorizeToolCall: (@MainActor (_ call: ExtensionCall, _ server: String, _ tool: String) async throws -> Void)?
     /// Told when an extension says something about one of its widgets that is not a service call (3.4.0): its live state
     /// (intents, header labels) changed, or a popover asked to close. Work42 sets it per link; unset, those calls are
     /// accepted and dropped.
@@ -300,6 +304,7 @@ public final class ExtensionHostServer {
             return try .success(try await tools(call).listTools())
         case "tools.call":
             let a = try args(ExtensionPayload.ToolCall.self)
+            try await authorizeToolCall?(call, a.server, a.tool)
             return try .success(try await tools(call).call(server: a.server, tool: a.tool, arguments: a.arguments,
                                                            session: a.session))
 
@@ -438,6 +443,20 @@ public final class ExtensionHostServer {
             let source = try capabilities(call).calendar.changes()
             open(sub.streamId) { yield in for await _ in source { yield(try? ExtensionJSON.encode(ExtensionEmpty())) } }
             return empty
+
+        // disk read and automation (3.5.0)
+        case "diskRead.stat":
+            let path = try args(ExtensionPayload.Path.self).path
+            return try .success(try await capabilities(call).diskRead.stat(path: path))
+        case "diskRead.list":
+            let a = try args(ExtensionPayload.DiskList.self)
+            return try .success(try await capabilities(call).diskRead.list(path: a.path, cursor: a.cursor, limit: a.limit))
+        case "diskRead.read":
+            let a = try args(ExtensionPayload.DiskRead.self)
+            return try .success(try await capabilities(call).diskRead.read(path: a.path, offset: a.offset, length: a.length))
+        case "automation.send":
+            let request = try args(AppleEventRequest.self)
+            return try .success(try await capabilities(call).automation.send(request))
 
         case "stream.cancel":
             // The consumer stopped reading: a command the stream carried is stopped too (nobody is left to read it).
