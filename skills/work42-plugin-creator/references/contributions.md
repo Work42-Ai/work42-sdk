@@ -22,7 +22,7 @@ Use the installed app SDK via `work42 plugin build`, not app-internal modules or
 
 ## Skills
 
-Each `skills/<slug>/SKILL.md` needs valid skill frontmatter and agent-facing instructions. Scope it from a session type using `session_skills`; use manifest `global_skills` only when it truly applies to every session.
+Each `skills/<slug>/SKILL.md` needs valid skill frontmatter and agent-facing instructions. Scope it from a session type using `session_skills`, or from the widget it belongs to with `skills:` in that widget's `widget.yaml`. There are no global skills.
 
 ### Prerequisites
 
@@ -59,7 +59,7 @@ Stage-rule kinds are `execute`, `edit`, `fetch`, or `mcp`; actions are `allow` o
 
 ## Session types
 
-Each `session-types/<id>.json` declares `id`, display `name`, and a same-bundle `workflow`. Optional arrays `session_skills` and `session_mcps` must name same-bundle folders. `create_intent`, when present, must name a same-bundle intent. Other supported fields are `layout_json`, `icon`, `accent_hex`, `fresh_per_session`, `shows_in_new_session_menu`, `sort_order`, `enforce_capability_gate`, `self_archives`, `list_shape`, `archive_source`, `shows_in_session_list`, `start_hook` (a setup command, see below), and typed `args`.
+Each `session-types/<id>.json` declares `id`, display `name`, and a same-bundle `workflow`. Optional `session_skills` must name same-bundle skill folders; optional `session_mcps` is a list of MCP objects (see "MCPs"). `create_intent`, when present, must name a same-bundle intent. Other supported fields are `layout_json`, `icon`, `accent_hex`, `fresh_per_session`, `shows_in_new_session_menu`, `sort_order`, `enforce_capability_gate`, `self_archives`, `list_shape`, `archive_source`, `shows_in_session_list`, `start_hook` (a setup command, see below), and typed `args`.
 
 `widgets` is the explicit list of widget kind ids sessions of this type have: built-in kinds as plain ids (`chat`, `files`, `terminal`) and plugin widgets as `widget:<slug>`. Only these exist in its sessions (the `+ Widget` picker, background work, link handling, the widgets' skills); installing a plugin adds its widgets to the catalog but to no type's list. A `widget:` entry must be one of this plugin's widgets or one of a plugin named in `requires`, or install fails. When `widgets` is absent, the ids found in `layout_json` are used. Keep it in step with the layout.
 
@@ -102,4 +102,32 @@ Each `intents/<id>.json` declares `id`, `title`, a same-bundle `type_id`, option
 
 ## Hooks and MCPs
 
-Use `Sources/Plugin.swift` only for compiled session hooks defined by `Work42PluginKit`. Put MCP-owned declarations beneath `mcp/<id>/` and reference their IDs only from session types in the same plugin. Both are package-owned and disappear on removal; external/user data they wrote is not traversed or deleted.
+Use `Sources/Plugin.swift` only for compiled session hooks defined by `Work42PluginKit`. Hooks are package-owned and disappear on removal; external/user data they wrote is not traversed or deleted.
+
+## MCPs
+
+A plugin declares MCP servers only where they attach: on a widget (`widgets/<id>/widget.yaml`) or on a session type (`session_mcps` in `session-types/<id>.json`). A session gets an MCP when it has that widget or session type. There are two kinds, and no command or stdio MCP:
+
+```yaml
+# widgets/mail/widget.yaml (an extension plugin needs one in every widget folder)
+id: mail                    # the folder name
+title: Mail
+description: Your inbox next to the session.
+mcps:
+  - id: mail
+    title: Mail
+    description: Search and read your mail.
+    source: extension       # tools written in Swift in the extension, under the same id
+  - id: docs
+    title: Docs
+    description: Your team's knowledge base.
+    url: https://docs.example.com/mcp   # a server hosted elsewhere: https, or http on localhost / 127.0.0.1; no headers
+skills: [mail-help]         # names under skills/
+```
+
+```json
+{ "id": "inbox", "name": "Inbox", "workflow": "w",
+  "session_mcps": [{ "id": "inbox", "title": "Inbox", "description": "…", "source": "extension" }] }
+```
+
+For `source: extension` the extension declares the tools with `PluginMCPTools(id:)` (SDK 3.5.0): a widget conforming to `Work42WidgetMCPs`, or a session type listed in the extension's `sessionTypes` conforming to `Work42SessionTypeMCPs`. `work42 plugin package` refuses a widget folder with no `widget.yaml`, an id the extension lacks (or the reverse), an extension MCP with no Swift tools (or tools for an undeclared MCP), duplicate ids, an unknown skill, a `url` that is not allowed, a command or stdio MCP, an `mcp/` folder and `global_skills`. It writes each MCP, with its tools, into `release.json` and into `mcps.json` inside the package; when the extension starts, Work42 compares its live tools with `mcps.json` and switches off an MCP that no longer matches.

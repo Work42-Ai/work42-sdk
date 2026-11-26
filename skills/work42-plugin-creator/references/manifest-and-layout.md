@@ -9,7 +9,6 @@ version: 0.1.0
 description: Explain what this plugin contributes
 author: Your Name
 sdk_version: 3.2.0
-global_skills: optional-global-skill
 requires: [other-plugin]
 ```
 
@@ -17,7 +16,7 @@ requires: [other-plugin]
 - `version`: semantic plugin version (`major.minor.patch`).
 - `sdk_version`: the Work42 SDK release the plugin is built with (`work42 sdk` prints the installed one, and `work42 plugin new` writes it). `work42 plugin build` stamps the built copy with the exact version, so never edit it in a built plugin. The app runs a plugin whose major version matches its own and whose version is the same or older: a plugin built with 3.0.0 runs on 3.2.0, but one built with 3.2.0 does not run on 3.0.0.
 - There is no `sdk_abi` field. An older manifest that still has one is read, the field is ignored with a warning, and you should delete it.
-- `global_skills`: optional comma-separated skill slugs composed globally. Most skills should instead be scoped from a session type.
+- A plugin declares no MCPs and no skills in `plugin.yaml`: `plugin.yaml` is the plugin's identity and permissions. A skill belongs to a widget (`skills:` in its `widget.yaml`) or to a session type (`session_skills`), and an MCP is declared the same way (see "MCPs" in contributions). `global_skills` and an `mcp/` folder are refused by `work42 plugin package`.
 
 - `requires`: optional list of plugin names this plugin depends on (`[a, b]`, `a, b`, or a block list). Install fails until each is installed, nothing is installed automatically, and `work42 plugin remove` refuses to remove a plugin another installed plugin requires. Declare it whenever a session type's `widgets` list names another plugin's widgets.
 
@@ -30,12 +29,12 @@ my-plugin/
 ├── plugin.yaml
 ├── Sources/Plugin.swift          # optional compiled session hooks
 ├── widgets/<slug>/
+│   ├── widget.yaml               # extension plugins: id, title, description, mcps, skills (required, one per widget)
 │   ├── Sources/*.swift           # source build, or a compatible prebuilt dylib
 │   └── SKILL.md                  # optional widget-facing agent guidance
 ├── skills/<slug>/SKILL.md
 ├── workflows/<slug>.json
-├── session-types/<id>.json       # incl. the `widgets` its sessions have
-├── mcp/<id>/                     # MCP declaration/configuration owned by plugin
+├── session-types/<id>.json       # incl. the `widgets` its sessions have and its `session_mcps`
 └── intents/<id>.json
 ```
 
