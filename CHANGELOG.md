@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.5.0 (unreleased)
+
+Additions only: an extension built with 3.3.0 or 3.4.0 runs unchanged on a 3.5.0 host (its handshake has no `sessionTypes`, its widgets
+describe no `mcps`, and the host never calls `extension.callTool` on it), and a 3.5.0 extension runs on an older host (which never
+asks for tools). WOR-894.
+
+- **MCP tools on widgets and session types.** A plugin declares the tools of an MCP server in Swift: `PluginTool` (id, description,
+  `input` schema, `changesData`, handler), grouped by `PluginMCPTools(id:)` with the `PluginToolBuilder` result builder (conditionals and
+  loops work). A widget lists its servers by conforming to `Work42WidgetMCPs`; a session type through `Work42SessionTypeMCPs`, which an
+  extension offers in `Work42PluginExtension.sessionTypes` as `ExtensionSessionTypeFactory` values (default none).
+- **Schemas, arguments, results.** `PluginToolSchema` and `PluginToolProperty` (`.string`, `.integer`, `.number`, `.boolean`,
+  `.dateTime`, `.oneOf`, `.optional`) write the JSON schema MCP expects, and the extension checks every call's arguments against it before
+  the handler runs. `PluginToolArguments` reads typed values; `PluginToolResult` is `.text` or `.structured`; `PluginToolFailure` carries
+  a code, a message and a suggestion. Handlers get a `PluginToolContext` (session, widget, invocation id, services, `reportProgress`).
+- **Wire.** `extension.callTool` (answers a result or a tool failure, apart from a transport error), `extension.cancelTool` (stops the
+  running handler, which answers `cancelled`) and `tool.progress` (extension to host; `ExtensionHost.toolProgress` receives it). A call to a
+  `changesData` tool carries a `requestId`, so after an extension crash the caller learns it was interrupted and it is never re-sent. The
+  handshake lists session types, and each widget's description lists its MCPs and tools (both absent on the wire when empty).
+- **Permissions.** `PluginPermissionID` names the 20 permission ids; `ExtensionHostServer.authorizeShell` lets the app gate
+  `services.shell` (WOR-893).
+- **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen by the next release `dump`.
+
 ## 3.4.0 (unreleased)
 
 Additions only, and none of them needs a new `WidgetIntentSpec` or protocol requirement: an extension built with 3.3.0 runs unchanged

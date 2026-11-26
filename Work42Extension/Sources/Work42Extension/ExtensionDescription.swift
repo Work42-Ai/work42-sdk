@@ -75,6 +75,8 @@ nonisolated public struct ExtensionWidgetDescription: Codable, Sendable, Equatab
     /// The action-area intents (by name) that open a popover instead of running (`Work42WidgetActionPopovers`, 3.4.0); the
     /// host draws it from the `popover:<name>` surface. Nil or empty: none.
     public var popoverIntents: [String]?
+    /// The MCP servers whose tools this widget brings into every session it is in (`Work42WidgetMCPs`, 3.5.0). Nil: none.
+    public var mcps: [PluginMCPDescription]?
 
     public init(id: String, title: String, icon: String, iconImageData: Data? = nil, minSize: WidgetMinSize = .zero,
                 storageNamespace: String? = nil, collaboration: WidgetCollaboration = .default,
@@ -118,6 +120,9 @@ extension ExtensionWidgetDescription {
             // nothing (the view it returns is built and thrown away; nothing is drawn).
             let names = widget.intents.map(\.name).filter { popovers.actionAreaPopover(for: $0, dismiss: {}) != nil }
             self.popoverIntents = names.isEmpty ? nil : names
+        }
+        if let declared = (widget as? any Work42WidgetMCPs)?.mcpTools, !declared.isEmpty {
+            self.mcps = declared.map(PluginMCPDescription.init(describing:))
         }
     }
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# api-baseline.sh — the public API of Work42UI and Work42PluginKit, frozen per SDK release (WOR-856).
+# api-baseline.sh — the public API of Work42UI, Work42PluginKit and Work42Extension, frozen per SDK release (WOR-856, WOR-894).
 #
 #   scripts/api-baseline.sh dump    write api-baselines/<version>/<Module>.json for the current SDK version
 #   scripts/api-baseline.sh check   diagnose the current SDK against the newest baseline with the same major version
@@ -13,7 +13,7 @@ set -euo pipefail
 SDK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINES="$SDK_ROOT/api-baselines"
 VERSION_FILE="$SDK_ROOT/Work42UI/Sources/Work42UI/Work42SDKCompatibility.swift"
-MODULES=(Work42UI Work42PluginKit)
+MODULES=(Work42UI Work42PluginKit Work42Extension)
 
 die() { echo "api-baseline: $*" >&2; exit 1; }
 
@@ -27,9 +27,11 @@ major_of() { echo "${1%%.*}"; }
 build_and_module_flags() {
   local flags=()
   for module in "${MODULES[@]}"; do
-    (cd "$SDK_ROOT/$module" && swift build --target "$module" >&2) || die "swift build failed for $module"
+    # API_BASELINE_BUILD_FLAGS (e.g. "-Xswiftc -gnone") shrinks the build on a tight disk; it does not change the public API.
+    # shellcheck disable=SC2086
+    (cd "$SDK_ROOT/$module" && swift build --target "$module" ${API_BASELINE_BUILD_FLAGS:-} >&2) || die "swift build failed for $module"
     local bin
-    bin="$(cd "$SDK_ROOT/$module" && swift build --show-bin-path)"
+    bin="$(cd "$SDK_ROOT/$module" && swift build --show-bin-path ${API_BASELINE_BUILD_FLAGS:-})"
     flags+=(-I "$bin/Modules" -I "$bin")
   done
   printf '%s\n' "${flags[@]}"
@@ -86,6 +88,13 @@ case "$cmd" in
     status=0
     for module in "${MODULES[@]}"; do
       report="$work/$module.txt"
+      # A module added to MODULES after a release has no baseline in that release's folder; the next `dump` freezes it
+      # (Work42Extension's first baseline is 3.5.0). Until then it is dumped (above, so a module that cannot be dumped fails
+      # the check) but not compared.
+      if [[ ! -f "$BASELINES/$base/$module.json" ]]; then
+        echo "api-baseline: $module has no $base baseline yet; \`dump\` at the next release freezes it"
+        continue
+      fi
       xcrun swift-api-digester -diagnose-sdk -module "$module" "${include[@]}" "${common[@]}" \
         -baseline-path "$BASELINES/$base/$module.json" -o "$report" 2>"$work/$module.err" || true
       # The report is a list of empty `/* Section */` headers when nothing broke; any other line is a finding.

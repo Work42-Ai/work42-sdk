@@ -45,6 +45,9 @@ public final class ExtensionHostServer {
     /// (intents, header labels) changed, or a popover asked to close. Work42 sets it per link; unset, those calls are
     /// accepted and dropped.
     public var widgetEvents: (@MainActor (ExtensionWidgetEvent) -> Void)?
+    /// Told when a running tool reports progress (3.5.0): the progress and the session it is for. Work42 sets it per link and
+    /// passes it on to the agent that called the tool; unset, progress is accepted and dropped.
+    public var toolProgress: (@MainActor (_ progress: ExtensionPayload.ToolProgress, _ sessionId: String?) -> Void)?
 
     public init(ledger: ExtensionRequestLedger) {
         self.ledger = ledger
@@ -251,6 +254,9 @@ public final class ExtensionHostServer {
             if let sessionId = call.sessionId, let widgetId = call.widgetId {
                 widgetEvents?(.dismissPopover(widgetId: widgetId, sessionId: sessionId, intent: closed.intent))
             }
+            return empty
+        case "tool.progress":
+            toolProgress?(try args(ExtensionPayload.ToolProgress.self), call.sessionId)
             return empty
 
         // pill

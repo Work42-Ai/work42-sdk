@@ -104,9 +104,9 @@ final class Pair {
     }
 
     init(widgets: [ExtensionWidgetFactory], hooks: (any Work42SessionHooks)? = nil,
-         deadline: Duration = ExtensionHostLink.uiDeadline) {
+         sessionTypes: [ExtensionSessionTypeFactory] = [], deadline: Duration = ExtensionHostLink.uiDeadline) {
         let state = self.state
-        let runtime = Work42ExtensionRuntime(widgets: widgets, sessionHooks: hooks)
+        let runtime = Work42ExtensionRuntime(widgets: widgets, sessionHooks: hooks, sessionTypes: sessionTypes)
         self.runtime = runtime
         // Host -> extension.
         let toExtension = ClosureExtensionTransport { data, reply in

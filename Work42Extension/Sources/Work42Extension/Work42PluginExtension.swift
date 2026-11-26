@@ -54,11 +54,14 @@ nonisolated public protocol Work42PluginExtension: AppExtension {
     @MainActor var widgets: [ExtensionWidgetFactory] { get }
     /// The plugin's session hooks, or nil.
     @MainActor var sessionHooks: (any Work42SessionHooks)? { get }
+    /// The objects that declare the MCP tools of the plugin's session types, by the ids in `session-types/*.json` (3.5.0).
+    @MainActor var sessionTypes: [ExtensionSessionTypeFactory] { get }
 }
 
 @available(macOS 26.2, *)
 nonisolated public extension Work42PluginExtension {
     @MainActor var sessionHooks: (any Work42SessionHooks)? { nil }
+    @MainActor var sessionTypes: [ExtensionSessionTypeFactory] { [] }
 
     /// Binds the extension to Work42's point, `com.work42.app.plugin`.
     @AppExtensionPoint.Bind
@@ -70,7 +73,7 @@ nonisolated public extension Work42PluginExtension {
     var configuration: AppExtensionSceneConfiguration {
         // ExtensionKit makes this object once and nothing else touches it; it is only read on the main actor here.
         nonisolated(unsafe) let plugin = self
-        onMain { Work42ExtensionHost.start(widgets: plugin.widgets, sessionHooks: plugin.sessionHooks) }
+        onMain { Work42ExtensionHost.start(widgets: plugin.widgets, sessionHooks: plugin.sessionHooks, sessionTypes: plugin.sessionTypes) }
         return AppExtensionSceneConfiguration(Work42WidgetScene(), configuration: Work42ProcessConnection())
     }
 }
@@ -82,8 +85,9 @@ nonisolated public extension Work42PluginExtension {
 public enum Work42ExtensionHost {
     public private(set) static var runtime: Work42ExtensionRuntime?
 
-    static func start(widgets: [ExtensionWidgetFactory], sessionHooks: (any Work42SessionHooks)?) {
-        if runtime == nil { runtime = Work42ExtensionRuntime(widgets: widgets, sessionHooks: sessionHooks) }
+    static func start(widgets: [ExtensionWidgetFactory], sessionHooks: (any Work42SessionHooks)?,
+                      sessionTypes: [ExtensionSessionTypeFactory]) {
+        if runtime == nil { runtime = Work42ExtensionRuntime(widgets: widgets, sessionHooks: sessionHooks, sessionTypes: sessionTypes) }
     }
 }
 

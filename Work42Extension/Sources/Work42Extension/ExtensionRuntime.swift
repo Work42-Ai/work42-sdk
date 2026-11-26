@@ -24,8 +24,15 @@ extension ExtensionPayload {
     /// from it before any session uses them).
     nonisolated public struct Handshake: Codable, Sendable, Equatable {
         public var sdkVersion: String, widgets: [ExtensionWidgetDescription], hasSessionHooks: Bool
+        /// The MCP tools each session type declares (3.5.0). Nil: none.
+        public var sessionTypes: [ExtensionSessionTypeDescription]?
         public init(sdkVersion: String, widgets: [ExtensionWidgetDescription], hasSessionHooks: Bool) {
             self.sdkVersion = sdkVersion; self.widgets = widgets; self.hasSessionHooks = hasSessionHooks
+        }
+        public init(sdkVersion: String, widgets: [ExtensionWidgetDescription], hasSessionHooks: Bool,
+                    sessionTypes: [ExtensionSessionTypeDescription]?) {
+            self.init(sdkVersion: sdkVersion, widgets: widgets, hasSessionHooks: hasSessionHooks)
+            self.sessionTypes = sessionTypes
         }
     }
     /// The session context the host sends with any call that may activate a widget.
@@ -76,8 +83,14 @@ public final class Work42ExtensionRuntime {
 
     public let factories: [ExtensionWidgetFactory]
     public let sessionHooks: (any Work42SessionHooks)?
+    /// How the plugin makes the objects that declare its session types' tools (3.5.0).
+    public let sessionTypeFactories: [ExtensionSessionTypeFactory]
     public private(set) var channel: ExtensionChannel?
 
+    private struct SessionTypeKey: Hashable { let typeId: String; let sessionId: String }
+    private var sessionTypeInstances: [SessionTypeKey: any Work42SessionTypeMCPs] = [:]
+    /// The tool calls in flight, by invocation id, so `extension.cancelTool` can stop one.
+    private var runningTools: [String: Task<PluginToolResult, any Error>] = [:]
     private var instances: [InstanceKey: (widget: any Work42Widget, services: SessionServices)] = [:]
     private var agents: [InstanceKey: any WidgetBackgroundAgent] = [:]
     /// What sends each widget's and agent's live state to Work42 (see `ExtensionStatePusher`).
@@ -87,6 +100,14 @@ public final class Work42ExtensionRuntime {
     public init(widgets: [ExtensionWidgetFactory], sessionHooks: (any Work42SessionHooks)?) {
         self.factories = widgets
         self.sessionHooks = sessionHooks
+        self.sessionTypeFactories = []
+    }
+
+    public init(widgets: [ExtensionWidgetFactory], sessionHooks: (any Work42SessionHooks)?,
+                sessionTypes: [ExtensionSessionTypeFactory]) {
+        self.factories = widgets
+        self.sessionHooks = sessionHooks
+        self.sessionTypeFactories = sessionTypes
     }
 
     /// Attaches the runtime to its connection to Work42 and points the SDK registries at it.
@@ -107,6 +128,9 @@ public final class Work42ExtensionRuntime {
         agents.removeAll()
         for instance in instances.values { instance.widget.deactivate() }
         instances.removeAll()
+        for task in runningTools.values { task.cancel() }
+        runningTools.removeAll()
+        sessionTypeInstances.removeAll()
     }
 
     /// Answers one encoded call from the host with one encoded reply.
@@ -130,7 +154,18 @@ public final class Work42ExtensionRuntime {
                 return try .success(ExtensionPayload.Handshake(
                     sdkVersion: Work42SDKCompatibility.version,
                     widgets: factories.map { ExtensionWidgetDescription(describing: $0.make()) },
-                    hasSessionHooks: sessionHooks != nil))
+                    hasSessionHooks: sessionHooks != nil,
+                    sessionTypes: sessionTypeFactories.isEmpty ? nil : sessionTypeFactories.map { factory in
+                        ExtensionSessionTypeDescription(id: factory.id,
+                                                        mcps: factory.make().mcpTools.map(PluginMCPDescription.init(describing:)))
+                    }))
+            case "extension.callTool":
+                let args = try ExtensionJSON.decode(ExtensionPayload.CallTool.self, from: call.payload)
+                return try .success(await callTool(call, args))
+            case "extension.cancelTool":
+                let args = try ExtensionJSON.decode(ExtensionPayload.CancelTool.self, from: call.payload)
+                runningTools[args.invocationId]?.cancel()
+                return try .success(ExtensionEmpty())
             case "extension.performIntent":
                 let args = try ExtensionJSON.decode(ExtensionPayload.PerformIntent.self, from: call.payload)
                 try await performIntent(call, args)
@@ -243,6 +278,9 @@ public final class Work42ExtensionRuntime {
         for key in agents.keys where key.sessionId == sessionId {
             agents.removeValue(forKey: key)?.stop()
         }
+        for key in sessionTypeInstances.keys where key.sessionId == sessionId {
+            sessionTypeInstances.removeValue(forKey: key)
+        }
     }
 
     public var activeInstanceCount: Int { instances.count }
@@ -274,6 +312,88 @@ public final class Work42ExtensionRuntime {
                                      suggestion: "use the name of an intent declared with the .menu style")
         }
         try await onSelect(args.optionId)
+    }
+
+    /// Runs one MCP tool for the widget or session type that owns it. A tool's own failure, an argument that does not fit its
+    /// schema and an unknown tool come back as `ToolOutcome.failure`; only a call that cannot be routed at all throws.
+    private func callTool(_ call: ExtensionCall, _ args: ExtensionPayload.CallTool) async throws -> ExtensionPayload.ToolOutcome {
+        guard let channel else {
+            throw WidgetServiceError(message: "the extension is not connected to Work42", suggestion: "retry the action")
+        }
+        let sessionId = try required(call.sessionId, "sessionId", call)
+        let declared: [PluginMCPTools]
+        let services: SessionServices
+        let widgetId: String?
+        switch args.owner {
+        case ExtensionPayload.CallTool.widgetOwner:
+            let (widget, widgetServices) = try instance(widgetId: args.ownerId, sessionId: sessionId, worktreePath: args.worktreePath)
+            declared = (widget as? any Work42WidgetMCPs)?.mcpTools ?? []
+            services = widgetServices
+            widgetId = args.ownerId
+        case ExtensionPayload.CallTool.sessionTypeOwner:
+            let key = SessionTypeKey(typeId: args.ownerId, sessionId: sessionId)
+            if sessionTypeInstances[key] == nil {
+                guard let factory = sessionTypeFactories.first(where: { $0.id == args.ownerId }) else {
+                    throw WidgetServiceError(message: "this extension has no session type '\(args.ownerId)'",
+                                             suggestion: "list it in `sessionTypes` in the extension, under the id in session-types/*.json")
+                }
+                sessionTypeInstances[key] = factory.make()
+            }
+            declared = sessionTypeInstances[key]?.mcpTools ?? []
+            services = ExtensionServices.session(channel: channel, sessionId: sessionId, widgetId: nil, worktreePath: args.worktreePath)
+            widgetId = nil
+        default:
+            throw WidgetServiceError(message: "extension.callTool names an owner '\(args.owner)'",
+                                     suggestion: "the owner is `widget` or `session-type`")
+        }
+        guard let tool = declared.first(where: { $0.id == args.mcp })?.tools.first(where: { $0.id == args.tool }) else {
+            return ExtensionPayload.ToolOutcome(failure: PluginToolFailure(
+                code: "no_such_tool", message: "'\(args.owner)' '\(args.ownerId)' has no tool '\(args.mcp)/\(args.tool)'",
+                suggestion: "list the tools of the MCP and call one of them"))
+        }
+        if let problem = tool.input.problem(with: args.arguments) {
+            return ExtensionPayload.ToolOutcome(failure: PluginToolFailure(
+                code: "invalid_arguments", message: problem, suggestion: "pass the arguments the tool's input schema lists"))
+        }
+
+        let invocationId = args.invocationId
+        let context = PluginToolContext(sessionId: sessionId, widgetId: widgetId, invocationId: invocationId, services: services,
+                                        progress: { message, fraction in
+            _ = try? await channel.call("tool", "progress", sessionId: sessionId, widgetId: widgetId,
+                                        payload: ExtensionPayload.ToolProgress(invocationId: invocationId, message: message, fraction: fraction))
+        })
+        let arguments = PluginToolArguments(args.arguments)
+        let task = Task { @MainActor in try await tool.run(arguments, context) }
+        runningTools[invocationId] = task
+        defer { runningTools[invocationId] = nil }
+        do {
+            return ExtensionPayload.ToolOutcome(result: try await task.value)
+        } catch {
+            return ExtensionPayload.ToolOutcome(failure: Self.failure(for: error))
+        }
+    }
+
+    /// A thrown error as the failure a tool answers with: the tool's own, a permission refusal, a service error, or cancelled.
+    private static func failure(for error: any Error) -> PluginToolFailure {
+        if let failure = error as? PluginToolFailure { return failure }
+        if error is CancellationError { return .cancelled }
+        let typed = (error as? WidgetServiceError).flatMap(PluginPermissionError.init) ?? (error as? PluginPermissionError)
+        switch typed {
+        case .notDeclared?:
+            return PluginToolFailure(code: "permission_not_declared", message: typed?.errorDescription ?? "permission not declared",
+                                     suggestion: "declare the permission under permissions in plugin.yaml")
+        case .denied(_, let message)?:
+            return PluginToolFailure(code: "permission_denied", message: message,
+                                     suggestion: "change it in Settings → Plugins → this plugin → Permissions")
+        case nil:
+            break
+        @unknown default:
+            break
+        }
+        if let service = error as? WidgetServiceError {
+            return PluginToolFailure(code: "service_error", message: service.message, suggestion: service.suggestion)
+        }
+        return PluginToolFailure(code: "tool_error", message: error.localizedDescription)
     }
 
     private func openLink(_ call: ExtensionCall, _ args: ExtensionPayload.OpenLink) async throws {
