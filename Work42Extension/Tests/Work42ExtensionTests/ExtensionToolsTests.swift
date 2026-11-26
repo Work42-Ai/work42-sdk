@@ -86,6 +86,10 @@ final class EventSessionType: Work42SessionTypeMCPs {
             PluginTool(id: "get_event", description: "This session's event.") { _, context in
                 .text("widget=\(context.widgetId ?? "none") session=\(context.sessionId)")
             }
+            PluginTool(id: "run", description: "Runs a command through the host's services.") { _, context in
+                _ = try await context.services.shell.run(command: "from-session-type")
+                return .text("ran")
+            }
         },
     ]}
 }
@@ -177,6 +181,49 @@ struct ExtensionToolsTests {
         let outcome = try await call(toolsPair(), owner: ExtensionPayload.CallTool.sessionTypeOwner, ownerId: "event",
                                      mcp: "calendar", tool: "get_event")
         #expect(outcome.result?.content.first?.text == "widget=none session=s1")
+    }
+
+    // MARK: Headless calls (a tool lease)
+
+    @Test("a tool of a session type, with no tile shown, is answered by the services Work42 attached as a lease")
+    func toolLeaseAnswersHeadlessCalls() async throws {
+        let shell = CountingShell()
+        let pair = Pair(widgets: [], sessionTypes: [ExtensionSessionTypeFactory("event") { EventSessionType() }])
+        pair.link.server.attachToolLease(hostServices(shell: shell, storage: MemoryStore(), sessionId: "s1"), sessionId: "s1", widgetId: nil)
+        let outcome = try await call(pair, owner: ExtensionPayload.CallTool.sessionTypeOwner, ownerId: "event", mcp: "calendar", tool: "run")
+        #expect(outcome.result?.content.first?.text == "ran" && shell.ran == ["from-session-type"])
+    }
+
+    @Test("the same call with no lease and no tile fails with a service error naming what is missing, not a transport error")
+    func noLeaseNoServices() async throws {
+        let pair = Pair(widgets: [], sessionTypes: [ExtensionSessionTypeFactory("event") { EventSessionType() }])
+        let failure = try #require(try await call(pair, owner: ExtensionPayload.CallTool.sessionTypeOwner, ownerId: "event",
+                                                  mcp: "calendar", tool: "run").failure)
+        #expect(failure.code == "service_error" && !failure.message.isEmpty)
+    }
+
+    @Test("a lease is counted: two calls at once share it, and it ends with the last one")
+    func leaseIsCounted() throws {
+        let pair = Pair(widgets: [], sessionTypes: [])
+        let services = hostServices(shell: CountingShell(), storage: MemoryStore(), sessionId: "s1")
+        let server = pair.link.server
+        server.attachToolLease(services, sessionId: "s1", widgetId: nil)
+        server.attachToolLease(services, sessionId: "s1", widgetId: nil)
+        server.detachToolLease(sessionId: "s1", widgetId: nil)
+        #expect(server.toolLeaseCount == 1, "the first call finishing does not take the lease from the second")
+        server.detachToolLease(sessionId: "s1", widgetId: nil)
+        #expect(server.toolLeaseCount == 0)
+        server.detachToolLease(sessionId: "s1", widgetId: nil)   // an extra detach is harmless
+        #expect(server.toolLeaseCount == 0)
+    }
+
+    @Test("a lease serves the session folder to a capability host when no tile is attached")
+    func leaseProvidesTheSessionFolder() throws {
+        let pair = Pair(widgets: [], sessionTypes: [])
+        pair.link.server.attachToolLease(hostServices(shell: CountingShell(), storage: MemoryStore(), sessionId: "s1"),
+                                         sessionId: "s1", widgetId: "mail")
+        let call = ExtensionCall(service: "audio", method: "startRecording", sessionId: "s1", widgetId: "mail", payload: Data())
+        #expect(pair.link.server.sessionFolder(for: call) == "/tmp/s1")
     }
 
     // MARK: Failures

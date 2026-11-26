@@ -23,6 +23,11 @@ public final class ExtensionHostServer {
     public var push: (@MainActor (ExtensionStreamEvent) -> Void)?
 
     private var sessionServices: [Scope: SessionServices] = [:]
+    /// What a headless tool call is answered with (3.5.0): the services Work42 attached for a session, and for the widget the
+    /// tool belongs to (nil for a session type's tool), while calls run that have no tile. Counted, so two calls at once for
+    /// the same session and owner share one lease and the first to finish does not take it from the second.
+    private struct LeaseKey: Hashable { let sessionId: String; let widgetId: String? }
+    private var toolLeases: [LeaseKey: (services: SessionServices, count: Int)] = [:]
     private var backgroundServices: [Scope: WidgetBackgroundServices] = [:]
     private var createContexts: [String: SessionCreateContext] = [:]
     private var streams: [UUID: Task<Void, Never>] = [:]
@@ -60,11 +65,30 @@ public final class ExtensionHostServer {
         sessionServices[Scope(sessionId: sessionId, widgetId: widgetId)] = services
     }
 
+    /// Attaches the services a tool call uses when the owner has no tile shown (3.5.0): an agent calls an MCP tool of a widget
+    /// or session type that is not on screen, so the call is answered from these instead of from a tile's services. Call it
+    /// before sending `extension.callTool` and `detachToolLease` when the call is over.
+    public func attachToolLease(_ services: SessionServices, sessionId: String, widgetId: String?) {
+        let key = LeaseKey(sessionId: sessionId, widgetId: widgetId)
+        toolLeases[key] = (services, (toolLeases[key]?.count ?? 0) + 1)
+    }
+
+    /// Ends one hold on the lease; the last one removes it.
+    public func detachToolLease(sessionId: String, widgetId: String?) {
+        let key = LeaseKey(sessionId: sessionId, widgetId: widgetId)
+        guard let lease = toolLeases[key] else { return }
+        if lease.count <= 1 { toolLeases.removeValue(forKey: key) } else { toolLeases[key] = (lease.services, lease.count - 1) }
+    }
+
+    /// The number of tool leases held, for tests.
+    public var toolLeaseCount: Int { toolLeases.count }
+
     /// The folder of the session `call` is for (the `worktreePath` its widget was activated with), or nil when the call names
     /// no session or none of its widgets is attached. A capability host resolves a recording's relative folder against it.
     public func sessionFolder(for call: ExtensionCall) -> String? {
         guard let sessionId = call.sessionId else { return nil }
         return sessionServices.first { $0.key.sessionId == sessionId }?.value.worktreePath
+            ?? toolLeases.first { $0.key.sessionId == sessionId }?.value.services.worktreePath
     }
 
     public func detach(widgetId: String, sessionId: String) {
@@ -460,10 +484,12 @@ public final class ExtensionHostServer {
     }
 
     private func session(_ call: ExtensionCall) throws -> SessionServices {
-        guard call.agent != true, let scope = scope(call), let services = sessionServices[scope] else {
-            throw unavailable(call, "a widget shown in a session")
+        if call.agent != true, let scope = scope(call), let services = sessionServices[scope] { return services }
+        if call.agent != true, let sessionId = call.sessionId,
+           let lease = toolLeases[LeaseKey(sessionId: sessionId, widgetId: call.widgetId)] {
+            return lease.services
         }
-        return services
+        throw unavailable(call, "a widget shown in a session")
     }
 
     /// The service for `call`: an agent's call is answered by its agent's services only; any other call by its tile's services,
@@ -471,6 +497,8 @@ public final class ExtensionHostServer {
     private func lookup<Service>(_ call: ExtensionCall, session: (SessionServices) -> Service,
                                  background: (WidgetBackgroundServices) -> Service) -> Service? {
         if call.agent != true, let scope = scope(call), let services = sessionServices[scope] { return session(services) }
+        if call.agent != true, let sessionId = call.sessionId,
+           let lease = toolLeases[LeaseKey(sessionId: sessionId, widgetId: call.widgetId)] { return session(lease.services) }
         return self.background(call).map(background)
     }
 

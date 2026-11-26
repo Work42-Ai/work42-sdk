@@ -18,6 +18,10 @@ asks for tools). WOR-894.
   running handler, which answers `cancelled`) and `tool.progress` (extension to host; `ExtensionHost.toolProgress` receives it). A call to a
   `changesData` tool carries a `requestId`, so after an extension crash the caller learns it was interrupted and it is never re-sent. The
   handshake lists session types, and each widget's description lists its MCPs and tools (both absent on the wire when empty).
+- **Headless tool calls.** `ExtensionHostServer.attachToolLease(_:sessionId:widgetId:)` and `detachToolLease` give the host a way to
+  answer a tool's service calls when the owner has no tile shown (an agent calling a widget's or session type's tool): the
+  services are attached for the length of the call, counted so overlapping calls for one session share the lease, and
+  `sessionFolder(for:)` falls back to them. A widget's tile services still win when one is attached.
 - **Permissions.** `PluginPermissionID` names the 20 permission ids; `ExtensionHostServer.authorizeShell` lets the app gate
   `services.shell` (WOR-893).
 - **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen by the next release `dump`.
