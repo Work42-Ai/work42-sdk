@@ -37,6 +37,10 @@ public final class ExtensionHostServer {
     /// plugin the link belongs to (and so what it declared) is known to Work42, not to the call. Without it those calls
     /// fail with a named error.
     public var capabilityProvider: (@MainActor (ExtensionCall) -> WidgetCapabilities)?
+    /// Asked before `shell.run` and `shell.start` (3.5.0): Work42 sets it per link to check that the plugin declared
+    /// `run-commands` and that the person allowed it, and throws (a `PluginPermissionError`) when not. Unset, a command
+    /// runs as it did before.
+    public var authorizeShell: (@MainActor (ExtensionCall) async throws -> Void)?
     /// Told when an extension says something about one of its widgets that is not a service call (3.4.0): its live state
     /// (intents, header labels) changed, or a popover asked to close. Work42 sets it per link; unset, those calls are
     /// accepted and dropped.
@@ -180,6 +184,7 @@ public final class ExtensionHostServer {
         // shell, intents
         case "shell.run":
             let a = try args(ExtensionPayload.Command.self)
+            try await authorizeShell?(call)
             let service = try shell(call)
             if let seconds = a.timeoutSeconds {
                 return try .success(try await service.run(command: a.command, timeout: .seconds(seconds)))
@@ -188,6 +193,7 @@ public final class ExtensionHostServer {
         case "shell.start":
             // The stream carries the command's lines and ends after `.exited`; a refusal throws here, to the caller.
             let sub = try args(ExtensionSubscription<ExtensionPayload.Command>.self)
+            try await authorizeShell?(call)
             let process = try await shell(call).start(command: sub.arguments.command)
             shellProcesses[sub.streamId] = process
             open(sub.streamId, scope: scope(call)) { yield in

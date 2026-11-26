@@ -33,6 +33,39 @@ nonisolated public enum PluginPermission: String, Codable, Sendable, CaseIterabl
     }
 }
 
+/// A permission by the name `plugin.yaml` `permissions` uses (SDK 3.5.0). `PluginPermission` has only the four cases of SDK
+/// 3.3.0; this names every permission Work42 brokers, including ones a newer Work42 adds, and a name the host does not know
+/// is refused rather than guessed at. Each `PluginPermission` converts to the id with the same name.
+nonisolated public struct PluginPermissionID: RawRepresentable, Hashable, Codable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    public init(_ permission: PluginPermission) { self.rawValue = permission.rawValue }
+
+    public static let microphone: PluginPermissionID = "microphone"
+    public static let systemAudio: PluginPermissionID = "system-audio"
+    public static let speechRecognition: PluginPermissionID = "speech-recognition"
+    public static let calendars: PluginPermissionID = "calendars"
+    public static let reminders: PluginPermissionID = "reminders"
+    public static let contacts: PluginPermissionID = "contacts"
+    public static let photos: PluginPermissionID = "photos"
+    public static let camera: PluginPermissionID = "camera"
+    public static let location: PluginPermissionID = "location"
+    public static let bluetooth: PluginPermissionID = "bluetooth"
+    public static let localNetwork: PluginPermissionID = "local-network"
+    public static let mediaLibrary: PluginPermissionID = "media-library"
+    public static let notifications: PluginPermissionID = "notifications"
+    public static let filesAndFolders: PluginPermissionID = "files-and-folders"
+    public static let automation: PluginPermissionID = "automation"
+    public static let fullDiskAccess: PluginPermissionID = "full-disk-access"
+    public static let accessibility: PluginPermissionID = "accessibility"
+    public static let inputMonitoring: PluginPermissionID = "input-monitoring"
+    public static let screenRecording: PluginPermissionID = "screen-recording"
+    /// Running a command through `services.shell`: Work42's own rule, with no macOS permission behind it.
+    public static let runCommands: PluginPermissionID = "run-commands"
+}
+
 /// Where a permission stands for one plugin.
 nonisolated public enum PluginPermissionStatus: String, Codable, Sendable, Equatable {
     /// The plugin may use it now.
