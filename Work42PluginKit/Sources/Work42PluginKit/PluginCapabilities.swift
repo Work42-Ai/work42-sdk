@@ -409,6 +409,8 @@ nonisolated public struct WidgetCapabilities: Sendable {
     public let calendar: any WidgetCalendarService
     public let diskRead: any WidgetDiskReadService
     public let automation: any WidgetAutomationService
+    /// Runs this plugin's own tools on the paired Mac (an iPad's widget; a Mac's calls its controller directly).
+    public let pluginTools: any WidgetPluginToolService
 
     public init(permissions: any WidgetPermissionService = UnsupportedWidgetCapability(),
                 audio: any WidgetAudioService = UnsupportedWidgetCapability(),
@@ -421,13 +423,15 @@ nonisolated public struct WidgetCapabilities: Sendable {
     /// The same, with the 3.5.0 services (a separate initializer, so the one above keeps its exact signature).
     public init(permissions: any WidgetPermissionService, audio: any WidgetAudioService, speech: any WidgetSpeechService,
                 calendar: any WidgetCalendarService, diskRead: any WidgetDiskReadService = UnsupportedWidgetCapability(),
-                automation: any WidgetAutomationService = UnsupportedWidgetCapability()) {
+                automation: any WidgetAutomationService = UnsupportedWidgetCapability(),
+                pluginTools: any WidgetPluginToolService = UnsupportedWidgetCapability()) {
         self.permissions = permissions
         self.audio = audio
         self.speech = speech
         self.calendar = calendar
         self.diskRead = diskRead
         self.automation = automation
+        self.pluginTools = pluginTools
     }
 }
 
@@ -482,6 +486,9 @@ extension SessionServices {
 
     /// Sends typed Apple Events to another app through Work42, behind the `automation` permission (SDK 3.5.0).
     @MainActor public var automation: any WidgetAutomationService { capabilities.automation }
+
+    /// Runs this plugin's own tools on the paired Mac, for a widget on another device (SDK 3.5.0).
+    @MainActor public var pluginTools: any WidgetPluginToolService { capabilities.pluginTools }
 }
 
 /// The same four services for a background agent (SDK 3.3.0). A recording started here ends when the agent stops, so work that

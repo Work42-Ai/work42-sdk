@@ -35,6 +35,12 @@ asks for tools). WOR-894.
   marks a tool that takes minutes. Work42 starts it and answers the agent at once with an operation id; the agent asks for its
   status (latest `reportProgress`, the result when done) or cancels it, and Work42 cancels it when the owning widget leaves the
   session. The handler is unchanged: report progress, honour cancellation, return the result.
+- **`services.pluginTools`** (WOR-902): `call(mcp:tool:arguments:requestId:)` runs one of the plugin's own MCP tools on the paired
+  Mac, for a widget on an iPad (a Mac widget calls its controller directly, and the service answers "host lacks" there). It is a
+  typed call, not a command line. A tool that `changesData` runs once per `requestId`: asking again after a lost connection gets the
+  first answer, or `outcome_unknown`. No Mac to reach is `mac_unreachable`. New types: `WidgetPluginToolService`,
+  `PluginToolOutcomeWire`, `PluginRemoteFailure`; `WidgetCapabilities` gains `pluginTools` (an optional parameter of the 3.5.0
+  initializer).
 - **Permissions.** `PluginPermissionID` names the 20 permission ids; `ExtensionHostServer.authorizeShell` lets the app gate
   `services.shell` (WOR-893).
 - **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen by the next release `dump`.
