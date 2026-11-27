@@ -12,10 +12,9 @@
 // shape (also `: Work42Widget`) and `Work42WidgetBackground`'s cast-based
 // discovery. The host discovers pill capability via
 // `as? any Work42WidgetPill`. Old dylibs without the conformance return nil
-// from the cast, load and behave exactly as before. `WidgetSDK.abiVersion` IS
-// bumped this release — not because this protocol is unsafe, but because
-// `SessionServices`/`WidgetBackgroundServices` gain a new required `pill`
-// field (see `Work42PluginKit.swift`'s v10 note).
+// from the cast, load and behave exactly as before. (The release that added
+// this protocol also added the required `pill` field to `SessionServices` /
+// `WidgetBackgroundServices`; see `CHANGELOG.md`.)
 
 import SwiftUI
 

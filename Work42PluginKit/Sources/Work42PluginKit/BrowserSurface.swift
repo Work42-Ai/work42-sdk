@@ -220,6 +220,14 @@ public struct BrowserSurfaceDeclaration {
     /// Called once with the model when it is built, wherever it is built (a mounted surface or the host's headless resolve).
     public var configure: ((BrowserWidgetModel) -> Void)?
 
+    /// Declares a surface (SDK 3.1.0). Drive its tabs with `services.browser`; there is nothing to configure.
+    public init(spec: BrowserSurfaceSpec, cacheKey: String) {
+        self.spec = spec
+        self.cacheKey = cacheKey
+        self.configure = nil
+    }
+
+    @available(*, deprecated, message: "Use BrowserSurfaceDeclaration(spec:cacheKey:) and drive the tabs with try await services.browser.setTabs(tabs). services.browser is already scoped to this widget; BrowserWidgetModel is no longer public API for plugins.")
     public init(spec: BrowserSurfaceSpec, cacheKey: String, configure: ((BrowserWidgetModel) -> Void)? = nil) {
         self.spec = spec
         self.cacheKey = cacheKey
@@ -608,6 +616,21 @@ public struct BrowserSurface: View {
 
     @State private var state = BrowserSurfaceState()
 
+    /// A browser surface (SDK 3.1.0). Drive its tabs with `services.browser`; there is nothing to configure.
+    public init(
+        spec: BrowserSurfaceSpec,
+        cacheKey: String,
+        services: SessionServices? = nil,
+        selectionResolver: WebSelectionResolver? = nil
+    ) {
+        self.spec = spec
+        self.cacheKey = cacheKey
+        self.services = services
+        self.selectionResolver = selectionResolver
+        self.configure = nil
+    }
+
+    @available(*, deprecated, message: "Drop configure: and drive the tabs with try await services.browser.setTabs(tabs) and services.browser.events. services.browser is already scoped to this widget; BrowserWidgetModel is no longer public API for plugins.")
     public init(
         spec: BrowserSurfaceSpec,
         cacheKey: String,
@@ -625,7 +648,11 @@ public struct BrowserSurface: View {
     /// A surface built from the widget's declaration (WOR-644): what a `Work42BrowserBacked` widget's `body` returns, so the view
     /// and the host's headless resolve are made from the same declaration.
     public init(_ declaration: BrowserSurfaceDeclaration) {
-        self.init(spec: declaration.spec, cacheKey: declaration.cacheKey, configure: declaration.configure)
+        self.spec = declaration.spec
+        self.cacheKey = declaration.cacheKey
+        self.services = nil
+        self.selectionResolver = nil
+        self.configure = declaration.configure
     }
 
     /// The services the comment pipeline uses: the explicit parameter, else the environment's.
@@ -716,13 +743,14 @@ public struct BrowserSurface: View {
     ///
     /// An instance belongs to a session (WOR-794): a surface is cached under its session's scope, so a bare key never finds one. Use
     /// `model(forKey:scope:)` with the widget's session id.
-    @available(*, deprecated, message: "An instance belongs to a session; use model(forKey:scope:) with the widget's session id.")
+    @available(*, deprecated, message: "Use try await services.browser.setTabs(tabs) (or selectTab / updateTab). services.browser is already scoped to this widget and its session.")
     public static func model(forKey cacheKey: String) -> BrowserWidgetModel? {
         BrowserSurfaceCache.shared.existingModel(forKey: cacheKey)
     }
 
     /// The model of the surface with `cacheKey` in `scope` (a session id, or `"home"`): what a host asks for
     /// when one widget is shown in several sessions.
+    @available(*, deprecated, message: "Use try await services.browser.setTabs(tabs) (or selectTab / updateTab). services.browser is already scoped to this widget and its session.")
     public static func model(forKey cacheKey: String, scope: String?) -> BrowserWidgetModel? {
         BrowserSurfaceCache.shared.existingModel(forKey: BrowserSurfaceCache.scopedKey(cacheKey, scope: scope))
     }
@@ -816,7 +844,8 @@ public struct BrowserSurface: View {
     /// `.task` executions (re-renders) are guarded by `state.configureInvoked`.
     private func resolveIfNeeded(cacheKey: String) async {
         await Self.resolve(
-            spec: spec, cacheKey: cacheKey, state: state, configure: configure, timeout: Self.openingTimeout)
+            spec: spec, cacheKey: cacheKey, state: state, configure: configure, services: services,
+            timeout: Self.openingTimeout)
     }
 
     /// How long the surface waits for its URL provider (or for a first tab) before it says it could not open.
@@ -834,6 +863,7 @@ public struct BrowserSurface: View {
         cacheKey: String,
         state: BrowserSurfaceState,
         configure: ((BrowserWidgetModel) -> Void)?,
+        services: SessionServices? = nil,
         timeout: Duration
     ) async {
         let existing = BrowserSurfaceCache.shared.existingModel(forKey: cacheKey)
@@ -843,7 +873,7 @@ public struct BrowserSurface: View {
         if let model = existing, !model.tabs.isEmpty {
             if !state.configureInvoked {
                 state.configureInvoked = true
-                BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure)
+                BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure, services: services)
             }
             state.resolution = .ready
             return
@@ -909,7 +939,7 @@ public struct BrowserSurface: View {
         // cache-hit path (e.g. a retry loop) doesn't re-call wireHooks.
         if !state.configureInvoked {
             state.configureInvoked = true
-            BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure)
+            BrowserSurface.wireHooks(on: model, cacheKey: cacheKey, configure: configure, services: services)
         }
         state.resolution = .ready
     }
@@ -938,7 +968,8 @@ public struct BrowserSurface: View {
     static func wireHooks(
         on model: BrowserWidgetModel,
         cacheKey: String,
-        configure: ((BrowserWidgetModel) -> Void)?
+        configure: ((BrowserWidgetModel) -> Void)?,
+        services: SessionServices? = nil
     ) {
         // 1. Default: + button opens an empty tab.
         //    configure can override this by assigning its own model.onNewTab.
@@ -969,6 +1000,9 @@ public struct BrowserSurface: View {
             // Then call the widget's handler (may be nil → no-op).
             widgetTabClosed?(tabID)
         }
+
+        // 4. Let the host put its own listeners on top (services.browser's events), now that the defaults are in.
+        BrowserTabsRegistry.attach?(model, cacheKey, services)
     }
 
     // MARK: - Fail-loud error card

@@ -25,11 +25,13 @@
 // ```swift
 // import Work42PluginKit
 //
-// /// Checked FIRST by the loader, before any Swift type crosses the
-// /// boundary. A mismatch against `WidgetSDK.abiVersion` produces a named
-// /// "rebuild against SDK vN" error — never a crash.
+// /// Answers the loader's version probe, before any Swift type crosses the
+// /// boundary. Compatibility itself is decided earlier, from the manifest's
+// /// `sdk_version` (see `Work42SDKCompatibility.accepts(pluginSDK:)`), so a
+// /// plugin built for another SDK is refused with a named "rebuild" or
+// /// "update Work42" error — never a crash.
 // @_cdecl("work42_widget_sdk_version")
-// public func work42WidgetSDKVersion() -> Int32 { WidgetSDK.abiVersion }
+// public func work42WidgetSDKVersion() -> Int32 { Work42SDKCompatibility.versionProbeValue }
 //
 // /// The factory. Called on the main actor by the loader after the
 // /// version check passes. Returns the widget instance boxed through
@@ -79,82 +81,14 @@ public enum WidgetSDK {
     /// Semantic release of the public SDK used to compile the plugin.
     nonisolated public static var version: String { Work42SDKCompatibility.version }
 
-    /// The SDK ABI version. The loader reads the widget's exported
-    /// `work42_widget_sdk_version` BEFORE calling the factory; a mismatch
-    /// is reported as a named "rebuild against SDK v\(abiVersion)" error,
-    /// never a crash.
-    /// v2: `WidgetIntentSpec` gained `placement` + `actionAreaStyle`
-    /// (stored-layout change on an SDK struct — dylibs built against v1
-    /// must rebuild).
-    /// v3: `BrowserSurface.init` gained the `configure:` parameter
-    /// (changes the init's mangled Swift symbol from
-    /// `BrowserSurface.init(spec:cacheKey:)` to
-    /// `BrowserSurface.init(spec:cacheKey:configure:)`). A widget dylib
-    /// built against SDK v2 that calls the old symbol will fail at
-    /// `dlopen(RTLD_NOW)` with "symbol not found" — the loader catches
-    /// this and shows the fail-loud error card. The version bump ensures
-    /// `widget.yaml` staleness detection and the version-mismatch message
-    /// name the correct rebuild target.
-    /// v4: `SessionServices` gained the `storage` property
-    /// (`WidgetStorageService`), changing `SessionServices.init`'s
-    /// parameter list. A widget dylib built against SDK v3 that calls
-    /// the old 3-parameter init will fail at `dlopen(RTLD_NOW)` with
-    /// "symbol not found". Rebuild with `work42 widget build <slug>`.
-    /// v5: `Work42Widget` gained the required `linkIntents` property and the
-    /// `WidgetLinkMatcher` / `WidgetLinkIntentSpec` link-opening contract.
-    /// Every widget must rebuild and explicitly declare its capabilities.
-    /// v6: widget and intent metadata gained optional bundled-image channels;
-    /// widget intents also gained an optional action-area brand colour.
-    /// First-party plugins rebuild to opt in; SF-Symbol-only source keeps the
-    /// same behaviour through nil defaults and fallback glyphs.
-    /// v7: widget intents gained confirmed state, service-aware handlers, and
-    /// action-area menus with live options. These change the stored SDK types,
-    /// so existing widget dylibs must rebuild.
-    /// v8: a plugin bundle may ADDITIONALLY export a `work42_plugin_main`
-    /// entry point (`Work42SessionHooks`, `PluginEntryPoint`) — a session-hook
-    /// contract scoped to the plugin's session TYPES rather than one mounted
-    /// widget. This is a purely additive symbol: it does not change any
-    /// existing widget-side type, so an existing widget dylib built against
-    /// v7 keeps loading unchanged (the version check is per-entry-point; a
-    /// widget with no plugin entry is simply reported as having no hooks).
-    /// The version bump exists so a plugin dylib itself is checked against
-    /// the same single `sdk_version` ceiling as its widgets (one version
-    /// governs the whole plugin).
-    /// v9 (task42-plugin-conversion, s3): `SessionServices` gained
-    /// `sessionId`/`worktreePath` (additive — defaulted in the init, so an
-    /// existing widget dylib's call to the old init still links). `Work42Widget`
-    /// gained the optional `storageNamespace` property, defaulting to `nil`
-    /// (my own slug) via a protocol extension — no existing conformance
-    /// breaks. Purely additive on both counts; the bump exists so a plugin
-    /// declaring `sdk_version: 9` in its manifest is understood to rely on
-    /// these two additions being present.
-    /// v10 (meet42-plugin-conversion, s1): new opt-in `Work42WidgetPill`
-    /// protocol (a widget's compact floatable "pill" presentation), mirroring
-    /// `Work42WidgetBackground`'s cast-based discovery — additive, no
-    /// existing conformance affected. The version bump is for the OTHER
-    /// change this release: `SessionServices` and `WidgetBackgroundServices`
-    /// both gain a new required `pill: any WidgetPillService` field, changing
-    /// both structs' memberwise init signature. Neither struct is ever
-    /// constructed by a widget/plugin dylib (only the host constructs them),
-    /// so no existing dylib fails to link — the bump exists so a plugin
-    /// declaring `sdk_version: 10` is understood to rely on `services.pill`
-    /// being present.
-    /// v11: `WidgetBackgroundServices` gained the required `activity` field,
-    /// changing the stored layout of a value passed across the widget dylib
-    /// boundary. Older hosts must reject widgets built against this layout
-    /// before invoking their factory or background agent.
-    /// v13 (SDK 2.8.0): `SessionServices` and `WidgetBackgroundServices` gained the `tools`
-    /// field (`WidgetToolService`), growing both structs by one existential (40 bytes) and
-    /// changing both memberwise inits. Plugins built for ABI 12 or older must rebuild.
-    /// v14 (SDK 2.9.0): web popups open as tabs. `PolicyWebView` (an open class a plugin may subclass) gained the
-    /// stored `popupHandler` and `onClose`, shifting its instance layout; `BrowserWidgetModel.openTab` gained the
-    /// `after:` parameter, replacing the old symbol. Plugins built for ABI 13 or older must rebuild.
-    /// v16 (SDK 2.14.0): collaboration. `SessionServices` gained `actor` and `collaboration`, `WidgetIntentSpec` gained its
-    /// audience, scope and per-viewer fields, `WidgetStorageService` gained the per-person requirements and `Work42Widget`
-    /// gained `collaboration` and `scopes`, so their layouts and witness tables changed. Plugins built for ABI 15 or older must rebuild.
-    /// v17 (SDK 2.16.0): session files and device actions. `SessionServices` gained `files` and `platform` and
-    /// `WidgetBackgroundServices` gained `files`, growing both structs by their existentials. Plugins built for ABI 16 or older must rebuild.
-    nonisolated public static var abiVersion: Int32 { Work42SDKCompatibility.abiGeneration }
+    /// What the version-probe symbols return: always 3 in SDK 3.x.
+    ///
+    /// Before 3.0 this was an ABI generation counter that every SDK change to a stored layout or initializer
+    /// bumped, forcing every plugin author to rebuild at once (its history, v2 to v17, is in `CHANGELOG.md`).
+    /// It no longer decides anything. Compatibility is one number, the SDK's semantic version: a plugin's
+    /// manifest records `sdk_version`, and `Work42SDKCompatibility.accepts(pluginSDK:)` decides.
+    @available(*, deprecated, message: "Compatibility follows Work42SDKCompatibility.version and the manifest's sdk_version. To answer the version probe, return Work42SDKCompatibility.versionProbeValue.")
+    nonisolated public static var abiVersion: Int32 { Work42SDKCompatibility.versionProbeValue }
 
     /// C symbol name of the widget factory (`@_cdecl`). See the file
     /// header for the exact exported signature.

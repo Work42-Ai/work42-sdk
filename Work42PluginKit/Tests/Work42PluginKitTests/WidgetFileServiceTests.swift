@@ -135,3 +135,29 @@ struct WidgetFileServiceTests {
         #expect(defaultedBackground.files is NoopWidgetFileService)
     }
 }
+
+private final class RevealRecorder: WidgetPlatformService, @unchecked Sendable {
+    nonisolated(unsafe) var revealed: [URL] = []
+    @MainActor func open(_ url: URL) {}
+    @MainActor func copy(_ text: String) {}
+    @MainActor func reveal(_ url: URL) { revealed.append(url) }
+}
+
+@Suite("WidgetPlatformService.reveal (SDK 3.3.0)")
+struct WidgetPlatformRevealTests {
+
+    @Test("a conformer that predates reveal still conforms, and reveal then does nothing")
+    @MainActor
+    func defaultsToNothing() {
+        RecordingPlatform().reveal(URL(fileURLWithPath: "/tmp/anything"))
+    }
+
+    @Test("a conformer can answer reveal itself")
+    @MainActor
+    func overrides() {
+        let recorder = RevealRecorder()
+        let url = URL(fileURLWithPath: "/tmp/saved.pdf")
+        recorder.reveal(url)
+        #expect(recorder.revealed == [url])
+    }
+}

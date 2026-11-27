@@ -68,8 +68,18 @@ public nonisolated enum ArtifactRuntime {
     /// Same reproduction policy this codebase already uses for cross-target
     /// primitives (e.g. `Work42DB.StorageValue`, "a verbatim copy... does NOT
     /// depend on [the original], so it is reproduced here").
+    ///
+    /// The account's real home, not `NSHomeDirectory()`: inside a sandboxed extension that is the extension's own container,
+    /// where there is no `runtime.json` and no registry. A plugin that serves pages through the artifact server declares
+    /// `~/.work42/artifacts` under `file_access`. For the unsandboxed app the two are the same folder.
     private static func work42Root() -> String {
-        (NSHomeDirectory() as NSString).appendingPathComponent(".work42")
+        let home: String
+        if let entry = getpwuid(getuid()), let directory = entry.pointee.pw_dir {
+            home = String(cString: directory)
+        } else {
+            home = NSHomeDirectory()
+        }
+        return (home as NSString).appendingPathComponent(".work42")
     }
 
     /// `~/.work42/artifacts/` — the machine-global artifact runtime dir.

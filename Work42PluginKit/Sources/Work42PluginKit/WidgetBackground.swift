@@ -42,7 +42,6 @@ import Foundation
 /// following the `Work42BrowserWidgetOptions` / `Work42WidgetHeaderLabels`
 /// pattern. The host checks conformance via a conditional cast; old dylibs
 /// without the conformance return nil and behave exactly as today.
-/// `WidgetSDK.abiVersion` is NOT bumped.
 ///
 /// ## Lifecycle
 ///

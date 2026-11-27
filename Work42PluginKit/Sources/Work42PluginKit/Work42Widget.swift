@@ -561,6 +561,42 @@ public struct WidgetIntentSpec: Sendable {
         self.onConfirmedTap = onConfirmedTap
         self.perform = {}
     }
+
+    /// The service-aware initializer with a live title that ticks (SDK 3.4.0): what a host that draws a widget it cannot read
+    /// closures from (an out-of-process one) builds from the state it was sent. `livePeriodicTick` has no default so this
+    /// overload stays distinct from the one above.
+    public init(
+        name: String,
+        title: String,
+        icon: String,
+        iconImageData: Data? = nil,
+        brandColorHex: String? = nil,
+        keywords: [String] = [],
+        placement: Set<WidgetIntentPlacement> = [.palette],
+        actionAreaStyle: WidgetIntentActionAreaStyle = .labeled,
+        isEnabled: (@MainActor () -> Bool)? = nil,
+        isConfirmed: (@MainActor () -> Bool)?,
+        actionAreaTitle: (@MainActor () -> String)? = nil,
+        livePeriodicTick: TimeInterval?,
+        onConfirmedTap: (@MainActor (SessionServices) async throws -> Void)? = nil,
+        performWithServices: @escaping @MainActor (SessionServices) async throws -> Void
+    ) {
+        self.name = name
+        self.title = title
+        self.icon = icon
+        self.iconImageData = iconImageData
+        self.brandColorHex = brandColorHex
+        self.keywords = keywords
+        self.placement = placement
+        self.actionAreaStyle = actionAreaStyle
+        self.isEnabled = isEnabled
+        self.isConfirmed = isConfirmed
+        self.actionAreaTitle = actionAreaTitle
+        self.livePeriodicTick = livePeriodicTick
+        self.performWithServices = performWithServices
+        self.onConfirmedTap = onConfirmedTap
+        self.perform = {}
+    }
 }
 
 // MARK: - WidgetLinkIntentSpec
@@ -851,9 +887,9 @@ extension Work42Widget {
 /// before calling `prefersDefaultWidgetHeader`. For an old dylib that does not
 /// declare conformance, the cast safely returns `nil` and the host uses the
 /// default behaviour (browser chrome header). No Protocol Witness Table slot
-/// is added to `Work42Widget`, so `WidgetSDK.abiVersion` stays at 3 — old
-/// dylibs load without a version-mismatch error and gain the browser header
-/// automatically, which is the intended behavior.
+/// is added to `Work42Widget`, so old dylibs load without a version-mismatch
+/// error and gain the browser header automatically, which is the intended
+/// behavior.
 @MainActor
 public protocol Work42BrowserWidgetOptions: Work42Widget {
 

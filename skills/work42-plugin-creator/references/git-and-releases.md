@@ -41,6 +41,6 @@ Before tagging:
 3. Commit clean sources and tag that exact commit.
 4. Package the plugin root, including compatible prebuilt native dylibs when the release is intended for curated installation.
 5. Produce SHA-256 for the asset and publish both through the repository’s release mechanism.
-6. Attach `work42-plugin-release.json` containing plugin identity/version, SDK version/ABI, asset URL, SHA-256, and contribution summary.
+6. Attach `work42-plugin-release.json` containing plugin identity/version, SDK version, asset URL, SHA-256, and contribution summary.
 
 Curated release assets must be publisher-built and validly code signed. Work42’s future public catalogue may add stronger attestation, but the MVP does not require a marketplace account.

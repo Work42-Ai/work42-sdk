@@ -192,6 +192,58 @@ nonisolated public protocol WidgetShellService: Sendable {
     /// session has no worktree to run in; a non-zero exit is NOT a throw —
     /// it comes back in `exitCode` with both streams intact.
     func run(command: String) async throws -> WidgetShellResult
+
+    /// Like `run(command:)` with your own timeout (SDK 3.3.0). Throws `WidgetServiceError` when it runs out. Works with no
+    /// worktree too (a Home widget): the command then runs in the home folder, with no session environment.
+    func run(command: String, timeout: Duration) async throws -> WidgetShellResult
+
+    /// Starts a long-running command and returns at once (SDK 3.3.0): the daemon behind a widget, a recording. Its lines
+    /// arrive on `WidgetShellProcess.output`, ending with `.exited`. Work42 stops it when the widget's scope ends, when
+    /// the plugin is deactivated or removed, or when the extension's connection is lost; `stop` ends it earlier.
+    /// Like `run`, a started command is never started twice after a crash. Works with no worktree (home folder).
+    func start(command: String) async throws -> WidgetShellProcess
+}
+
+/// One line of a started command's output, or its end (SDK 3.3.0). One case per line; `exited` is always last.
+nonisolated public enum WidgetShellOutput: Codable, Sendable, Equatable {
+    case stdout(String)
+    case stderr(String)
+    case exited(Int32)
+}
+
+/// A command started with `WidgetShellService.start(command:)` (SDK 3.3.0).
+nonisolated public struct WidgetShellProcess: Sendable {
+    /// Identifies the process for the length of its life.
+    public let id: UUID
+    /// Its output lines in order, ending with `.exited(status)`. The stream finishes after `.exited`.
+    public let output: AsyncStream<WidgetShellOutput>
+    /// Asks the command to end (SIGTERM, then SIGKILL after 3 s). `output` still ends with `.exited`.
+    public let stop: @Sendable () async -> Void
+
+    public init(id: UUID, output: AsyncStream<WidgetShellOutput>, stop: @escaping @Sendable () async -> Void) {
+        self.id = id
+        self.output = output
+        self.stop = stop
+    }
+}
+
+public extension WidgetShellService {
+    // 3.3.0 additions: a 3.2.0 host or mock that only has `run(command:)` keeps compiling, and a widget that calls these on
+    // it gets a named error instead of a crash.
+    func run(command: String, timeout: Duration) async throws -> WidgetShellResult {
+        throw WidgetServiceError.hostLacks("shell.run(command:timeout:)")
+    }
+
+    func start(command: String) async throws -> WidgetShellProcess {
+        throw WidgetServiceError.hostLacks("shell.start(command:)")
+    }
+}
+
+public extension WidgetServiceError {
+    /// What a 3.3.0 call gets from a host that does not have it yet.
+    static func hostLacks(_ what: String) -> WidgetServiceError {
+        WidgetServiceError(message: "this host does not support \(what)", suggestion: "run inside Work42 3.3 or later")
+    }
 }
 
 // MARK: - Intents
@@ -411,9 +463,10 @@ nonisolated public enum WidgetFilePath {
     }
 }
 
-/// Reads the session's folder (SDK 2.16.0, ABI 17). On the Mac a widget reads the folder itself; on an iPad the
-/// same calls are answered by the paired Mac, so a widget never touches `FileManager` for session files.
-/// All paths are relative to the session folder (see `WidgetFilePath`); read-only by design. A symbolic link that
+/// Reads the session's folder (SDK 2.16.0, ABI 17), and since 3.3.0 writes and removes files in it. On the Mac a widget
+/// reads the folder itself; on an iPad the same calls are answered by the paired Mac, so a widget never touches
+/// `FileManager` for session files.
+/// All paths are relative to the session folder (see `WidgetFilePath`). A symbolic link that
 /// points outside the session folder is refused like a `..` path (`WidgetServiceError.notPermitted`).
 nonisolated public protocol WidgetFileService: Sendable {
 
@@ -428,6 +481,25 @@ nonisolated public protocol WidgetFileService: Sendable {
     /// removed or renamed. Rapid changes coalesce into one pending yield. Finishes when the consumer stops
     /// iterating, and at once for a path that is refused. A path that doesn't exist yet yields when it appears.
     func watch(_ relativePath: String) -> AsyncStream<Void>
+
+    /// Writes `data` to `relativePath` (SDK 3.3.0), creating the parent folders and replacing the file atomically.
+    /// The path rule is the same as for reading: relative to the session folder, never absolute, never leaving it.
+    func write(_ relativePath: String, data: Data) async throws
+
+    /// Removes the file or folder at `relativePath` (SDK 3.3.0). A path that is not there is not an error. The session
+    /// folder itself (`"."`) is refused.
+    func remove(_ relativePath: String) async throws
+}
+
+public extension WidgetFileService {
+    // 3.3.0 additions: a host that cannot write answers with a named error, so a read-only 3.2.0 service still conforms.
+    func write(_ relativePath: String, data: Data) async throws {
+        throw WidgetServiceError.hostLacks("files.write(_:data:)")
+    }
+
+    func remove(_ relativePath: String) async throws {
+        throw WidgetServiceError.hostLacks("files.remove(_:)")
+    }
 }
 
 /// The default for hosts without file access (previews, tests): `read` throws a named error, `list` is empty
@@ -459,6 +531,14 @@ nonisolated public protocol WidgetPlatformService: Sendable {
 
     /// Put `text` on the device's general pasteboard.
     @MainActor func copy(_ text: String)
+
+    /// Show `url` (a file or folder) in Finder, selected (SDK 3.3.0). On an iPad, which has no Finder to show it in, it does
+    /// nothing. Default: nothing, so an existing conformer still conforms.
+    @MainActor func reveal(_ url: URL)
+}
+
+nonisolated public extension WidgetPlatformService {
+    @MainActor func reveal(_ url: URL) {}
 }
 
 /// The real implementation on both platforms: `NSWorkspace` / `NSPasteboard` on macOS, `UIApplication` /
@@ -480,6 +560,12 @@ nonisolated public struct SystemWidgetPlatformService: WidgetPlatformService {
         NSPasteboard.general.setString(text, forType: .string)
         #elseif canImport(UIKit)
         UIPasteboard.general.string = text
+        #endif
+    }
+
+    @MainActor public func reveal(_ url: URL) {
+        #if canImport(AppKit)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
         #endif
     }
 }

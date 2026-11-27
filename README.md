@@ -19,9 +19,13 @@ do not statically embed either module in a plugin.
 
 ## Compatibility
 
-SDK releases use semantic versions. Binary compatibility is tracked separately
-by `Work42SDKCompatibility.abiGeneration`. Release `2.16.0` uses ABI generation
-`17`.
+SDK releases use semantic versions, and the version is the whole compatibility
+contract. A plugin records the SDK it was built with as `sdk_version`, and Work42
+runs it when the plugin's major version matches the app's and the app's SDK is
+the same or newer (`Work42SDKCompatibility.accepts(pluginSDK:)`). Minor and patch
+releases only add to the public API; a breaking change is a new major version.
+Release `3.0.0` is the first on this model, so plugins built for 2.x are rebuilt
+once. See `CHANGELOG.md`.
 
 ## Development
 

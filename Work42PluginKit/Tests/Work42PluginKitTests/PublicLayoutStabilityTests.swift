@@ -26,9 +26,12 @@ struct PublicLayoutStabilityTests {
     // ABI generation 16 (SDK 2.14.0): `SessionServices` gained `actor` and `collaboration`: 424 -> 536.
     // ABI generation 17 (SDK 2.16.0): `SessionServices` gained `files` and `platform` (two 40-byte existentials): 536 -> 616.
     // Widgets built for ABI 16 or older are rejected by the loader.
+    // SDK 3.0.0: `SessionServices` had grown to 624 after that pin (WOR-825 added `stream` and the host-pushed stream
+    // service), so this assertion was red; 3.0.0 is the deliberate break (every 2.x plugin is rebuilt once), so the
+    // pins are reset to what 3.0.0 ships: 616 -> 776. From here on a 3.x release must not change them.
     @Test("BrowserSurface keeps the layout widgets built against this ABI generation expect")
     func browserSurface() {
-        #expect(MemoryLayout<BrowserSurface>.size == 616)
+        #expect(MemoryLayout<BrowserSurface>.size == 776)
         #expect(MemoryLayout<BrowserSurface>.alignment == 8)
     }
 
@@ -57,7 +60,8 @@ struct PublicLayoutStabilityTests {
         // ABI generation 16 (SDK 2.14.0): `SessionServices` gained `actor` (a struct) and `collaboration` (an existential): 272 -> 384.
         // ABI generation 17 (SDK 2.16.0): `SessionServices` gained `files` and `platform` (two 40-byte existentials): 384 -> 464.
         // `WidgetBackgroundServices` gained `files` (one): 232 -> 272.
-        #expect(MemoryLayout<SessionServices>.size == 464)
+        // SDK 3.0.0: reset to the shipped layout (see `browserSurface`): 464 -> 624. Frozen for every 3.x release.
+        #expect(MemoryLayout<SessionServices>.size == 624)
         #expect(MemoryLayout<WidgetFileEntry>.size == 40)
         #expect(MemoryLayout<NoopWidgetFileService>.size == 0)
         #expect(MemoryLayout<SystemWidgetPlatformService>.size == 0)

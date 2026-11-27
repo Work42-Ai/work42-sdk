@@ -1,5 +1,210 @@
 # Changelog
 
+## 3.5.0 (unreleased)
+
+Additions only: an extension built with 3.3.0 or 3.4.0 runs unchanged on a 3.5.0 host (its handshake has no `sessionTypes`, its widgets
+describe no `mcps`, and the host never calls `extension.callTool` on it), and a 3.5.0 extension runs on an older host (which never
+asks for tools). WOR-894.
+
+- **MCP tools on widgets and session types.** A plugin declares the tools of an MCP server in Swift: `PluginTool` (id, description,
+  `input` schema, `changesData`, handler), grouped by `PluginMCPTools(id:)` with the `PluginToolBuilder` result builder (conditionals and
+  loops work). A widget lists its servers by conforming to `Work42WidgetMCPs`; a session type through `Work42SessionTypeMCPs`, which an
+  extension offers in `Work42PluginExtension.sessionTypes` as `ExtensionSessionTypeFactory` values (default none).
+- **Schemas, arguments, results.** `PluginToolSchema` and `PluginToolProperty` (`.string`, `.integer`, `.number`, `.boolean`,
+  `.dateTime`, `.oneOf`, `.optional`) write the JSON schema MCP expects, and the extension checks every call's arguments against it before
+  the handler runs. `PluginToolArguments` reads typed values; `PluginToolResult` is `.text` or `.structured`; `PluginToolFailure` carries
+  a code, a message and a suggestion. Handlers get a `PluginToolContext` (session, widget, invocation id, services, `reportProgress`).
+- **Wire.** `extension.callTool` (answers a result or a tool failure, apart from a transport error), `extension.cancelTool` (stops the
+  running handler, which answers `cancelled`) and `tool.progress` (extension to host; `ExtensionHost.toolProgress` receives it). A call to a
+  `changesData` tool carries a `requestId`, so after an extension crash the caller learns it was interrupted and it is never re-sent. The
+  handshake lists session types, and each widget's description lists its MCPs and tools (both absent on the wire when empty).
+- **Headless tool calls.** `ExtensionHostServer.attachToolLease(_:sessionId:widgetId:)` and `detachToolLease` give the host a way to
+  answer a tool's service calls when the owner has no tile shown (an agent calling a widget's or session type's tool): the
+  services are attached for the length of the call, counted so overlapping calls for one session share the lease, and
+  `sessionFolder(for:)` falls back to them. A widget's tile services still win when one is attached.
+- **`services.diskRead`** (behind `full-disk-access`): `stat(path:)`, `list(path:cursor:limit:)` and `read(path:offset:length:)` read
+  files anywhere on disk through Work42, which holds Full Disk Access. Paths are absolute or `~/`; reads are capped at 4 MiB a call,
+  listings at 1,000 entries a page (cursor paged, byte order); `stat` describes a link as itself, `list` and `read` follow it;
+  sockets, devices and pipes are refused; no file descriptor leaves Work42; macOS errors come back with their errno.
+- **`services.automation`** (behind `automation`, one consent per target app): `send(_:)` takes a typed `AppleEventRequest` (target
+  bundle id, event class and id, parameters of `AppleEventValue`) and Work42 sends it with the Apple Event APIs. Never `osascript`, a
+  shell or a script. `automation.send` is a non-repeatable call: after a crash it is reported interrupted, not sent again.
+- `WidgetCapabilities` gains `diskRead` and `automation` (a new initializer; the old one keeps its signature), and
+  `ExtensionHostServer.authorizeToolCall` lets Work42 gate a plugin's `tools.call` per MCP server.
+- **Long-running tools.** `PluginTool(longRunning: true)` (and `PluginToolDescription.longRunning`, read as false when absent)
+  marks a tool that takes minutes. Work42 starts it and answers the agent at once with an operation id; the agent asks for its
+  status (latest `reportProgress`, the result when done) or cancels it, and Work42 cancels it when the owning widget leaves the
+  session. The handler is unchanged: report progress, honour cancellation, return the result.
+- **`services.pluginTools`** (WOR-902): `call(mcp:tool:arguments:requestId:)` runs one of the plugin's own MCP tools on the paired
+  Mac, for a widget on an iPad (a Mac widget calls its controller directly, and the service answers "host lacks" there). It is a
+  typed call, not a command line. A tool that `changesData` runs once per `requestId`: asking again after a lost connection gets the
+  first answer, or `outcome_unknown`. No Mac to reach is `mac_unreachable`. New types: `WidgetPluginToolService`,
+  `PluginToolOutcomeWire`, `PluginRemoteFailure`; `WidgetCapabilities` gains `pluginTools` (an optional parameter of the 3.5.0
+  initializer).
+- **Every permission by id** (WOR-903): `services.permissions.status(id:target:)` and `request(id:target:)` answer for any id in the
+  inventory (contacts, reminders, camera, photos, and the rest), through the same broker; `target` names the app or folder of
+  `automation` and `files-and-folders`. `PluginPermissionStatus` gains `unsupported` (macOS cannot grant it to an app: nobody is
+  asked). A host that predates 3.5.0 answers the four of 3.3.0 by id and throws "host lacks" for the rest. New protocol
+  `WidgetPermissionByIDService`.
+- **Permissions.** `PluginPermissionID` names the 20 permission ids; `ExtensionHostServer.authorizeShell` lets the app gate
+  `services.shell` (WOR-893).
+- **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen with this release
+  (`api-baselines/3.5.0`).
+
+## 3.4.0 (unreleased)
+
+Additions only, and none of them needs a new `WidgetIntentSpec` or protocol requirement: an extension built with 3.3.0 runs unchanged
+on a 3.4.0 host (its buttons stay static, as before), and a 3.4.0 extension runs on a 3.3.0 host (the host answers its new calls
+with "not supported", which the extension ignores). Plugin code already written for in-process widgets works as it is: the
+extension reads what the host used to read off the widget.
+
+- **Live button state across the process boundary.** An extension widget's `isEnabled`, `isConfirmed`, `actionAreaTitle` and a
+  `.menu` intent's choices now reach the host: the extension reads them (observed, and again every `livePeriodicTick` seconds or
+  every second) and sends a `widget.state` call when they change. A Record button that hides while recording and a Stop button with a
+  running timer work as in process. `extension.selectMenuOption` runs a menu choice. New plain-data types: `ExtensionIntentState`,
+  `ExtensionMenuOption`, `ExtensionPayload.WidgetState`, `ExtensionPayload.MenuSelect`.
+- **Header labels.** A widget's `Work42WidgetHeaderLabels.headerLabels` and its background agent's `headerLabels` travel in the same
+  `widget.state` call (`ExtensionHeaderLabel`, with `tint` as `neutral`/`success`/`warning`/`failure`/`accent`).
+- **Pill, custom header and action-area popovers.** `ExtensionWidgetDescription` gains `pillMetadata`, `customHeaderContentPadding` and
+  `popoverIntents`, all optional (absent on the wire when unused). The extension draws each in a surface of its one scene:
+  `scene.attach` carries `ExtensionPayload.SessionContext.surface` (`pill`, `header`, `popover:<intent>`; absent is the tile).
+  `Work42ExtensionRuntime.view(widgetId:sessionId:worktreePath:surface:)` resolves it. A popover closes itself with
+  `widget.dismissPopover`. `ExtensionIntentDescription` gains `livePeriodicTick`, and a `.menu` intent is described as `menu`.
+- **Host hook.** `ExtensionHostServer.widgetEvents` delivers `ExtensionWidgetEvent` (`state`, `dismissPopover`) to the app.
+- **Partial transcript lines.** `TranscriptSegment.isPartial` (nil means final, so every earlier host and consumer is unchanged) and
+  `isFinal`. A host that asks its recognizer for volatile results delivers a growing partial line, then the final one.
+
+## 3.3.0
+
+Additions only: a plugin built with 3.0.0, 3.1.0 or 3.2.0 runs unchanged on 3.3.0. Every new protocol requirement has a default
+implementation, so an existing host, mock or service still conforms; a widget that calls one on a host that predates it gets a
+named `WidgetServiceError` ("this host does not support …", "run inside Work42 3.3 or later").
+
+- **Long-running and timed commands.** `WidgetShellService.start(command:)` starts a command and returns a `WidgetShellProcess`
+  at once: `output` streams one `WidgetShellOutput` per line (`stdout`, `stderr`, then `exited(status)` last) and `stop()` ends
+  it (SIGTERM, then SIGKILL after 3 s). Work42 stops a started command when its widget's scope ends, when its plugin is
+  deactivated or removed, or when an extension's connection is lost. `run(command:timeout:)` takes your own timeout. Both work
+  with no worktree (a Home widget): the command runs in the home folder with no session environment. In an extension,
+  `shell.start` carries a request id like `shell.run`, so a crash never starts the command twice.
+- **Reveal in Finder.** `WidgetPlatformService.reveal(_:)` shows a file or folder in Finder, selected. It acts on this device, like
+  `open` and `copy`, so it needs no host call from an extension; on an iPad it does nothing. A conformer that predates it gets a
+  default that does nothing.
+- **Writable session files.** `WidgetFileService.write(_:data:)` creates the parent folders and writes atomically;
+  `remove(_:)` deletes a file or folder (a missing path is not an error). Paths follow the read rule: relative to the session
+  folder, never absolute, never leaving it, never through a symbolic link that leaves it.
+- On an iPad both are answered by the paired Mac, like every other service.
+- **Permissions, audio, speech and calendar.** macOS refuses a privacy permission to an extension on a third-party point,
+  however it is signed, so Work42 holds them and does the work for a plugin. A plugin declares what it needs under
+  `permissions` in `plugin.yaml` (`microphone`, `system-audio`, `calendars`, `speech-recognition`, each with a `reason`) and
+  calls the services; the first use shows Work42's permission pill, then macOS's own prompt (which names Work42). A call that
+  cannot go ahead throws `PluginPermissionError` (`notDeclared` or `denied(_, message:)`), which a widget handles like any
+  other error. New computed members of `SessionServices` (its layout is unchanged):
+  - `services.permissions`: `status(_:)` and `request(_:)` for a permission list such as meet42's; optional to use.
+  - `services.audio`: `startRecording(_:)` records `microphone` and/or `systemAudio` to a folder the plugin may write, streams
+    `levels`, and `stop()` returns the files. A recording ends with its widget, its extension's connection or Work42; files
+    written so far are kept.
+  - `services.speech`: `transcribe(file:locale:)` and `liveTranscript(of:)` for a running recording.
+  - `services.calendar`: `events(from:to:)` and `changes()`.
+  - The same four members on `WidgetBackgroundServices`, because a recording that has to outlive a tile (a meeting) belongs to a
+    background agent: a recording ends with the scope that started it, and a tile's scope ends when it leaves the screen, an agent's
+    when the session goes away. A `WidgetCapabilityProvider` that predates `capabilities(forBackground:)` answers none.
+  - `AudioRecordingRequest.microphoneDevice`: the input device to record (a Core Audio UID); `nil` is the system default.
+  - `CalendarEvent` also carries `calendarId`, `calendarColor`, `source`, `organizer`, `attendeeDetails` (`CalendarAttendee`),
+    `status`, `url` and `lastModified`, all optional, for a plugin that keeps its own copy of the calendar.
+  The `file_access` and `app_groups` keys of `plugin.yaml` become entitlements of the extension at `work42 plugin build`;
+  `permissions` add none.
+
+## 3.2.0
+
+Additions only: a plugin built with 3.0.0 or 3.1.0 runs unchanged on 3.2.0.
+
+- **Out-of-process plugins: the `Work42Extension` product.** A plugin can now run in its own process, as an ExtensionKit
+  extension inside a container app, instead of as a dylib inside Work42. A crash or hang then takes down only the plugin: the
+  widget shows an error card with Restart, and nothing it was doing is run twice. Declare it in `plugin.yaml` with
+  `runtime: extension` and `extension_bundle_id: <the extension's bundle id>` (the default stays `runtime: inprocess`), and
+  `work42 plugin build` builds the container app. The `@main` type is a `nonisolated final class` conforming to
+  `Work42PluginExtension` that lists its widgets (`ExtensionWidgetFactory`, `@MainActor`) and, optionally, its
+  `sessionHooks`; widgets are written exactly as they are in process (`Work42Widget`, `SessionServices`,
+  `Work42WidgetBackground`, `Work42BrowserBacked`).
+  ```swift
+  import Work42Extension
+
+  @main
+  nonisolated final class TodosExtension: Work42PluginExtension {
+      required init() {}
+      @MainActor var widgets: [ExtensionWidgetFactory] { [ExtensionWidgetFactory("todos") { TodosWidget() }] }
+  }
+  ```
+  Requires macOS 26.2. The extension binds to the point `com.work42.app.plugin` (`Work42ExtensionPoint.identifier`).
+- **How it talks to Work42.** Every `SessionServices` member is a proxy that sends the call to Work42 (`platform` stays local:
+  links and the pasteboard are this Mac's either way). Calls travel as JSON in one generic XPC method
+  (`Work42ExtensionXPC`, `Work42HostXPC`; envelope `ExtensionCall` / `ExtensionReply`, stamped with the sender's SDK version),
+  so a method added later never changes the XPC protocol, and a method one side does not know comes back as a named
+  `WidgetServiceError` instead of an XPC failure. Calls that must not run twice (`shell.run`, `intents.execute`, `tools.call`,
+  hooks, intents Work42 asks the extension to perform) carry a `requestId`. When the connection is lost the caller gets
+  `WidgetServiceError.extensionInterrupted` ("interrupted: the extension stopped", suggestion "retry the action") or, inside the
+  extension, `.hostInterrupted`; nothing is re-sent automatically.
+- **What Work42 reads up front.** The handshake describes every widget as data (`ExtensionWidgetDescription`: title, icon,
+  minimum size, storage namespace, collaboration, scopes, intents, link matchers, background agent, browser-backed), so
+  Work42 registers the widgets before any session uses them; a link a widget claims is opened with `extension.openLink`.
+  Out of process, an intent's live state (`isEnabled`, `isConfirmed`, `actionAreaTitle`, `.menu` choices) is not read: its
+  action-area button is always enabled and shows its static title. Custom headers, header labels and item kinds stay
+  in-process features.
+- New types: `Work42PluginExtension`, `ExtensionWidgetDescription`, `ExtensionIntentDescription`,
+  `ExtensionLinkMatcherDescription`, `ExtensionWidgetFactory`, `Work42ExtensionPoint`, `Work42ExtensionRuntime`,
+  `ExtensionCall`, `ExtensionReply`, `ExtensionStreamEvent`, `ExtensionPayload`, `ExtensionChannel`, `ExtensionTransport`,
+  `ClosureExtensionTransport`, `ExtensionSubscription`, `ExtensionServices`, the `Extension…Proxy` service proxies, and the XPC
+  protocols above. Nothing in `Work42UI` or `Work42PluginKit` changed.
+
+## 3.1.0
+
+Additions only: a plugin built with 3.0.0 runs unchanged on 3.1.0.
+
+- **`services.browser`: a browser widget drives its own tabs.** `SessionServices.browser` returns a `BrowserTabsService` bound
+  to the calling widget: `setTabs(_:)`, `selectTab(_:)`, `updateTab(_:title:url:icon:)`, and the streams `tabs` (the widget's
+  tabs now and after every change) and `events` (`BrowserEvent.newTabRequested` for the "+" button, `.tabClosed(id)` for a
+  "×"). Nothing takes a widget id, so a widget cannot read or change another widget's tabs. On a host that cannot provide it
+  every call throws a `WidgetServiceError` saying to run inside Work42 3.1 or later. New types: `BrowserTabsState`,
+  `BrowserEvent`, `BrowserTabsService`, `UnavailableBrowserTabsService`, `BrowserTabsRegistry` (`resolve` and `attach`, both set
+  by the host: `attach` runs after a surface has wired a model's own hooks, so the host's listeners for `events` sit on top of
+  the defaults and are re-installed whenever the surface wires again). Plugins never touch it.
+  `updateTab(_:url:)` shows the new address: the tab's page navigates there (a tab with no page yet starts on it).
+  `BrowserTabsState.address` is what the address bar shows for the tab in front: the page's live address (it follows links,
+  redirects and in-page routes; a tab's `url` changes only through `updateTab`). Read it to know which page is showing.
+- **A browser surface needs no closure.** `BrowserSurfaceDeclaration(spec:cacheKey:)` and `BrowserSurface(spec:cacheKey:...)`
+  have forms without `configure:`. Declare the surface, then drive it through `services.browser`.
+- **Deprecated, with the replacement named in the message:** the `configure:` forms of `BrowserSurfaceDeclaration.init` and
+  `BrowserSurface.init`, and `BrowserSurface.model(forKey:)` / `model(forKey:scope:)`. They still compile and still work; new
+  plugins should not use them, and `BrowserWidgetModel` is no longer the way for a plugin to reach its tabs. A call that
+  passes no `configure:` resolves to the new forms, so it does not warn.
+- **Intent ids** the host registers for the same purpose (they act on the browser of the widget whose `services.intents` made
+  the call, never take a widget id): `browser.tabs.set {tabs}`, `browser.tabs.select {id}`,
+  `browser.tabs.update {id, title?, url?, icon?}`.
+
+## 3.0.0
+
+- **Compatibility is one number: the SDK version.** The ABI generation counter (`Work42SDKCompatibility.abiGeneration`, last
+  value `17`) is removed, and so is the `sdk_abi` manifest field. A plugin records the SDK it was built with as `sdk_version`,
+  and the host runs it when the plugin's **major version matches its own and its own version is the same or newer**:
+  `Work42SDKCompatibility.accepts(pluginSDK:)`. A plugin built with 3.0.0 runs on 3.2.0; one built with 3.2.0 does not run
+  on 3.0.0; one built with 2.x does not run on 3.x until it is rebuilt. From 3.0 on, minor and patch releases only add to
+  the public API, and a breaking change is a new major version with a migration note here.
+- **The one forced rebuild.** Every plugin built for SDK 2.x (ABI 17 or older) **must be rebuilt once**. No source changes are
+  needed. To migrate a plugin: delete `sdk_abi:` from `plugin.yaml` (it is read and ignored with a warning if left), set
+  `sdk_version: 3.0.0`, and rebuild with `work42 plugin build` or reinstall it. `work42 plugin build` and `work42 widget build`
+  now write `sdk_version` for you: the exact SDK version the binary was built against, as a full `MAJOR.MINOR.PATCH` string.
+  Before this, `widget.yaml` held the ABI integer in `sdk_version`; an integer there, or a missing value, now means "built for
+  an older SDK".
+- **New API:** `Work42SDKCompatibility.accepts(pluginSDK:)`, `accepts(pluginSDK:hostSDK:)` (a pre-release or build suffix such
+  as `-beta.1` is ignored; anything that is not `MAJOR.MINOR.PATCH` is never accepted), `requiredMajor(_:)` and
+  `versionProbeValue`.
+- **Deprecated:** `WidgetSDK.abiVersion` still compiles and returns `3` in every 3.x SDK, with a deprecation warning that names
+  the replacement. It no longer decides anything: a widget or plugin dylib's `work42_widget_sdk_version` /
+  `work42_plugin_sdk_version` function only answers the loader's probe, so return
+  `Work42SDKCompatibility.versionProbeValue` from it. The scaffolds and the plugin template already do.
+- **History of the removed counter.** The ABI generations 2 through 17, and what changed in each, are in the entries below
+  and in the git history of `WidgetSDK.abiVersion`.
+
 ## 2.16.0
 
 - **ABI generation `17`.** `SessionServices` and `WidgetBackgroundServices` gained stored members, which changes their

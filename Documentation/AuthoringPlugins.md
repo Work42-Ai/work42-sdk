@@ -34,10 +34,13 @@ also ships its Work42 plugin.
 - **`widgets`** in a session type lists the widget kind ids its sessions have (`chat`, `files`,
   `widget:<slug>`). Only those exist in its sessions. A `widget:` entry must belong to this plugin or to a
   plugin in `requires`. Installing a plugin never adds its widgets to any session type that does not name them.
-- **`## Prerequisites`** in a skill is how a plugin gets set up. A skill for something that needs a CLI or
-  configuration starts with exact, checkable steps; the skill is composed into every session that uses the
-  plugin. When installing the tool takes more than one command, a `<plugin>-setup` skill carries the steps and the Prerequisites point to it. Tools a plugin installs go in
-  `~/.work42/bin`, which is on `PATH` for agent sessions and widget commands.
+- **A plugin ships no command-line tool.** An extension plugin reaches the Mac through Work42's services
+  (`services.calendar`, `audio`, `speech`, `diskRead`, `automation`, `permissions`) and offers agents MCP tools
+  written in Swift (`widget.yaml` `mcps`, or `session_mcps` on a session type; see the plugin-creator skill). On an
+  iPad a widget runs its own plugin's tools on the paired Mac with `services.pluginTools`. The person is asked for
+  what the plugin needs through Work42's permission pill, declared in `plugin.yaml` `permissions`.
+- **`## Prerequisites`** in a skill is for configuration, not installation: exact, checkable steps the agent can
+  verify; the skill is composed into every session that uses the plugin.
 - **Removal** deregisters first: the plugin's sessions become plain chat sessions (transcript, artifacts,
   storage and layout kept, minus the plugin's widgets), its widgets leave every session, and only then are its
   session types, workflows, widgets and skills deleted.

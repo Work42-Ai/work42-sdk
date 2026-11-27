@@ -1,0 +1,2 @@
+dylib: compat-fixture-frozen.dylib
+sdk_version: 3.0.0

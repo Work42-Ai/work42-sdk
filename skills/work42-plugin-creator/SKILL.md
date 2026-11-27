@@ -33,7 +33,7 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
    git init
    ```
 
-   To start from the bundled example instead, copy `assets/plugin-template/` and replace every `example-plugin` identifier.
+   `plugin new` writes an extension plugin, the only kind Work42 installs. `assets/plugin-template/` is a legacy in-process example kept for its widget code; Work42 refuses to install it as it is, so use it to read widget code and start new plugins with `plugin new`.
 
 3. Add only the contribution folders needed. Keep cross-references self-contained: a plugin session type may refer only to workflows, skills, MCPs, and intents in the same bundle. Two things cross the bundle boundary on purpose: a session type's `widgets` list may name another plugin's widgets, and then the manifest must say `requires: [that-plugin]`. If the plugin needs a command-line tool or configuration, its skill says so in a `## Prerequisites` section (see `references/contributions.md`).
 
@@ -62,6 +62,8 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
    work42 plugin install https://github.com/OWNER/TOOL.git --path work42-plugin
    ```
 
+   A built package also installs from an https link: `work42 plugin install https://example.com/my-plugin-1.0.0.zip` (Settings → Plugins → Install from URL). Only extension plugins (`runtime: extension`) install; a `runtime: inprocess` plugin is refused from every source, and one already installed keeps loading with a "Deprecated runtime" badge. A first-party id from a link must be signed by Work42's team and notarized. `work42 plugin deactivate <name>` stops an extension plugin without removing it and `work42 plugin activate <name>` starts it again.
+
    Install fails, naming the plugin, when anything listed in `requires` is not installed yet; install that first. Nothing is installed automatically, and Work42 itself ships with no plugins. A new plugin's widgets are in the catalog but on no session type's widget list until the plugin's own session types (or the user, in Session Lab) name them.
 
    Installing the same plugin identity replaces its package-owned definitions. Work42 preserves existing sessions, storage, artifacts, transcripts, recordings, and files.
@@ -81,13 +83,38 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
    work42 plugin remove my-plugin
    ```
 
-9. If the plugin needs a CLI or configuration, give it a `my-plugin-setup` skill with the exact install steps, and end every other skill's `## Prerequisites` with "if that fails, follow the `my-plugin-setup` skill". The agent runs it when something is missing; there is no Set up button.
+9. A plugin ships no command-line tool and no setup skill that installs one. What a CLI used to do is done by Work42 services the extension calls (`services.calendar`, `audio`, `speech`, `diskRead`, `automation`, `permissions`, and `pluginTools` on an iPad) and by MCP tools written in Swift in the extension (see "MCPs" in contributions). The person is asked for what the plugin needs through Work42's permission pill, never through a skill. A skill is for teaching an agent how to use the plugin's tools; if something needs configuration, say so in the skill's `## Prerequisites`, with steps the agent can check.
+
+## Browser-based widgets
+
+A widget that shows web pages in tabs (SDK 3.1.0 and later) uses two things and nothing else: a declaration of its surface, and `services.browser` for its tabs. `assets/plugin-template/widgets/example-browser/` is a complete example; copy it.
+
+```swift
+final class MyBrowserWidget: Work42BrowserBacked {
+    // ... id, title, icon, linkIntents ...
+    var browserSurface: BrowserSurfaceDeclaration? {
+        BrowserSurfaceDeclaration(spec: BrowserSurfaceSpec(url: url, dataStoreKey: "my-plugin", title: "My page"), cacheKey: id)
+    }
+    func makeView(services: SessionServices) -> AnyView {
+        AnyView(BrowserSurface(spec: browserSurface!.spec, cacheKey: id, services: services))
+    }
+}
+
+try await services.browser.setTabs([BrowserTab(url: url, title: "Page")])   // show these tabs
+try await services.browser.selectTab(tab.id)                                // bring one to the front
+for await event in services.browser.events { /* .newTabRequested (+), .tabClosed(id) (x) */ }
+```
+
+`services.browser` is already scoped to this widget in this session; it takes no widget id, and a widget cannot reach another widget's tabs. Switch over `BrowserEvent` with `@unknown default`, because a later 3.x release may add events. The plugin's `sdk_version` must be 3.1.0 or newer if it calls `services.browser` (`work42 plugin build` stamps it).
+
+**Do not use `configure:` or `BrowserWidgetModel`** (and not `BrowserSurface.model(forKey:)`): they are deprecated and compile with a warning that names the replacement call.
 
 ## Guardrails
 
-- Keep `manifest_version: 2`, semantic plugin/SDK versions, and the exact integer SDK ABI.
+- Keep `manifest_version: 2` and semantic plugin and SDK versions. There is no `sdk_abi`; do not write one.
 - Do not copy private Work42 app types into a plugin. Import `Work42PluginKit` and supported `Work42UI` APIs only.
-- Treat native plugin code as full local access. Do not claim granular sandbox permissions.
+- Write new plugins with `runtime: extension` (the default of `work42 plugin new`); Work42 no longer installs in-process plugins. An extension runs in its own sandboxed process and reaches only what `plugin.yaml` declares (`file_access`, `app_groups`, `permissions`). Privacy permissions are held by Work42, which asks macOS the first time the plugin needs one; handle `PluginPermissionError`. Declare every permission in `plugin.yaml` `permissions` with a `reason` (and a `target` for the per-target ones, `automation` and `files-and-folders`): the ids are `microphone`, `system-audio`, `speech-recognition`, `calendars`, `reminders`, `contacts`, `photos`, `camera`, `location`, `bluetooth`, `local-network`, `media-library`, `notifications`, `files-and-folders`, `automation`, `full-disk-access`, `accessibility`, `input-monitoring`, `screen-recording` and `run-commands`. Read or ask for any of them with `services.permissions.status(id:target:)` / `request(id:target:)` (SDK 3.5.0); an undeclared one reads `notDeclared`, and one macOS cannot grant to an app reads `unsupported`.
+- Treat an in-process (legacy) plugin's native code as full local access. Do not claim granular sandbox permissions for it.
 - Do not change plugin identity accidentally when customizing a fork. Same identity means replacement; a new identity installs separately.
 - Do not delete user/session storage during update or removal.
 - Do not retain or promise rollback packages; replacement is transactional, but only the active version remains after success.
