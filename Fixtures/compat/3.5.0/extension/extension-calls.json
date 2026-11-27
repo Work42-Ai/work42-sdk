@@ -1,0 +1,362 @@
+[
+  {
+    "method" : "insert",
+    "payload" : "eyJ0ZXh0IjoiaGkifQ==",
+    "sdkVersion" : "3.5.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "attach",
+    "payload" : "eyJleGNlcnB0IjoibGV0IGEiLCJzb3VyY2VMYWJlbCI6ImEuc3dpZnQiLCJib2R5IjoibGV0IGEgPSAxIn0=",
+    "sdkVersion" : "3.5.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "presentCommentableSelection",
+    "payload" : "eyJleGNlcnB0IjoibGV0IGEiLCJzb3VyY2VMYWJlbCI6ImEuc3dpZnQifQ==",
+    "sdkVersion" : "3.5.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "clearCommentableSelection",
+    "payload" : "e30=",
+    "sdkVersion" : "3.5.0",
+    "service" : "composer",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "run",
+    "payload" : "eyJjb21tYW5kIjoiZWNobyBmcm96ZW4ifQ==",
+    "requestId" : "B23D839F-9ACD-4C80-BF5B-0E9AEED64098",
+    "sdkVersion" : "3.5.0",
+    "service" : "shell",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "run",
+    "payload" : "eyJ0aW1lb3V0U2Vjb25kcyI6MzAsImNvbW1hbmQiOiJlY2hvIGZyb3plbiJ9",
+    "requestId" : "7A078734-D253-4572-A60D-81DCEB74E82D",
+    "sdkVersion" : "3.5.0",
+    "service" : "shell",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "start",
+    "payload" : "eyJhcmd1bWVudHMiOnsiY29tbWFuZCI6ImVjaG8gZnJvemVuIn0sInN0cmVhbUlkIjoiM0FBQjBEMjQtQjYxNy00QjE4LUE2RUUtNzY2RDUwRDYzNkY4In0=",
+    "requestId" : "DF158EC3-BC64-4EAB-AB71-A48465E11C45",
+    "sdkVersion" : "3.5.0",
+    "service" : "shell",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "stop",
+    "payload" : "eyJzdHJlYW1JZCI6IjNBQUIwRDI0LUI2MTctNEIxOC1BNkVFLTc2NkQ1MEQ2MzZGOCJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "shell",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjNBQUIwRDI0LUI2MTctNEIxOC1BNkVFLTc2NkQ1MEQ2MzZGOCJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "write",
+    "payload" : "eyJwYXRoIjoibm90ZXNcL2EubWQiLCJkYXRhIjoiYUdrPSJ9",
+    "requestId" : "C3EDF0D7-7C06-4548-A88C-2FB2FD6D200D",
+    "sdkVersion" : "3.5.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "remove",
+    "payload" : "eyJwYXRoIjoibm90ZXNcL2EubWQifQ==",
+    "requestId" : "D5A3B2BD-E249-4FF5-9FF1-736447E47871",
+    "sdkVersion" : "3.5.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "execute",
+    "payload" : "eyJwYXJhbXMiOnsibiI6MX0sImlkIjoiY291bnRlci5ydW4ifQ==",
+    "requestId" : "CC179164-4D92-4194-B660-56FD338CBBEF",
+    "sdkVersion" : "3.5.0",
+    "service" : "intents",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "get",
+    "payload" : "eyJuYW1lc3BhY2UiOiJ0b2RvcyIsImtleSI6Iml0ZW1zIn0=",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "list",
+    "payload" : "eyJuYW1lc3BhY2UiOiJ0b2RvcyJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "set",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvaXRlbXMiLCJ2YWx1ZSI6WyJhIl19",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "delete",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvaXRlbXMifQ==",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "person",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "setPerson",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiIsInZhbHVlIjp0cnVlfQ==",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "deletePerson",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "people",
+    "payload" : "eyJrZXkiOiJ0b2Rvc1wvc2VlbiJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "storage",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "present",
+    "payload" : "eyJzZXNzaW9uSWQiOiJzLWZyb3plbiIsIndpZGdldElkIjoiY291bnRlciJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "pill",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "dismiss",
+    "payload" : "eyJ3aWRnZXRJZCI6ImNvdW50ZXIifQ==",
+    "sdkVersion" : "3.5.0",
+    "service" : "pill",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "isPresented",
+    "payload" : "eyJ3aWRnZXRJZCI6ImNvdW50ZXIifQ==",
+    "sdkVersion" : "3.5.0",
+    "service" : "pill",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "listTools",
+    "payload" : "e30=",
+    "sdkVersion" : "3.5.0",
+    "service" : "tools",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "call",
+    "payload" : "eyJhcmd1bWVudHMiOnsia2V5IjoiYVwvYiJ9LCJzZXJ2ZXIiOiJ3b3JrNDItc2Vzc2lvbiIsInRvb2wiOiJzdG9yYWdlX2dldCJ9",
+    "requestId" : "7A9821EB-3081-49E4-927E-846C0E2CB319",
+    "sdkVersion" : "3.5.0",
+    "service" : "tools",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "read",
+    "payload" : "eyJwYXRoIjoiUkVBRE1FLm1kIn0=",
+    "sdkVersion" : "3.5.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "list",
+    "payload" : "eyJwYXRoIjoiZG9jcyJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "currentUser",
+    "payload" : "e30=",
+    "sdkVersion" : "3.5.0",
+    "service" : "account",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "members",
+    "payload" : "e30=",
+    "sdkVersion" : "3.5.0",
+    "service" : "collaboration",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "report",
+    "payload" : "e30=",
+    "sdkVersion" : "3.5.0",
+    "service" : "collaboration",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "agent" : true,
+    "method" : "ping",
+    "payload" : "e30=",
+    "sdkVersion" : "3.5.0",
+    "service" : "activity",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "selectTab",
+    "payload" : "eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDA0MiJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "updateTab",
+    "payload" : "eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDA0MiIsInVybCI6Imh0dHBzOlwvXC9leGFtcGxlLmNvbSIsInRpdGxlIjoiRG9jcyIsImljb24iOiJnbG9iZSJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "setTabs",
+    "payload" : "eyJ0YWJzIjpbXX0=",
+    "sdkVersion" : "3.5.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "watch",
+    "payload" : "eyJzdHJlYW1JZCI6IjI0RTFBOTFCLUREREYtNEQ1MC04RjBFLUFDMThCMEEyQ0NFMyIsImFyZ3VtZW50cyI6eyJwYXRoIjoiZG9jcyJ9fQ==",
+    "sdkVersion" : "3.5.0",
+    "service" : "files",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cursors",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjUxMEY4NzA1LTYyNjItNDgwMC1COEE0LTQyRTQyODQ4RjA0OCJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "collaboration",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "tabs",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IkJEQjZFNzlGLTRBNjAtNDY0QS1CNEY0LTA2N0QzQUZERkNBNyJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "events",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IkFGMjE2NUMxLTkzM0YtNDZGMi1BODQ0LTMyQjMyMDFFNzBEQyJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "browser",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "subscribe",
+    "payload" : "eyJhcmd1bWVudHMiOnsic2Vzc2lvbiI6InMtZnJvemVuIiwic3RyZWFtIjoiZXZlbnRzIiwid2lkZ2V0IjoiY291bnRlciJ9LCJzdHJlYW1JZCI6IkEwQzc5MDAzLTkxNDItNDIzNy1BNkMyLUVCODBFOTg1ODI3RiJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "streams",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IjI0RTFBOTFCLUREREYtNEQ1MC04RjBFLUFDMThCMEEyQ0NFMyJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IkEwQzc5MDAzLTkxNDItNDIzNy1BNkMyLUVCODBFOTg1ODI3RiJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJzdHJlYW1JZCI6IjUxMEY4NzA1LTYyNjItNDgwMC1COEE0LTQyRTQyODQ4RjA0OCIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.5.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJzdHJlYW1JZCI6IkJEQjZFNzlGLTRBNjAtNDY0QS1CNEY0LTA2N0QzQUZERkNBNyIsImFyZ3VtZW50cyI6e319",
+    "sdkVersion" : "3.5.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  },
+  {
+    "method" : "cancel",
+    "payload" : "eyJhcmd1bWVudHMiOnt9LCJzdHJlYW1JZCI6IkFGMjE2NUMxLTkzM0YtNDZGMi1BODQ0LTMyQjMyMDFFNzBEQyJ9",
+    "sdkVersion" : "3.5.0",
+    "service" : "stream",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  }
+]
