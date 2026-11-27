@@ -48,7 +48,8 @@ asks for tools). WOR-894.
   `WidgetPermissionByIDService`.
 - **Permissions.** `PluginPermissionID` names the 20 permission ids; `ExtensionHostServer.authorizeShell` lets the app gate
   `services.shell` (WOR-893).
-- **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen by the next release `dump`.
+- **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen with this release
+  (`api-baselines/3.5.0`).
 
 ## 3.4.0 (unreleased)
 
