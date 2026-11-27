@@ -83,7 +83,7 @@ Read [references/manifest-and-layout.md](references/manifest-and-layout.md) befo
    work42 plugin remove my-plugin
    ```
 
-9. If the plugin needs a CLI or configuration, give it a `my-plugin-setup` skill with the exact install steps, and end every other skill's `## Prerequisites` with "if that fails, follow the `my-plugin-setup` skill". The agent runs it when something is missing; there is no Set up button.
+9. A plugin ships no command-line tool and no setup skill that installs one. What a CLI used to do is done by Work42 services the extension calls (`services.calendar`, `audio`, `speech`, `diskRead`, `automation`, `permissions`, and `pluginTools` on an iPad) and by MCP tools written in Swift in the extension (see "MCPs" in contributions). The person is asked for what the plugin needs through Work42's permission pill, never through a skill. A skill is for teaching an agent how to use the plugin's tools; if something needs configuration, say so in the skill's `## Prerequisites`, with steps the agent can check.
 
 ## Browser-based widgets
 
@@ -113,7 +113,7 @@ for await event in services.browser.events { /* .newTabRequested (+), .tabClosed
 
 - Keep `manifest_version: 2` and semantic plugin and SDK versions. There is no `sdk_abi`; do not write one.
 - Do not copy private Work42 app types into a plugin. Import `Work42PluginKit` and supported `Work42UI` APIs only.
-- Write new plugins with `runtime: extension` (the default of `work42 plugin new`); Work42 no longer installs in-process plugins. An extension runs in its own sandboxed process and reaches only what `plugin.yaml` declares (`file_access`, `app_groups`, `permissions`). Privacy permissions are held by Work42, which asks macOS the first time the plugin needs one; handle `PluginPermissionError`.
+- Write new plugins with `runtime: extension` (the default of `work42 plugin new`); Work42 no longer installs in-process plugins. An extension runs in its own sandboxed process and reaches only what `plugin.yaml` declares (`file_access`, `app_groups`, `permissions`). Privacy permissions are held by Work42, which asks macOS the first time the plugin needs one; handle `PluginPermissionError`. Declare every permission in `plugin.yaml` `permissions` with a `reason` (and a `target` for the per-target ones, `automation` and `files-and-folders`): the ids are `microphone`, `system-audio`, `speech-recognition`, `calendars`, `reminders`, `contacts`, `photos`, `camera`, `location`, `bluetooth`, `local-network`, `media-library`, `notifications`, `files-and-folders`, `automation`, `full-disk-access`, `accessibility`, `input-monitoring`, `screen-recording` and `run-commands`. Read or ask for any of them with `services.permissions.status(id:target:)` / `request(id:target:)` (SDK 3.5.0); an undeclared one reads `notDeclared`, and one macOS cannot grant to an app reads `unsupported`.
 - Treat an in-process (legacy) plugin's native code as full local access. Do not claim granular sandbox permissions for it.
 - Do not change plugin identity accidentally when customizing a fork. Same identity means replacement; a new identity installs separately.
 - Do not delete user/session storage during update or removal.

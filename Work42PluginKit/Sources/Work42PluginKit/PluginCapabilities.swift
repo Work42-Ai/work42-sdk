@@ -76,6 +76,8 @@ nonisolated public enum PluginPermissionStatus: String, Codable, Sendable, Equat
     case denied
     /// The plugin's manifest does not declare it, so it can never be used.
     case notDeclared
+    /// macOS cannot grant it to an ordinary app on this Mac (SDK 3.5.0): asking is pointless, so nobody is asked.
+    case unsupported
 }
 
 /// Why a call that needs a permission did not go ahead.
@@ -149,6 +151,31 @@ nonisolated public extension WidgetPermissionService {
 
     func request(_ permission: PluginPermission) async throws -> PluginPermissionStatus {
         throw WidgetServiceError.hostLacks("permissions.request(_:)")
+    }
+}
+
+/// Any permission by its `plugin.yaml` name (SDK 3.5.0), for the ones `PluginPermission` has no case for: contacts, reminders,
+/// camera, photos, and the rest of the inventory. The same broker answers: a permission the manifest does not declare reads
+/// `.notDeclared` (and throws `notDeclared` on `request`), and no one is asked for one macOS cannot grant (`.unsupported`).
+nonisolated public protocol WidgetPermissionByIDService: WidgetPermissionService {
+    /// `target` names the app or folder of a per-target permission (`automation`, `files-and-folders`) and is nil for any other.
+    func status(id: PluginPermissionID, target: String?) async throws -> PluginPermissionStatus
+    func request(id: PluginPermissionID, target: String?) async throws -> PluginPermissionStatus
+}
+
+nonisolated public extension WidgetPermissionService {
+    /// Where `id` stands for this plugin, without asking anyone. A host older than 3.5.0 knows only the four of 3.3.0.
+    func status(id: PluginPermissionID, target: String? = nil) async throws -> PluginPermissionStatus {
+        if let byID = self as? any WidgetPermissionByIDService { return try await byID.status(id: id, target: target) }
+        guard let legacy = PluginPermission(rawValue: id.rawValue) else { throw WidgetServiceError.hostLacks("permissions.status(id:)") }
+        return try await status(legacy)
+    }
+
+    /// Asks for `id` as the first use would, and returns where it stands afterwards.
+    func request(id: PluginPermissionID, target: String? = nil) async throws -> PluginPermissionStatus {
+        if let byID = self as? any WidgetPermissionByIDService { return try await byID.request(id: id, target: target) }
+        guard let legacy = PluginPermission(rawValue: id.rawValue) else { throw WidgetServiceError.hostLacks("permissions.request(id:)") }
+        return try await request(legacy)
     }
 }
 

@@ -41,6 +41,11 @@ asks for tools). WOR-894.
   first answer, or `outcome_unknown`. No Mac to reach is `mac_unreachable`. New types: `WidgetPluginToolService`,
   `PluginToolOutcomeWire`, `PluginRemoteFailure`; `WidgetCapabilities` gains `pluginTools` (an optional parameter of the 3.5.0
   initializer).
+- **Every permission by id** (WOR-903): `services.permissions.status(id:target:)` and `request(id:target:)` answer for any id in the
+  inventory (contacts, reminders, camera, photos, and the rest), through the same broker; `target` names the app or folder of
+  `automation` and `files-and-folders`. `PluginPermissionStatus` gains `unsupported` (macOS cannot grant it to an app: nobody is
+  asked). A host that predates 3.5.0 answers the four of 3.3.0 by id and throws "host lacks" for the rest. New protocol
+  `WidgetPermissionByIDService`.
 - **Permissions.** `PluginPermissionID` names the 20 permission ids; `ExtensionHostServer.authorizeShell` lets the app gate
   `services.shell` (WOR-893).
 - **API baseline.** `scripts/api-baseline.sh` now covers `Work42Extension`; its first baseline is frozen by the next release `dump`.
