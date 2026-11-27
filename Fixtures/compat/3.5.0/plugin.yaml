@@ -1,0 +1,7 @@
+manifest_version: 2
+name: compat-fixture
+version: 1.0.0
+description: Frozen SDK 3.5.0 fixture for the binary compatibility tests.
+author: work42
+sdk_version: 3.5.0
+requires: []
