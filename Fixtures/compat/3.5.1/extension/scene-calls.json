@@ -1,0 +1,10 @@
+[
+  {
+    "method" : "attach",
+    "payload" : "eyJ3b3JrdHJlZVBhdGgiOiJcL3RtcFwvZnJvemVuIn0=",
+    "sdkVersion" : "3.5.1",
+    "service" : "scene",
+    "sessionId" : "s-frozen",
+    "widgetId" : "counter"
+  }
+]
