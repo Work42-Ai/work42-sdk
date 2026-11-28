@@ -146,6 +146,7 @@ public final class ExtensionHostServer {
 
     /// Cancels stream `streamId` (which stops a command it carries) and forgets it; `notify` also tells the extension.
     private func closeStream(_ streamId: UUID, notify: Bool) {
+        ExtensionLog.host.info("stream-cancel stream=\(ExtensionLog.short(streamId), privacy: .public) notify=\(notify, privacy: .public) known=\(self.streams[streamId] != nil, privacy: .public)")
         streams.removeValue(forKey: streamId)?.cancel()
         streamScopes.removeValue(forKey: streamId)
         shellProcesses.removeValue(forKey: streamId)
@@ -402,6 +403,7 @@ public final class ExtensionHostServer {
             let sub = try args(ExtensionSubscription<ExtensionPayload.AudioStart>.self)
             let recording = try await capabilities(call).audio.startRecording(sub.arguments.request)
             recordings[sub.streamId] = recording
+            ExtensionLog.host.info("audio-recording-started stream=\(ExtensionLog.short(sub.streamId), privacy: .public) recording=\(ExtensionLog.short(recording.id), privacy: .public)")
             open(sub.streamId, scope: scope(call)) { yield in
                 await withTaskCancellationHandler {
                     for await levels in recording.levels { yield(try? ExtensionJSON.encode(levels)) }
@@ -428,11 +430,13 @@ public final class ExtensionHostServer {
                 throw WidgetServiceError(message: "no recording \(sub.arguments.recording.uuidString) is running", suggestion: nil)
             }
             let speech = try capabilities(call).speech
+            ExtensionLog.host.info("speech-live-subscribe stream=\(ExtensionLog.short(sub.streamId), privacy: .public) recording=\(ExtensionLog.short(recording.id), privacy: .public) partial=\(sub.arguments.partialResults == true, privacy: .public)")
             let source = sub.arguments.partialResults == true
                 ? speech.liveTranscript(of: recording.id, partialResults: true)
                 : speech.liveTranscript(of: recording.id)
             open(sub.streamId) { yield in
-                do { for try await segment in source { yield(try? ExtensionJSON.encode(segment)) } } catch {}
+                // A throw (permission refused, no speech model, analyzer failure) ends the stream with that error.
+                for try await segment in source { yield(try ExtensionJSON.encode(segment)) }
             }
             return empty
         case "calendar.events":
@@ -470,23 +474,51 @@ public final class ExtensionHostServer {
 
     // MARK: Streams
 
-    /// Runs `body` as stream `streamId`, pushing what it yields, then the stream's end.
+    /// Runs `body` as stream `streamId`, pushing what it yields, then the stream's end. A `body` that throws ends the stream
+    /// with that error, which the extension's consumer receives.
     private func open(_ streamId: UUID, scope: Scope? = nil,
-                      _ body: @escaping @MainActor (_ yield: @MainActor (Data?) -> Void) async -> Void) {
+                      _ body: @escaping @MainActor (_ yield: @MainActor (Data?) -> Void) async throws -> Void) {
+        if streams[streamId] != nil { ExtensionLog.host.notice("stream-replaced stream=\(ExtensionLog.short(streamId), privacy: .public)") }
         streams[streamId]?.cancel()
         if let scope { streamScopes[streamId] = scope }
+        ExtensionLog.host.info("stream-open stream=\(ExtensionLog.short(streamId), privacy: .public) session=\(scope?.sessionId ?? "-", privacy: .public) widget=\(scope?.widgetId ?? "-", privacy: .public) agent=\(scope?.agent ?? false, privacy: .public)")
         streams[streamId] = Task { [weak self] in
-            await body { item in
-                guard let item, !Task.isCancelled else { return }
-                self?.push?(ExtensionStreamEvent(streamId: streamId, item: item))
+            var failure: Error?
+            var items = 0
+            do {
+                try await body { item in
+                    guard let item, !Task.isCancelled else { return }
+                    items += 1
+                    self?.push?(ExtensionStreamEvent(streamId: streamId, item: item))
+                }
+            } catch {
+                failure = error
             }
-            guard let self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled else {
+                ExtensionLog.host.info("stream-close stream=\(ExtensionLog.short(streamId), privacy: .public) reason=cancelled items=\(items, privacy: .public) error=\(failure.map { String(describing: $0) } ?? "-", privacy: .public)")
+                return
+            }
+            if let failure {
+                ExtensionLog.host.error("stream-close stream=\(ExtensionLog.short(streamId), privacy: .public) reason=error items=\(items, privacy: .public) error=\(String(describing: failure), privacy: .public)")
+            } else {
+                ExtensionLog.host.info("stream-close stream=\(ExtensionLog.short(streamId), privacy: .public) reason=finished items=\(items, privacy: .public)")
+            }
             self.streams.removeValue(forKey: streamId)
             self.streamScopes.removeValue(forKey: streamId)
             self.shellProcesses.removeValue(forKey: streamId)
             self.recordings.removeValue(forKey: streamId)
-            self.push?(ExtensionStreamEvent(streamId: streamId, finished: true))
+            if let failure {
+                self.push?(ExtensionStreamEvent(streamId: streamId, error: Self.serviceError(failure)))
+            } else {
+                self.push?(ExtensionStreamEvent(streamId: streamId, finished: true))
+            }
         }
+    }
+
+    /// An error as it crosses the wire: the refusal's typed form, the service error as it is, any other by its description.
+    private static func serviceError(_ error: Error) -> WidgetServiceError {
+        if let permission = error as? PluginPermissionError { return permission.serviceError }
+        return ExtensionReply.failure(error).error ?? WidgetServiceError(message: error.localizedDescription)
     }
 
     // MARK: Service lookup

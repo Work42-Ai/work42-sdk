@@ -42,6 +42,7 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
     private let interruption: WidgetServiceError
     private let lock = NSLock()
     private var streams: [UUID: AsyncStream<Data>.Continuation] = [:]
+    private var streamErrors: [UUID: WidgetServiceError] = [:]
     private var closed = false
 
     /// - Parameter interruption: what a waiting call throws when the connection is lost (`hostInterrupted` inside an
@@ -101,6 +102,7 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
                 try await self.call(service, method, sessionId: sessionId, widgetId: widgetId, agent: agent,
                                     payload: ExtensionSubscription(streamId: streamId, arguments: arguments))
             } catch {
+                ExtensionLog.channel.error("subscribe-failed stream=\(ExtensionLog.short(streamId), privacy: .public) call=\(service, privacy: .public).\(method, privacy: .public) error=\(String(describing: error), privacy: .public)")
                 self.finishStream(streamId)
             }
         }
@@ -120,9 +122,11 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
             try await call(service, method, sessionId: sessionId, widgetId: widgetId, agent: agent,
                            payload: ExtensionSubscription(streamId: streamId, arguments: arguments))
         } catch {
+            ExtensionLog.channel.error("open-stream-failed stream=\(ExtensionLog.short(streamId), privacy: .public) call=\(service, privacy: .public).\(method, privacy: .public) error=\(String(describing: error), privacy: .public)")
             finishStream(streamId)
             throw error
         }
+        ExtensionLog.channel.info("open-stream-ok stream=\(ExtensionLog.short(streamId), privacy: .public) call=\(service, privacy: .public).\(method, privacy: .public)")
         return (streamId, stream)
     }
 
@@ -134,12 +138,15 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
         if !wasClosed { streams[streamId] = continuation }
         lock.unlock()
         if wasClosed {
+            ExtensionLog.channel.notice("stream-register-refused stream=\(ExtensionLog.short(streamId), privacy: .public) reason=channel-closed")
             continuation.finish()
             return stream
         }
+        ExtensionLog.channel.info("stream-register stream=\(ExtensionLog.short(streamId), privacy: .public) session=\(sessionId ?? "-", privacy: .public) widget=\(widgetId ?? "-", privacy: .public)")
         continuation.onTermination = { [weak self] reason in
             guard let self else { return }
             let stillOpen = self.removeStream(streamId)
+            ExtensionLog.channel.info("stream-terminated stream=\(ExtensionLog.short(streamId), privacy: .public) reason=\(Self.describe(reason), privacy: .public) byConsumer=\(stillOpen, privacy: .public)")
             // Only a consumer that stopped iterating needs to tell the other side; a finish from the other side does not.
             if stillOpen, case .cancelled = reason {
                 Task { try? await self.call("stream", "cancel", sessionId: sessionId, widgetId: widgetId, agent: agent,
@@ -157,7 +164,21 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
         lock.unlock()
         guard let continuation else { return }
         if let item = event.item { continuation.yield(item) }
-        if event.finished { finishStream(event.streamId) }
+        if event.finished {
+            // Recorded before the stream finishes, so a consumer whose loop just ended finds it.
+            if let error = event.error {
+                ExtensionLog.channel.error("stream-end-error stream=\(ExtensionLog.short(event.streamId), privacy: .public) message=\(error.message, privacy: .public) suggestion=\(error.suggestion ?? "-", privacy: .public)")
+                lock.withLock { streamErrors[event.streamId] = error }
+            } else {
+                ExtensionLog.channel.info("stream-end stream=\(ExtensionLog.short(event.streamId), privacy: .public)")
+            }
+            finishStream(event.streamId)
+        }
+    }
+
+    /// The error stream `streamId` ended with, if the other side ended it with one. Taken once, after the stream finished.
+    func takeStreamError(_ streamId: UUID) -> WidgetServiceError? {
+        lock.withLock { streamErrors.removeValue(forKey: streamId) }
     }
 
     /// The connection is gone: every open stream finishes and every later call throws the interruption error.
@@ -167,7 +188,16 @@ nonisolated public final class ExtensionChannel: @unchecked Sendable {
         let open = streams
         streams.removeAll()
         lock.unlock()
+        ExtensionLog.channel.error("channel-closed openStreams=\(open.count, privacy: .public) streams=\(open.keys.map(ExtensionLog.short).joined(separator: ","), privacy: .public)")
         for continuation in open.values { continuation.finish() }
+    }
+
+    private static func describe(_ reason: AsyncStream<Data>.Continuation.Termination) -> String {
+        switch reason {
+        case .finished: "finished"
+        case .cancelled: "cancelled"
+        @unknown default: "unknown"
+        }
     }
 
     public var isClosed: Bool {

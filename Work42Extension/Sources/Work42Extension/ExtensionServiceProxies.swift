@@ -53,8 +53,13 @@ nonisolated func decodedStream<Item: Decodable & Sendable>(_ raw: AsyncStream<Da
     AsyncStream { continuation in
         let task = Task {
             for await data in raw {
-                guard let item = try? ExtensionJSON.decode(type, from: data) else { break }
-                continuation.yield(item)
+                do {
+                    continuation.yield(try ExtensionJSON.decode(type, from: data))
+                } catch {
+                    // The stream ends here (an `AsyncStream` cannot throw); the log says why.
+                    ExtensionLog.proxy.error("stream-decode-failed type=\(String(describing: type), privacy: .public) bytes=\(data.count, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                    break
+                }
             }
             continuation.finish()
         }
@@ -306,13 +311,27 @@ nonisolated public struct ExtensionSpeechProxy: WidgetSpeechService {
                 do {
                     let request = partialResults ? ExtensionPayload.LiveTranscript(recording: recording, partialResults: true)
                                                  : ExtensionPayload.LiveTranscript(recording: recording)
-                    let (_, raw) = try await typedFailure {
+                    let (id, raw) = try await typedFailure {
                         try await scope.openStream("speech", "liveTranscript", request)
                     }
+                    ExtensionLog.proxy.info("speech-live-open stream=\(ExtensionLog.short(id), privacy: .public) recording=\(ExtensionLog.short(recording), privacy: .public) partial=\(partialResults, privacy: .public)")
+                    var segments = 0
                     for await data in raw {
-                        guard let segment = try? ExtensionJSON.decode(TranscriptSegment.self, from: data) else { break }
-                        continuation.yield(segment)
+                        // A segment that does not decode is an error the consumer sees, not the end of the transcript.
+                        do {
+                            continuation.yield(try ExtensionJSON.decode(TranscriptSegment.self, from: data))
+                            segments += 1
+                        } catch {
+                            ExtensionLog.proxy.error("speech-live-decode-failed stream=\(ExtensionLog.short(id), privacy: .public) segments=\(segments, privacy: .public) bytes=\(data.count, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                            throw error
+                        }
                     }
+                    // The host's stream ended with the failure its source threw (a refused permission, a missing speech model).
+                    if let failure = scope.channel.takeStreamError(id) {
+                        ExtensionLog.proxy.error("speech-live-failed stream=\(ExtensionLog.short(id), privacy: .public) segments=\(segments, privacy: .public) message=\(failure.message, privacy: .public)")
+                        throw PluginPermissionError.typed(failure)
+                    }
+                    ExtensionLog.proxy.info("speech-live-finished stream=\(ExtensionLog.short(id), privacy: .public) segments=\(segments, privacy: .public)")
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
