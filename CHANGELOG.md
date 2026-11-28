@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.5.1 (unreleased)
+
+Additions only. An extension or host built with 3.5.0 runs unchanged against a 3.5.1 one: the new field is optional and absent
+from the JSON a 3.5.0 side writes.
+
+- **Speech stream errors cross the extension bridge.** `ExtensionStreamEvent` gains an optional `error: WidgetServiceError?` and
+  `init(streamId:error:)`, which ends stream `streamId` with the error the host's source threw. The extension side rethrows it from
+  the stream, where before the stream just finished. A 3.5.0 host never sets it, so the stream ends normally there; errors cross
+  only when the host is 3.5.1 or later.
+
 ## 3.5.0 (unreleased)
 
 Additions only: an extension built with 3.3.0 or 3.4.0 runs unchanged on a 3.5.0 host (its handshake has no `sessionTypes`, its widgets
