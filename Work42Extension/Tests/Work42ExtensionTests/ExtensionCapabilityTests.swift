@@ -19,6 +19,8 @@ nonisolated final class FakeCapabilities: WidgetPermissionService, WidgetAudioSe
     private var recordingId = UUID()
     private var liveOf: UUID?
     var refuse: PluginPermissionError?
+    /// The live transcript's source throws `error`, before its first segment or after it.
+    var liveFailure: (error: any Error, afterSegment: Bool)?
 
     var requests: [PluginPermission] { lock.withLock { requested } }
     var stops: Int { lock.withLock { stopCalls } }
@@ -59,9 +61,14 @@ nonisolated final class FakeCapabilities: WidgetPermissionService, WidgetAudioSe
 
     func liveTranscript(of recording: UUID) -> AsyncThrowingStream<TranscriptSegment, any Error> {
         lock.withLock { liveOf = recording }
+        let failure = liveFailure
         return AsyncThrowingStream { continuation in
+            if let failure, !failure.afterSegment {
+                continuation.finish(throwing: failure.error)
+                return
+            }
             continuation.yield(TranscriptSegment(start: 0, end: 1, text: "live words", source: .microphone))
-            continuation.finish()
+            if let failure { continuation.finish(throwing: failure.error) } else { continuation.finish() }
         }
     }
 
@@ -311,6 +318,78 @@ struct ExtensionCapabilityTests {
         await #expect(throws: WidgetServiceError.self) {
             for try await _ in services.speech.liveTranscript(of: UUID()) {}
         }
+    }
+
+    private struct SpeechModelMissing: Error, LocalizedError {
+        var errorDescription: String? { "the on-device speech model for en_US is not installed" }
+    }
+
+    @Test("a host speech stream that throws before its first segment reaches the consumer with the original error text")
+    func liveTranscriptFailsBeforeFirstSegment() async throws {
+        defer { cleanUp() }
+        let fake = FakeCapabilities()
+        fake.liveFailure = (SpeechModelMissing(), afterSegment: false)
+        let (_, services) = try connect(fake)
+        let recording = try await services.audio.startRecording(AudioRecordingRequest(sources: [.microphone], directory: "a"))
+
+        var segments: [TranscriptSegment] = []
+        do {
+            for try await segment in services.speech.liveTranscript(of: recording.id) { segments.append(segment) }
+            Issue.record("the stream finished normally: the host's error was swallowed")
+        } catch {
+            #expect(error.localizedDescription == "the on-device speech model for en_US is not installed")
+        }
+        #expect(segments.isEmpty)
+    }
+
+    @Test("a host speech stream that throws after a segment delivers the segment, then the original error text")
+    func liveTranscriptFailsAfterSegment() async throws {
+        defer { cleanUp() }
+        let fake = FakeCapabilities()
+        fake.liveFailure = (WidgetServiceError(message: "speech analyzer stopped", suggestion: "start the recording again"),
+                            afterSegment: true)
+        let (_, services) = try connect(fake)
+        let recording = try await services.audio.startRecording(AudioRecordingRequest(sources: [.microphone], directory: "a"))
+
+        var segments: [TranscriptSegment] = []
+        do {
+            for try await segment in services.speech.liveTranscript(of: recording.id) { segments.append(segment) }
+            Issue.record("the stream finished normally: the host's error was swallowed")
+        } catch let error as WidgetServiceError {
+            #expect(error == WidgetServiceError(message: "speech analyzer stopped", suggestion: "start the recording again"))
+        }
+        #expect(segments == [TranscriptSegment(start: 0, end: 1, text: "live words", source: .microphone)])
+    }
+
+    @Test("a permission refusal that ends a host speech stream arrives as PluginPermissionError")
+    func liveTranscriptPermissionRefusal() async throws {
+        defer { cleanUp() }
+        let fake = FakeCapabilities()
+        let denied = PluginPermissionError.denied(.speechRecognition, message: "Speech Recognition is off: allow it in System Settings.")
+        fake.liveFailure = (denied, afterSegment: false)
+        let (_, services) = try connect(fake)
+        let recording = try await services.audio.startRecording(AudioRecordingRequest(sources: [.microphone], directory: "a"))
+
+        await #expect(throws: denied) {
+            for try await _ in services.speech.liveTranscript(of: recording.id) {}
+        }
+    }
+
+    @Test("a stream event without an error decodes as before, and one with an error survives the wire")
+    func streamEventCompatibility() throws {
+        let id = UUID()
+        let old = Data(#"{"streamId":"\#(id.uuidString)","finished":true}"#.utf8)
+        let decoded = try ExtensionJSON.decode(ExtensionStreamEvent.self, from: old)
+        #expect(decoded == ExtensionStreamEvent(streamId: id, finished: true))
+        #expect(decoded.error == nil)
+
+        let failed = ExtensionStreamEvent(streamId: id, error: WidgetServiceError(message: "boom", suggestion: "retry"))
+        #expect(try ExtensionJSON.decode(ExtensionStreamEvent.self, from: ExtensionJSON.encode(failed)) == failed)
+        #expect(failed.finished, "an extension that predates `error` still sees the stream end")
+        // A new host's event read by an old extension: the unknown key is ignored.
+        struct OldEvent: Codable { var streamId: UUID; var item: Data?; var finished: Bool }
+        let seenByOld = try ExtensionJSON.decode(OldEvent.self, from: ExtensionJSON.encode(failed))
+        #expect(seenByOld.finished && seenByOld.item == nil)
     }
 
     @Test("the host finds a call's session folder from the services its widget was attached with")

@@ -103,16 +103,26 @@ nonisolated public struct ExtensionReply: Codable, Sendable, Equatable {
 }
 
 /// A value pushed on a stream the other side subscribed to (file watches, host streams, browser tabs and events,
-/// collaboration cursors). `finished` ends the stream; `item` is absent then.
+/// collaboration cursors). `finished` ends the stream; `item` is absent then. `error` is the failure the stream ended with
+/// (always sent together with `finished: true`, so a side that predates it still sees the stream end; it just never learns why).
 nonisolated public struct ExtensionStreamEvent: Codable, Sendable, Equatable {
     public var streamId: UUID
     public var item: Data?
     public var finished: Bool
+    public var error: WidgetServiceError?
 
     public init(streamId: UUID, item: Data? = nil, finished: Bool = false) {
         self.streamId = streamId
         self.item = item
         self.finished = finished
+    }
+
+    /// The end of stream `streamId` because the host's source threw `error`.
+    public init(streamId: UUID, error: WidgetServiceError) {
+        self.streamId = streamId
+        self.item = nil
+        self.finished = true
+        self.error = error
     }
 }
 
